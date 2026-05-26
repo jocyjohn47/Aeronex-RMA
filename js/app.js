@@ -1,4 +1,10 @@
 
+function msg(id, text){
+  const el = document.getElementById(id);
+  if (el) el.textContent = text || '';
+}
+
+
 function currentUserRoleText(){
   const u=S.user||{}, f=u.fields||{};
   return String(
@@ -335,14 +341,15 @@ function setAdminCountry(v){
   initApp();
 }
 
-async function login(){try{let d=await api('/api/login',{method:'POST',body:JSON.stringify({username:$('u').value.trim(),password:$('p').value})});save(d.user||d);location.href='/dashboard.html'}catch(e){msg('msg',e.message||'Invalid login')}}
-function forgotPassword(){msg('msg','Password reset: contact support@aeronex.ae',true)}
-async function changePassword(){let np=$('newPassword').value,cp=$('confirmPassword').value;if(np.length<6)return msg('cpMsg','Password must be at least 6 characters');if(np!==cp)return msg('cpMsg','Passwords do not match');try{await api('/api/change-password',{method:'POST',body:JSON.stringify({username:S.user.username,role:S.user.role,record_id:S.user.record_id,newPassword:np})});S.user.mustChange=false;save(S.user);msg('cpMsg','Password changed successfully',true)}catch(e){msg('cpMsg',e.message)}}
-function requireLogin(){if(!S.user){location.href='/index.html';return false}return true}
-
-function parseRemark(v,label){
-  const m = String(v||'').match(new RegExp(label+'\\s*:\\s*([^\\n]+)','i'));
-  return m ? m[1].trim() : '';
+async function login(){
+  try{
+    let d=await api('/api/login',{method:'POST',body:JSON.stringify({username:$('u').value.trim(),password:$('p').value})});
+    save(d.user||d);
+    location.href='/dashboard.html';
+  }catch(e){
+    const el=document.getElementById('msg');
+    if(el) el.textContent=e.message||'Invalid login';
+  }
 }
 function dealerAddress(){
   return parseRemark(uf('Remarks',''),'Address') || uf('Remarks','');
