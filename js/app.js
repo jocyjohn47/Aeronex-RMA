@@ -1,8 +1,27 @@
 
+function save(user){
+  localStorage.setItem('aeronex_user', JSON.stringify(user || {}));
+  localStorage.setItem('user', JSON.stringify(user || {}));
+}
+function loadUser(){
+  try{
+    return JSON.parse(localStorage.getItem('aeronex_user') || localStorage.getItem('user') || '{}');
+  }catch(e){
+    return {};
+  }
+}
+function logout(){
+  localStorage.removeItem('aeronex_user');
+  localStorage.removeItem('user');
+  location.href='/index.html';
+}
 function msg(id, text){
   const el = document.getElementById(id);
   if (el) el.textContent = text || '';
 }
+
+
+
 
 
 function currentUserRoleText(){
@@ -347,8 +366,7 @@ async function login(){
     save(d.user||d);
     location.href='/dashboard.html';
   }catch(e){
-    const el=document.getElementById('msg');
-    if(el) el.textContent=e.message||'Invalid login';
+    msg('msg', e.message || 'Invalid login');
   }
 }
 function dealerAddress(){
