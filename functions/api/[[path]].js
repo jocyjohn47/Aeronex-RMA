@@ -95,6 +95,11 @@ async function getFieldTypes(env, tableId) {
   return out;
 }
 
+async function getRecord(env, tableId, recordId) {
+  if (!tableId || !recordId) throw new Error("Missing tableId or record_id");
+  const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/records/${recordId}`);
+  return data.data?.record || data.data;
+}
 
 async function createRecord(env, tableId, fields) {
   return larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/records`, {
@@ -201,27 +206,40 @@ function csvBytes(caseNo, fields, items) {
   return new TextEncoder().encode(csv);
 }
 
+async function resolveOrderNoForUpload(env, b) {
+  let no = "";
 
+  if (b.tableId && b.record_id) {
+    const rec = await getRecord(env, b.tableId, b.record_id);
+    no = spareOrderNo(rec.fields || {});
+  }
 
+  if (!no) {
+    no = norm(b.orderNo || b.caseNo);
+  }
 
-
-
-
-
-
-
-
-
-async function getRecord(env, tableId, recordId) {
-  if (!tableId || !recordId) throw new Error("Missing tableId or record_id");
-  const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/records/${recordId}`);
-  return data.data?.record || data.data;
+  return assertValidSpareOrderNo(no);
 }
+
+
+
 
 function makeSpareOrderNo(country) {
   const ts = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
-  const prefix = lower(country).includes("ksa") ? "KSAASPARE" : "UAEASPARE";
-  return `${prefix}${ts}`;
+  const c = lower(country);
+  if (c.includes("ksa") || c.includes("saudi")) return `KSAASPARE${ts}`;
+  return `UAEASPARE${ts}`;
+}
+
+function isValidSpareOrderNo(no) {
+  return /^UAEASPARE\d{14}$/.test(norm(no)) || /^KSAASPARE\d{14}$/.test(norm(no));
+}
+
+function assertValidSpareOrderNo(no) {
+  if (!isValidSpareOrderNo(no)) {
+    throw new Error("Invalid spare order number. Expected UAEASPAREyyyyMMddHHmmss or KSAASPAREyyyyMMddHHmmss, got: " + norm(no));
+  }
+  return norm(no);
 }
 
 function spareOrderNo(fields) {
@@ -235,7 +253,8 @@ function spareOrderNo(fields) {
 }
 
 function getOrderFolderKey(orderNo, fileName) {
-  return `aeronex-orders/${orderNo}/${fileName}`;
+  const no = assertValidSpareOrderNo(orderNo);
+  return `aeronex-orders/${no}/${fileName}`;
 }
 
 function htmlExcelBytes(orderNo, fields, items) {
@@ -250,9 +269,7 @@ function htmlExcelBytes(orderNo, fields, items) {
     </tr>`).join("");
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
-body{font-family:Arial,sans-serif}h1{font-size:20px;color:#1f3b8a}h2{font-size:16px;margin-top:20px}
-table{border-collapse:collapse;width:100%}th{background:#1f3b8a;color:#fff;font-weight:bold}
-th,td{border:1px solid #777;padding:8px;text-align:left}.meta th{width:220px}
+body{font-family:Arial,sans-serif}h1{font-size:20px;color:#1f3b8a}table{border-collapse:collapse;width:100%}th{background:#1f3b8a;color:#fff}th,td{border:1px solid #777;padding:8px;text-align:left}.meta th{width:220px}
 </style></head><body>
 <h1>AERO NEX Spare Order</h1>
 <table class="meta">
@@ -312,15 +329,6 @@ async function attachOrderExcelToLark(env, tableId, recordId, bytes, fileName) {
   const fileToken = await larkUploadBitableAttachment(env, bytes, fileName, "application/vnd.ms-excel");
   await updateRecord(env, tableId, recordId, { "Order File": larkAttachmentValue(fileToken, fileName) });
   return { ok: true, fileToken };
-}
-
-async function resolveOrderNoForUpload(env, b) {
-  if (b.tableId && b.record_id) {
-    const rec = await getRecord(env, b.tableId, b.record_id);
-    const fromRecord = spareOrderNo(rec.fields || {});
-    if (fromRecord) return fromRecord;
-  }
-  return norm(b.orderNo || b.caseNo);
 }
 
 async function handle(req, env) {
@@ -401,7 +409,7 @@ async function handle(req, env) {
     const country = norm(b.country || "UAE & Other Region");
     const tableId = spareTable(env, country);
     const items = b.items || b.cart || [];
-    const no = makeSpareOrderNo(country);
+    const no = assertValidSpareOrderNo(makeSpareOrderNo(country));
 
     const fields = {
       "Spare Order Case": no,
@@ -430,15 +438,12 @@ async function handle(req, env) {
     const sendFields = {};
     for (const [k, v] of Object.entries(fields)) if (fieldTypes[k]) sendFields[k] = v;
     const result = await createRecord(env, tableId, sendFields);
-    const recordId = result.data?.record?.record_id || result.data?.record_id;
-
     let orderFileUpload = null;
     try {
-      orderFileUpload = await attachOrderExcelToLark(env, tableId, recordId, excelData, excelFileName);
+      orderFileUpload = await attachOrderExcelToLark(env, tableId, result.data?.record?.record_id || result.data?.record_id, excelData, excelFileName);
     } catch (e) {
       orderFileUpload = { ok: false, error: e.message || String(e) };
     }
-
     return json({ ok: true, orderNo: no, r2ExcelUrl: fileUrl, r2OrderFileUrl: fileUrl, orderFileUpload, result: result.data });
   }
 
@@ -483,7 +488,7 @@ async function handle(req, env) {
       const fieldTypes = await getFieldTypes(env, b.tableId);
       await updateRecord(env, b.tableId, b.record_id, { "Invoice Download": fieldTypes["Invoice Download"] === 15 ? larkUrl(fileUrl, "Invoice Download") : fileUrl });
     }
-    return json({ ok: true, orderNo: no, url: fileUrl });
+    return json({ ok: true, url: fileUrl });
   }
 
   if (p === "/api/upload-payment-receipt" && req.method === "POST") {
@@ -497,7 +502,7 @@ async function handle(req, env) {
       const fieldTypes = await getFieldTypes(env, b.tableId);
       await updateRecord(env, b.tableId, b.record_id, { "Payment Receipt": fieldTypes["Payment Receipt"] === 15 ? larkUrl(fileUrl, "Payment Receipt") : fileUrl });
     }
-    return json({ ok: true, orderNo: no, url: fileUrl });
+    return json({ ok: true, url: fileUrl });
   }
 
   if (p === "/api/update-status" && req.method === "POST") {
@@ -513,16 +518,29 @@ async function handle(req, env) {
     await deleteRecord(env, b.tableId, b.record_id);
     return json({ ok: true });
   }
-
-  if (p === "/api/download-order-excel") {
+if (p === "/api/download-order-excel") {
     const tableId = norm(url.searchParams.get("tableId"));
     const recordId = norm(url.searchParams.get("record_id"));
     const rec = await getRecord(env, tableId, recordId);
     const fields = rec.fields || {};
-    const no = spareOrderNo(fields) || norm(url.searchParams.get("orderNo"));
-    if (!no) return json({ error: "Missing order number" }, 400);
-    const fileUrl = `${String(env.R2_PUBLIC_URL || "").replace(/\/+$/, "")}/${getOrderFolderKey(no, "order.xls")}`;
-    return Response.redirect(fileUrl, 302);
+    const no = spareOrderNo(fields) || norm(url.searchParams.get("orderNo")) || "order";
+    const materialCodes = String(fields["Material Code"] || "").split(",").map(x => x.trim()).filter(Boolean);
+    const materialNames = String(fields["Material Name"] || "").split(",").map(x => x.trim()).filter(Boolean);
+    const qtys = String(fields["Qty"] || "").split(",").map(x => x.trim()).filter(Boolean);
+    const max = Math.max(materialCodes.length, materialNames.length, qtys.length, 1);
+    const items = [];
+    for (let i = 0; i < max; i++) {
+      items.push({ materialCode: materialCodes[i] || "", materialName: materialNames[i] || "", compatibleModel: "", qty: qtys[i] || "1" });
+    }
+    const bytes = htmlExcelBytes(no, fields, items);
+    return new Response(bytes, {
+      status: 200,
+      headers: {
+        "content-type": "application/vnd.ms-excel; charset=utf-8",
+        "content-disposition": `attachment; filename="${no}.xls"`,
+        "cache-control": "no-store"
+      }
+    });
   }
 
 
