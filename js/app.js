@@ -78,6 +78,29 @@ function requireLogin(){
 }
 
 
+
+function dealerAddress(){
+  const u=S.user||{}, f=u.fields||{};
+  return u.address || f.Address || f['Billing Address'] || f['Invoice Address'] || '';
+}
+function currencyOptions(){
+  const cur = selectedInvoiceCurrency();
+  return ['USD','AED','SAR'].map(c=>`<option ${cur===c?'selected':''}>${c}</option>`).join('');
+}
+function selectedInvoiceCurrency(){
+  const el = document.getElementById('invoiceCurrency');
+  return (el && el.value) || 'USD';
+}
+function orderNoValue(f){
+  return (f && (f['Spare Order No'] || f['Spare Order Case'] || f['Order No'] || f['Case No'])) || '';
+}
+function parseRemark(v){
+  return String(v || '');
+}
+function line(v){
+  return String(v || '').replace(/\n/g,'<br>');
+}
+
 function currentUserRoleText(){
   const u=S.user||{}, f=u.fields||{};
   return String(
@@ -367,6 +390,14 @@ let S={user:loadUser(),spares:[],cart:[],orders:[],repairs:[],dealers:[],notes:[
 function $(id){return document.getElementById(id)}function esc(v){return String(v??'').replace(/[&<>"]/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]))}
 
 
+function localOrderDownloadLink(orderNo, fileVal){
+  if(!orderNo && fileVal && Array.isArray(fileVal) && fileVal.length){
+    const f=fileVal[0]||{};
+    if(f.file_token || f.token) return `<a class="btn-light" href="#">Download Excel</a>`;
+  }
+  if(!orderNo) return '-';
+  return `<a class="btn-light" href="/downloads/${encodeURIComponent(orderNo)}.xls">Download</a>`;
+}
 
 function fileDownloadLink(v){
   if(!Array.isArray(v) || !v.length) return '-';
@@ -431,26 +462,6 @@ function addListed(){let v=$('spareSelect').value;if(!v)return msg('orderMsg','S
 function addCustom(){let n=$('customName').value.trim();if(!n)return msg('orderMsg','Enter custom material name');S.cart.push({materialCode:$('customCode').value.trim(),materialName:n,compatibleModel:'Custom',price:'-',stock:'-',qty:$('customQty').value||'1'});$('customCode').value='';$('customName').value='';drawCart()}
 function drawCart(){let e=$('cartRows');if(!e)return;e.innerHTML=S.cart.map((x,i)=>`<tr><td>${esc(x.materialCode||'CUSTOM')}</td><td>${esc(x.materialName)}</td><td>${esc(x.compatibleModel)}</td><td>${esc(x.qty)}</td><td><button class="btn-danger" onclick="S.cart.splice(${i},1);drawCart()">Remove</button></td></tr>`).join('')}
 async function submitOrder(){if(!S.cart.length)return msg('orderMsg','Add at least one item');let p={companyName:uf('Company Name','AERO NEX'),contactName:uf('Contact Person',''),billingAddress:dealerAddress(),invoiceCurrency:selectedInvoiceCurrency(),country:selectedCountry(),items:S.cart,remarks:'Order file/Excel should contain '+S.cart.length+' spare line(s).'};try{let d=await api('/api/submit-spare',{method:'POST',body:JSON.stringify(p)});msg('orderMsg','Order submitted with Excel file: '+d.orderNo,true);S.cart=[];drawCart();await loadOrders();renderOrders()}catch(e){msg('orderMsg',e.message)}}
-
-function backendOrderDownloadLink(r){
-  const f = r && r.fields ? r.fields : {};
-  const no = f['Spare Order No'] || f['Spare Order Case'] || f['Order No'] || '';
-  const tableId = r && (r._table_id || r.tableId || r.table_id) || '';
-  const recordId = r && r.record_id || '';
-  if(!tableId || !recordId) return '-';
-  const url = `/api/download-order-excel?tableId=${encodeURIComponent(tableId)}&record_id=${encodeURIComponent(recordId)}&orderNo=${encodeURIComponent(no)}`;
-  return `<a class="btn-light" href="${url}" target="_blank" rel="noopener">Download Excel</a>`;
-}
-
-function backendOrderDownloadLink(r){
-  return backendOrderDownloadLink(row);
-}
-
-function backendOrderDownloadLink(r){
-  return backendOrderDownloadLink(row);
-}
-
-
 function renderOrders(){let e=$('orderRows');if(!e)return;e.innerHTML=(Array.isArray(S.orders)?S.orders:[]).map(r=>{let f=r.fields||{};return `<tr><td>${esc(orderNoValue(f))}</td><td>${esc(f['Company Name'])}</td><td>${esc(f['Billing Address']||'')}</td><td>${esc(f['Country']||'')}</td><td>${esc(f['Invoice Currency']||'')}</td><td>${statusCell(r,'spare')}</td><td>${orderFileCellR2(r)}</td><td>${invoiceDownloadCell(r)}</td><td>${paymentReceiptCell(r)}</td><td>${Array.isArray(f['Invoice Upload'])?'Download':'-'}</td></tr>`}).join('')}
 
 function readFileBase64(inputId){
@@ -529,7 +540,7 @@ function renderAdmin(){
   <div class="table-wrap"><table><thead><tr><th>Company</th><th>User Email</th><th>Contact</th><th>Role</th><th>Country</th><th>Action</th></tr></thead><tbody>${visibleDealers().map(r=>{let f=r.fields||{};return `<tr><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Username ( Email )']||'')}</td><td>${esc(f['Contact Person']||'')}</td><td>${esc(f['User Role']||'')}</td><td>${esc(f['Country']||'')}</td><td><button onclick="resetUserPassword('${r.record_id}')">Reset Password</button></td></tr>`}).join('')}</tbody></table></div>
   <div class="cards"><div class="card"><h3>Mandatory Field Settings</h3><p>Coming next: configurable required fields.</p></div><div class="card"><h3>Spare List Excel Sync</h3><p>Coming next: upload/merge spare list.</p></div><div class="card"><h3>Portal Notes</h3><p>Use Lark Portal Note table with external document links.</p></div></div></div>`;
 }
-async function loadOrders(){S.orders=await api('/api/my-orders?country='+encodeURIComponent(selectedCountry())+'&role='+encodeURIComponent(S.user.role||''))}
-async function loadRepairs(){S.repairs=await api('/api/my-repairs?country='+encodeURIComponent(selectedCountry())+'&role='+encodeURIComponent(S.user.role||''))}
+async function loadOrders(){S.orders=await api('/api/my-orders?country='+encodeURIComponent(selectedCountry())+'&role='+encodeURIComponent(S.user?.role||'')+'&email='+encodeURIComponent(S.user?.email||S.user?.username||''));if(!Array.isArray(S.orders))S.orders=[];}
+async function loadRepairs(){S.repairs=await api('/api/my-repairs?country='+encodeURIComponent(selectedCountry())+'&role='+encodeURIComponent(S.user?.role||'')+'&email='+encodeURIComponent(S.user?.email||S.user?.username||''));if(!Array.isArray(S.repairs))S.repairs=[];}
 async function initApp(){if(!requireLogin())return;layout();renderDashboard();try{S.spares=await api('/api/spares')}catch{}try{await loadOrders()}catch{}try{await loadRepairs()}catch{}try{S.dealers=await api('/api/dealers')}catch{}try{S.notes=await api('/api/portal-notes')}catch{}renderSpare();renderRepairCreate();renderRepairStatus();renderDealers();renderNotes();renderChangePassword();renderAdmin()}
 
