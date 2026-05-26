@@ -1,4 +1,42 @@
 
+function isTechnician(){
+  return currentUserRoleText().includes('technician') || currentUserRoleText().includes('tech');
+}
+function isEndUser(){
+  return !isAdmin() && !isTechnician();
+}
+
+
+
+function displayName(){
+  const u = S.user || {};
+  return u.contactName || u.name || u.companyName || u.email || u.username || 'User';
+}
+function initials(){
+  const name = displayName();
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  if(parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return String(name || 'U').slice(0,2).toUpperCase();
+}
+function roleLabel(){
+  const r = currentUserRoleText();
+  if(r.includes('admin')) return 'Admin';
+  if(r.includes('technician') || r.includes('tech')) return 'Technician';
+  return 'End user';
+}
+function companyName(){
+  const u = S.user || {}, f = u.fields || {};
+  return u.companyName || f['Company Name'] || '';
+}
+function contactName(){
+  const u = S.user || {}, f = u.fields || {};
+  return u.contactName || f['Contact Person'] || f['Contact Name'] || '';
+}
+function userEmail(){
+  const u = S.user || {}, f = u.fields || {};
+  return u.email || u.username || f['Username ( Email )'] || f['Email'] || '';
+}
+
 function isAdmin(){
   return currentUserIsAdmin();
 }
