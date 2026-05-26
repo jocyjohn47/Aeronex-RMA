@@ -226,18 +226,16 @@ async function resolveOrderNoForUpload(env, b) {
 
 function makeSpareOrderNo(country) {
   const ts = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
-  const c = lower(country);
-  if (c.includes("ksa") || c.includes("saudi")) return `KSAASPARE${ts}`;
-  return `UAEASPARE${ts}`;
+  return `DXBRMASPARE${ts}`;
 }
 
 function isValidSpareOrderNo(no) {
-  return /^UAEASPARE\d{14}$/.test(norm(no)) || /^KSAASPARE\d{14}$/.test(norm(no));
+  return /^DXBRMASPARE\d{14}$/.test(norm(no));
 }
 
 function assertValidSpareOrderNo(no) {
   if (!isValidSpareOrderNo(no)) {
-    throw new Error("Invalid spare order number. Expected UAEASPAREyyyyMMddHHmmss or KSAASPAREyyyyMMddHHmmss, got: " + norm(no));
+    throw new Error("Invalid spare order number. Expected DXBRMASPAREyyyyMMddHHmmss, got: " + norm(no));
   }
   return norm(no);
 }
