@@ -482,6 +482,53 @@ function orderNoValue(rowOrFields){
   );
 }
 
+function getSpareOrderNoFromRow(r){
+  const f = r && r.fields ? r.fields : {};
+  return (
+    f['Spare Order Case'] ||
+    f['Spare Order No'] ||
+    f['Order No'] ||
+    f['Case No'] ||
+    ''
+  );
+}
+
+async function uploadInvoiceForRow(r, inputId){
+  const inp = document.getElementById(inputId);
+  const file = inp && inp.files && inp.files[0];
+  if(!file) return alert('Select invoice file');
+  const data = await fileToDataUrl(file);
+  await api('/api/upload-invoice', {
+    method:'POST',
+    body: JSON.stringify({
+      tableId: r._table_id || r.tableId || r.table_id,
+      record_id: r.record_id,
+      orderNo: getSpareOrderNoFromRow(r),
+      file: { name:file.name, type:file.type, data }
+    })
+  });
+  await loadOrders();
+  renderSpare();
+}
+
+async function uploadReceiptForRow(r, inputId){
+  const inp = document.getElementById(inputId);
+  const file = inp && inp.files && inp.files[0];
+  if(!file) return alert('Select receipt file');
+  const data = await fileToDataUrl(file);
+  await api('/api/upload-payment-receipt', {
+    method:'POST',
+    body: JSON.stringify({
+      tableId: r._table_id || r.tableId || r.table_id,
+      record_id: r.record_id,
+      orderNo: getSpareOrderNoFromRow(r),
+      file: { name:file.name, type:file.type, data }
+    })
+  });
+  await loadOrders();
+  renderSpare();
+}
+
 function renderOrders(){let e=$('orderRows');if(!e)return;e.innerHTML=(Array.isArray(S.orders)?S.orders:[]).map(r=>{let f=r.fields||{};return `<tr><td>${esc(orderNoValue(f))}</td><td>${esc(f['Company Name'])}</td><td>${esc(f['Billing Address']||'')}</td><td>${esc(f['Country']||'')}</td><td>${esc(f['Invoice Currency']||'')}</td><td>${statusCell(r,'spare')}</td><td>${orderFileCellR2(r)}</td><td>${invoiceDownloadCell(r)}</td><td>${paymentReceiptCell(r)}</td><td>${Array.isArray(f['Invoice Upload'])?'Download':'-'}</td></tr>`}).join('')}
 
 function readFileBase64(inputId){
