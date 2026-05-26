@@ -208,16 +208,11 @@ function csvBytes(caseNo, fields, items) {
 
 async function resolveOrderNoForUpload(env, b) {
   let no = "";
-
   if (b.tableId && b.record_id) {
     const rec = await getRecord(env, b.tableId, b.record_id);
     no = spareOrderNo(rec.fields || {});
   }
-
-  if (!no) {
-    no = norm(b.orderNo || b.caseNo);
-  }
-
+  if (!no) no = norm(b.orderNo || b.caseNo);
   return assertValidSpareOrderNo(no);
 }
 
@@ -238,7 +233,7 @@ function isValidSpareOrderNo(no) {
 
 function assertValidSpareOrderNo(no) {
   if (!isValidSpareOrderNo(no)) {
-    throw new Error("Invalid spare order number. Expected DXBRMASPAREYYYYMMDD0000, got: " + norm(no));
+    throw new Error("Invalid spare order number. Expected Lark format DXBRMASPAREYYYYMMDD0000, got: " + norm(no));
   }
   return norm(no);
 }
@@ -410,11 +405,13 @@ async function handle(req, env) {
     const country = norm(b.country || "UAE & Other Region");
     const tableId = spareTable(env, country);
     const items = b.items || b.cart || [];
-    const no = assertValidSpareOrderNo(makeSpareOrderNo(country));
+
+    // Temporary fallback only. Lark row is the authority for final order number.
+    const fallbackNo = makeSpareOrderNo(country);
 
     const fields = {
-      "Spare Order Case": no,
-      "Spare Order No": no,
+      "Spare Order Case": fallbackNo,
+      "Spare Order No": fallbackNo,
       "Company Name": b.companyName || "",
       "Contact Name": b.contactName || "",
       "Contact Email": b.contactEmail || b.email || "",
@@ -430,21 +427,47 @@ async function handle(req, env) {
       "Remarks": b.remarks || ""
     };
 
-    const excelFileName = `${no}.xls`;
-    const excelData = htmlExcelBytes(no, fields, items);
-    const fileUrl = await putR2(env, getOrderFolderKey(no, "order.xls"), excelData, "application/vnd.ms-excel");
-    fields.Remarks = fields.Remarks ? `${fields.Remarks}\nOrder File URL: ${fileUrl}` : `Order File URL: ${fileUrl}`;
-
     const fieldTypes = await getFieldTypes(env, tableId);
     const sendFields = {};
     for (const [k, v] of Object.entries(fields)) if (fieldTypes[k]) sendFields[k] = v;
+
+    // Step 1: create Lark row first.
     const result = await createRecord(env, tableId, sendFields);
+    const recordId = result.data?.record?.record_id || result.data?.record_id;
+    if (!recordId) throw new Error("Lark record created but record_id was not returned");
+
+    // Step 2: fetch Lark row and use Lark's final order number.
+    let saved = await getRecord(env, tableId, recordId);
+    let savedFields = saved.fields || {};
+    let no = spareOrderNo(savedFields) || fallbackNo;
+    no = assertValidSpareOrderNo(no);
+
+    // Step 3: generate Excel using the same final Lark order number and the original item list.
+    const finalFields = { ...fields, ...savedFields, "Spare Order Case": no, "Spare Order No": no };
+    const excelFileName = `${no}.xls`;
+    const excelData = htmlExcelBytes(no, finalFields, items);
+    const fileUrl = await putR2(env, getOrderFolderKey(no, "order.xls"), excelData, "application/vnd.ms-excel");
+
+    // Step 4: update Lark row with the same Order File and URL remark.
     let orderFileUpload = null;
     try {
-      orderFileUpload = await attachOrderExcelToLark(env, tableId, result.data?.record?.record_id || result.data?.record_id, excelData, excelFileName);
+      orderFileUpload = await attachOrderExcelToLark(env, tableId, recordId, excelData, excelFileName);
     } catch (e) {
       orderFileUpload = { ok: false, error: e.message || String(e) };
     }
+
+    const updateFields = {};
+    const newRemarks = (savedFields.Remarks || fields.Remarks || "")
+      ? `${savedFields.Remarks || fields.Remarks}\nOrder File URL: ${fileUrl}`
+      : `Order File URL: ${fileUrl}`;
+    if (fieldTypes["Remarks"]) updateFields["Remarks"] = newRemarks;
+    // Only update order number fields if they are writable. Formula/autonumber fields may ignore or reject; errors are non-fatal.
+    if (fieldTypes["Spare Order Case"]) updateFields["Spare Order Case"] = no;
+    if (fieldTypes["Spare Order No"]) updateFields["Spare Order No"] = no;
+    if (Object.keys(updateFields).length) {
+      try { await updateRecord(env, tableId, recordId, updateFields); } catch (_) {}
+    }
+
     return json({ ok: true, orderNo: no, r2ExcelUrl: fileUrl, r2OrderFileUrl: fileUrl, orderFileUpload, result: result.data });
   }
 
@@ -524,24 +547,10 @@ if (p === "/api/download-order-excel") {
     const recordId = norm(url.searchParams.get("record_id"));
     const rec = await getRecord(env, tableId, recordId);
     const fields = rec.fields || {};
-    const no = spareOrderNo(fields) || norm(url.searchParams.get("orderNo")) || "order";
-    const materialCodes = String(fields["Material Code"] || "").split(",").map(x => x.trim()).filter(Boolean);
-    const materialNames = String(fields["Material Name"] || "").split(",").map(x => x.trim()).filter(Boolean);
-    const qtys = String(fields["Qty"] || "").split(",").map(x => x.trim()).filter(Boolean);
-    const max = Math.max(materialCodes.length, materialNames.length, qtys.length, 1);
-    const items = [];
-    for (let i = 0; i < max; i++) {
-      items.push({ materialCode: materialCodes[i] || "", materialName: materialNames[i] || "", compatibleModel: "", qty: qtys[i] || "1" });
-    }
-    const bytes = htmlExcelBytes(no, fields, items);
-    return new Response(bytes, {
-      status: 200,
-      headers: {
-        "content-type": "application/vnd.ms-excel; charset=utf-8",
-        "content-disposition": `attachment; filename="${no}.xls"`,
-        "cache-control": "no-store"
-      }
-    });
+    const no = spareOrderNo(fields) || norm(url.searchParams.get("orderNo"));
+    if (!no) return json({ error: "Missing order number" }, 400);
+    const fileUrl = `${String(env.R2_PUBLIC_URL || "").replace(/\/+$/, "")}/${getOrderFolderKey(no, "order.xls")}`;
+    return Response.redirect(fileUrl, 302);
   }
 
 
