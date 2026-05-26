@@ -400,6 +400,14 @@ async function handle(req, env) {
     return json(filterOwn(rows, email, role));
   }
 
+
+  if (p === "/api/debug-repair-fields") {
+    const country = norm(url.searchParams.get("country") || "UAE & Other Region");
+    const tableId = repairTable(env, country);
+    const fieldTypes = await getFieldTypes(env, tableId);
+    return json({ ok: true, tableId, fields: Object.keys(fieldTypes) });
+  }
+
   if ((p === "/api/submit-spare" || p === "/api/spare-order") && req.method === "POST") {
     const b = await readBody(req);
     const country = norm(b.country || "UAE & Other Region");
@@ -476,29 +484,63 @@ async function handle(req, env) {
     const country = norm(b.country || "UAE & Other Region");
     const tableId = repairTable(env, country);
     const prefix = lower(country).includes("ksa") ? "KSARMA" : "DXBRMA";
-    const no = `${prefix}REPAIR${new Date().toISOString().replace(/\D/g, "").slice(0, 14)}`;
+    const no = `${prefix}${new Date().toISOString().replace(/\D/g, "").slice(0, 12)}`;
+
+    const uploadRequiredLink = b.requiredDetailsLink || b.uploadRequiredDetailsLink || b.uploadAllRequiredDetailsLink || "";
+    const logLink = b.logFileLink || b.logFile || "";
+    const issueMediaLink = b.issueMediaLink || "";
+    const gacaValue = b.gacaDocument?.data || b.gacaDocument || "";
 
     const fields = {
+      "REPAIR CASE": no,
       "Repair Case No": no,
+      "Repair Case": no,
       "Spare Order Case": no,
+
       "Company Name": b.companyName || "",
       "Contact Name": b.contactName || "",
       "Contact Person": b.contactName || "",
       "Contact Email": b.contactEmail || b.email || "",
+
+      "Address ( Receiver Info )": b.address || b.receiverAddress || "",
+      "Address": b.address || b.receiverAddress || "",
+      "Receiver Address": b.address || b.receiverAddress || "",
+
       "Country": country,
-      "Status": "Submitted",
-      "Product Name": b.productName || b.model || "",
+      "Model No": b.modelNo || b.model || "",
       "Serial No": b.serialNo || b.serial || "",
-      "Issue Description": b.issueDescription || b.issue || b.description || "",
+      "Date of Purchase / Activation date": b.purchaseDate || b.activationDate || b.date || "",
+      "Date Of Activation": b.purchaseDate || b.activationDate || b.date || "",
+
+      "Details Of Issue": b.details || b.issueDescription || b.issue || b.description || "",
+      "Issue Description": b.details || b.issueDescription || b.issue || b.description || "",
+
+      "Upload all the required details link": uploadRequiredLink,
+      "Upload all required details link": uploadRequiredLink,
+      "Required Details Link": uploadRequiredLink,
+
+      "Log File": logLink,
+      "Log File Link": logLink,
+      "Log for Drone and RC Link": logLink,
+
+      "Issue Video and Pictures Link": issueMediaLink,
+
+      "GACA Document": gacaValue,
+      "Warranty Status": b.warrantyStatus || "",
+
+      "Remarks": b.remarks || "",
       "Notes": b.notes || "",
-      "Remarks": b.remarks || ""
+      "Status": "Submitted"
     };
 
     const fieldTypes = await getFieldTypes(env, tableId);
     const sendFields = {};
-    for (const [k, v] of Object.entries(fields)) if (fieldTypes[k]) sendFields[k] = v;
+    for (const [k, v] of Object.entries(fields)) {
+      if (fieldTypes[k] && v !== undefined && v !== null && v !== "") sendFields[k] = v;
+    }
+
     const result = await createRecord(env, tableId, sendFields);
-    return json({ ok: true, repairNo: no, caseNo: no, result: result.data });
+    return json({ ok: true, repairNo: no, caseNo: no, result: result.data, sentFields: Object.keys(sendFields) });
   }
 
   if (p === "/api/upload-invoice" && req.method === "POST") {
