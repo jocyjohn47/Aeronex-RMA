@@ -358,6 +358,13 @@ function toLarkDateTimeValue(v) {
   return d.getTime();
 }
 
+function toLarkUrlValue(v, text = "Open Link") {
+  const s = norm(v);
+  if (!s) return "";
+  if (/^https?:\/\//i.test(s)) return { link: s, text };
+  return s;
+}
+
 async function handle(req, env) {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: H });
 
@@ -565,10 +572,21 @@ async function handle(req, env) {
     };
 
     const fieldTypes = await getFieldTypes(env, tableId);
+    const urlFieldNames = new Set([
+      "Upload all the required details link",
+      "Upload all required details link",
+      "Required Details Link",
+      "Log File",
+      "Log File Link",
+      "Log for Drone and RC Link",
+      "Issue Video and Pictures Link"
+    ]);
     const sendFields = {};
     for (const [k, v] of Object.entries(fields)) {
       if (fieldTypes[k] && v !== undefined && v !== null && v !== "") {
-        sendFields[k] = fieldTypes[k] === 5 ? toLarkDateTimeValue(v) : v;
+        sendFields[k] = fieldTypes[k] === 5
+          ? toLarkDateTimeValue(v)
+          : (fieldTypes[k] === 15 || urlFieldNames.has(k) ? toLarkUrlValue(v, k) : v);
       }
     }
 
