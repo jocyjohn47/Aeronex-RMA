@@ -127,6 +127,65 @@ function bytesFromDataUrl(dataUrl) {
   return arr;
 }
 
+function guessFileName(no) {
+  return `${no || 'order'}.xls`;
+}
+
+async function larkUploadBitableFile(env, bytes, fileName, mimeType) {
+  const token = await larkToken(env);
+  const boundary = "----aeronex" + Math.random().toString(16).slice(2);
+  const enc = new TextEncoder();
+
+  const parts = [
+    enc.encode(`--${boundary}\r\n`),
+    enc.encode(`Content-Disposition: form-data; name="file"; filename="${fileName}"\r\n`),
+    enc.encode(`Content-Type: ${mimeType || "application/vnd.ms-excel"}\r\n\r\n`),
+    bytes,
+    enc.encode(`\r\n--${boundary}--\r\n`)
+  ];
+
+  let size = 0;
+  for (const p of parts) size += p.length;
+  const body = new Uint8Array(size);
+  let offset = 0;
+  for (const p of parts) {
+    body.set(p, offset);
+    offset += p.length;
+  }
+
+  const res = await fetch("https://open.larksuite.com/open-apis/drive/v1/medias/upload_all", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": `multipart/form-data; boundary=${boundary}`
+    },
+    body
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.code) throw new Error("Lark file upload error: " + JSON.stringify(data));
+  const fileToken = data.data?.file_token || data.data?.file?.file_token || data.file_token;
+  if (!fileToken) throw new Error("Lark file upload did not return file_token: " + JSON.stringify(data));
+  return fileToken;
+}
+
+function larkAttachmentValue(fileToken, fileName) {
+  return [{ file_token: fileToken, name: fileName || "order.xls" }];
+}
+
+async function addOrderFileAttachment(env, tableId, recordId, bytes, fileName) {
+  if (!recordId) throw new Error("Missing Lark record_id for Order File upload");
+  const fieldTypes = await getFieldTypes(env, tableId);
+  if (!fieldTypes["Order File"]) return { skipped: true, reason: "Order File field not found" };
+
+  const fileToken = await larkUploadBitableFile(env, bytes, fileName, "application/vnd.ms-excel");
+  await updateRecord(env, tableId, recordId, {
+    "Order File": larkAttachmentValue(fileToken, fileName)
+  });
+
+  return { ok: true, fileToken };
+}
+
 async function putR2(env, key, bytes, contentType) {
   if (!env.R2) throw new Error("R2 binding missing. Add binding name R2 to bucket aeronex-rma.");
   await env.R2.put(key, bytes, { httpMetadata: { contentType: contentType || "application/octet-stream" } });
@@ -295,14 +354,22 @@ async function handle(req, env) {
       "Remarks": b.remarks || ""
     };
 
-    const fileUrl = await putR2(env, `aeronex-orders/${no}/order.xls`, csvBytes(no, fields, items), "application/vnd.ms-excel");
+    const excelFileName = guessFileName(no);
+    const excelData = csvBytes(no, fields, items);
+    const fileUrl = await putR2(env, `aeronex-orders/${no}/order.xls`, excelData, "application/vnd.ms-excel");
     fields.Remarks = fields.Remarks ? `${fields.Remarks}\nOrder File URL: ${fileUrl}` : `Order File URL: ${fileUrl}`;
 
     const fieldTypes = await getFieldTypes(env, tableId);
     const sendFields = {};
     for (const [k, v] of Object.entries(fields)) if (fieldTypes[k]) sendFields[k] = v;
     const result = await createRecord(env, tableId, sendFields);
-    return json({ ok: true, orderNo: no, r2ExcelUrl: fileUrl, r2OrderFileUrl: fileUrl, result: result.data });
+    let orderFileUpload = null;
+    try {
+      orderFileUpload = await addOrderFileAttachment(env, tableId, result.data?.record?.record_id || result.data?.record_id, excelData, excelFileName);
+    } catch (e) {
+      orderFileUpload = { ok: false, error: e.message || String(e) };
+    }
+    return json({ ok: true, orderNo: no, r2ExcelUrl: fileUrl, r2OrderFileUrl: fileUrl, orderFileUpload, result: result.data });
   }
 
   if ((p === "/api/create-repair" || p === "/api/repair-case") && req.method === "POST") {
