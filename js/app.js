@@ -506,6 +506,9 @@ async function uploadReceiptForRow(r, inputId){
   renderSpare();
 }
 
+
+
+
 function getSpareOrderNoFromRow(r){
   const f = r && r.fields ? r.fields : {};
   return (
