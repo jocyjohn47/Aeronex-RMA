@@ -219,9 +219,7 @@ async function refreshAfterCreateRepair(){
   renderRepairStatus();
 }
 
-function canManageOrders(){
-  return currentUserIsAdminTech();
-}
+function canManageOrders(){let role=String(S.user?.role||S.user?.fields?.['User Role']||'').toLowerCase();return role.includes('admin')||role.includes('technician')||role.includes('tech')}
 function larkOrderTableUrl(row){
   const c = (row.fields?.Country || selectedCountry() || '').toString();
   if(c.includes('KSA')) return window.LARK_SPARE_ORDER_KSA_URL || '';
@@ -306,13 +304,17 @@ function fileDownloadLink(v){
   return `<a class="btn-light" href="/api/download-order-file?token=${encodeURIComponent(token)}&name=${encodeURIComponent(name)}">Download</a>`;
 }
 
-async function api(url,opt={}){let r=await fetch(url,{...opt,headers:{'Content-Type':'application/json',...(opt.headers||{})}});let d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||JSON.stringify(d));return d}
-function msg(id,t,ok=false){let e=$(id);if(e){e.textContent=t;e.className='msg '+(ok?'ok':'err')}}function save(u){S.user=u;localStorage.setItem('aeronexUser',JSON.stringify(u))}
-function logout(){localStorage.removeItem('aeronexUser');location.href='/index.html'}function isAdmin(){return S.user?.role==='Admin'}function initials(){let n=(S.user?.displayName||S.user?.username||'User').trim();return n.split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase()}
-
-
-function orderNoValue(f){
-  return f['Spare Order No'] || f['Spare Order Case'] || '';
+async function api(url,opt={}){
+  let r=await fetch(url,{...opt,headers:{'Content-Type':'application/json',...(opt.headers||{})}});
+  let d=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(d.error||JSON.stringify(d));
+  if(url.startsWith('/api/spares') && d.items) return d.items;
+  if(url.startsWith('/api/spare-list') && d.items) return d.items;
+  if(url.startsWith('/api/dealers') && d.dealers) return d.dealers;
+  if(url.startsWith('/api/portal-notes') && d.notes) return d.notes;
+  if(url.startsWith('/api/my-orders') && d.orders) return d.orders;
+  if(url.startsWith('/api/my-repairs') && d.repairs) return d.repairs;
+  return d;
 }
 function currencyOptions(){
   const c = selectedCountry();
@@ -333,7 +335,7 @@ function setAdminCountry(v){
   initApp();
 }
 
-async function login(){try{let d=await api('/api/login',{method:'POST',body:JSON.stringify({username:$('u').value.trim(),password:$('p').value})});save(d);location.href='/dashboard.html'}catch(e){msg('msg','Invalid login')}}
+async function login(){try{let d=await api('/api/login',{method:'POST',body:JSON.stringify({username:$('u').value.trim(),password:$('p').value})});save(d.user||d);location.href='/dashboard.html'}catch(e){msg('msg',e.message||'Invalid login')}}
 function forgotPassword(){msg('msg','Password reset: contact support@aeronex.ae',true)}
 async function changePassword(){let np=$('newPassword').value,cp=$('confirmPassword').value;if(np.length<6)return msg('cpMsg','Password must be at least 6 characters');if(np!==cp)return msg('cpMsg','Passwords do not match');try{await api('/api/change-password',{method:'POST',body:JSON.stringify({username:S.user.username,role:S.user.role,record_id:S.user.record_id,newPassword:np})});S.user.mustChange=false;save(S.user);msg('cpMsg','Password changed successfully',true)}catch(e){msg('cpMsg',e.message)}}
 function requireLogin(){if(!S.user){location.href='/index.html';return false}return true}
@@ -366,7 +368,7 @@ function renderSpareOptions(){let q=($('spareSearch')?.value||'').toLowerCase(),
 function addListed(){let v=$('spareSelect').value;if(!v)return msg('orderMsg','Select material first');let o=JSON.parse(decodeURIComponent(v));o.qty=$('spareQty').value||'1';S.cart.push(o);drawCart()}
 function addCustom(){let n=$('customName').value.trim();if(!n)return msg('orderMsg','Enter custom material name');S.cart.push({materialCode:$('customCode').value.trim(),materialName:n,compatibleModel:'Custom',price:'-',stock:'-',qty:$('customQty').value||'1'});$('customCode').value='';$('customName').value='';drawCart()}
 function drawCart(){let e=$('cartRows');if(!e)return;e.innerHTML=S.cart.map((x,i)=>`<tr><td>${esc(x.materialCode||'CUSTOM')}</td><td>${esc(x.materialName)}</td><td>${esc(x.compatibleModel)}</td><td>${esc(x.qty)}</td><td><button class="btn-danger" onclick="S.cart.splice(${i},1);drawCart()">Remove</button></td></tr>`).join('')}
-async function submitOrder(){if(!S.cart.length)return msg('orderMsg','Add at least one item');let p={companyName:uf('Company Name','AERO NEX'),contactName:uf('Contact Person',''),billingAddress:dealerAddress(),invoiceCurrency:selectedInvoiceCurrency(),country:selectedCountry(),items:S.cart,remarks:'Order file/Excel should contain '+S.cart.length+' spare line(s).'};try{let d=await api('/api/spare-order',{method:'POST',body:JSON.stringify(p)});msg('orderMsg','Order submitted with Excel file: '+d.orderNo,true);S.cart=[];drawCart();await loadOrders();renderOrders()}catch(e){msg('orderMsg',e.message)}}
+async function submitOrder(){if(!S.cart.length)return msg('orderMsg','Add at least one item');let p={companyName:uf('Company Name','AERO NEX'),contactName:uf('Contact Person',''),billingAddress:dealerAddress(),invoiceCurrency:selectedInvoiceCurrency(),country:selectedCountry(),items:S.cart,remarks:'Order file/Excel should contain '+S.cart.length+' spare line(s).'};try{let d=await api('/api/submit-spare',{method:'POST',body:JSON.stringify(p)});msg('orderMsg','Order submitted with Excel file: '+d.orderNo,true);S.cart=[];drawCart();await loadOrders();renderOrders()}catch(e){msg('orderMsg',e.message)}}
 function renderOrders(){let e=$('orderRows');if(!e)return;e.innerHTML=S.orders.map(r=>{let f=r.fields||{};return `<tr><td>${esc(orderNoValue(f))}</td><td>${esc(f['Company Name'])}</td><td>${esc(f['Billing Address']||'')}</td><td>${esc(f['Country']||'')}</td><td>${esc(f['Invoice Currency']||'')}</td><td>${statusCell(r,'spare')}</td><td>${orderFileCellR2(r)}</td><td>${invoiceDownloadCell(r)}</td><td>${paymentReceiptCell(r)}</td><td>${Array.isArray(f['Invoice Upload'])?'Download':'-'}</td></tr>`}).join('')}
 
 function readFileBase64(inputId){
@@ -445,7 +447,7 @@ function renderAdmin(){
   <div class="table-wrap"><table><thead><tr><th>Company</th><th>User Email</th><th>Contact</th><th>Role</th><th>Country</th><th>Action</th></tr></thead><tbody>${visibleDealers().map(r=>{let f=r.fields||{};return `<tr><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Username ( Email )']||'')}</td><td>${esc(f['Contact Person']||'')}</td><td>${esc(f['User Role']||'')}</td><td>${esc(f['Country']||'')}</td><td><button onclick="resetUserPassword('${r.record_id}')">Reset Password</button></td></tr>`}).join('')}</tbody></table></div>
   <div class="cards"><div class="card"><h3>Mandatory Field Settings</h3><p>Coming next: configurable required fields.</p></div><div class="card"><h3>Spare List Excel Sync</h3><p>Coming next: upload/merge spare list.</p></div><div class="card"><h3>Portal Notes</h3><p>Use Lark Portal Note table with external document links.</p></div></div></div>`;
 }
-async function loadOrders(){S.orders=await api('/api/my-orders?country='+encodeURIComponent(selectedCountry())+'&role='+encodeURIComponent(S.user.role||''))}
+async function loadOrders(){S.orders=await api('/api/my-orders?country='+encodeURIComponent(selectedCountry())+'&role='+encodeURIComponent(S.user.role||'')+'&email='+encodeURIComponent(S.user.email||S.user.username||''))}
 async function loadRepairs(){S.repairs=await api('/api/my-repairs?country='+encodeURIComponent(selectedCountry())+'&role='+encodeURIComponent(S.user.role||''))}
 async function initApp(){if(!requireLogin())return;layout();renderDashboard();try{S.spares=await api('/api/spares')}catch{}try{await loadOrders()}catch{}try{await loadRepairs()}catch{}try{S.dealers=await api('/api/dealers')}catch{}try{S.notes=await api('/api/portal-notes')}catch{}renderSpare();renderRepairCreate();renderRepairStatus();renderDealers();renderNotes();renderChangePassword();renderAdmin()}
 
