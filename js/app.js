@@ -470,6 +470,18 @@ function backendOrderDownloadLink(r){
   return backendOrderDownloadLink(row);
 }
 
+
+function orderNoValue(rowOrFields){
+  const f = rowOrFields && rowOrFields.fields ? rowOrFields.fields : (rowOrFields || {});
+  return (
+    f['Spare Order No'] ||
+    f['Spare Order Case'] ||
+    f['Order No'] ||
+    f['Case No'] ||
+    ''
+  );
+}
+
 function renderOrders(){let e=$('orderRows');if(!e)return;e.innerHTML=(Array.isArray(S.orders)?S.orders:[]).map(r=>{let f=r.fields||{};return `<tr><td>${esc(orderNoValue(f))}</td><td>${esc(f['Company Name'])}</td><td>${esc(f['Billing Address']||'')}</td><td>${esc(f['Country']||'')}</td><td>${esc(f['Invoice Currency']||'')}</td><td>${statusCell(r,'spare')}</td><td>${orderFileCellR2(r)}</td><td>${invoiceDownloadCell(r)}</td><td>${paymentReceiptCell(r)}</td><td>${Array.isArray(f['Invoice Upload'])?'Download':'-'}</td></tr>`}).join('')}
 
 function readFileBase64(inputId){
