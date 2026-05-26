@@ -190,7 +190,7 @@ function invoiceDownloadCell(row){
   const current = url ? `<a class="btn-light" target="_blank" href="${esc(url)}">Download Invoice</a>` : '-';
   const orderNo = orderNoValue(f);
   const upload = (canManageOrders && canManageOrders())
-    ? `<br><label class="mini-upload">Upload Invoice<input type="file" onchange="uploadInvoiceFile('${esc(row.record_id)}','${esc(row._table_id||'')}','${esc(orderNo)}',this)"></label>`
+    ? `<br><label class="mini-upload">Upload Invoice<input type="file" onchange="uploadInvoiceFile('${esc(row.record_id)}','${esc(row._table_id||'')}','${esc(getSpareOrderNoFromRow(row))}',this)"></label>`
     : '';
   return current + upload;
 }
@@ -199,7 +199,7 @@ function paymentReceiptCell(row){
   const url = linkUrlValue(f['Payment Receipt'] || f['Payment Receipt Link'] || f['Payment Receipt URL']);
   const current = url ? `<a class="btn-light" target="_blank" href="${esc(url)}">View Receipt</a>` : '-';
   const orderNo = orderNoValue(f);
-  const upload = `<br><label class="mini-upload">Upload Receipt<input type="file" onchange="uploadPaymentReceipt('${esc(row.record_id)}','${esc(row._table_id||'')}','${esc(orderNo)}',this)"></label>`;
+  const upload = `<br><label class="mini-upload">Upload Receipt<input type="file" onchange="uploadPaymentReceipt('${esc(row.record_id)}','${esc(row._table_id||'')}','${esc(getSpareOrderNoFromRow(row))}',this)"></label>`;
   return current + upload;
 }
 
@@ -454,21 +454,8 @@ function addListed(){let v=$('spareSelect').value;if(!v)return msg('orderMsg','S
 function addCustom(){let n=$('customName').value.trim();if(!n)return msg('orderMsg','Enter custom material name');S.cart.push({materialCode:$('customCode').value.trim(),materialName:n,compatibleModel:'Custom',price:'-',stock:'-',qty:$('customQty').value||'1'});$('customCode').value='';$('customName').value='';drawCart()}
 function drawCart(){let e=$('cartRows');if(!e)return;e.innerHTML=S.cart.map((x,i)=>`<tr><td>${esc(x.materialCode||'CUSTOM')}</td><td>${esc(x.materialName)}</td><td>${esc(x.compatibleModel)}</td><td>${esc(x.qty)}</td><td><button class="btn-danger" onclick="S.cart.splice(${i},1);drawCart()">Remove</button></td></tr>`).join('')}
 async function submitOrder(){if(!S.cart.length)return msg('orderMsg','Add at least one item');let p={companyName:uf('Company Name','AERO NEX'),contactName:uf('Contact Person',''),billingAddress:dealerAddress(),invoiceCurrency:selectedInvoiceCurrency(),country:selectedCountry(),items:S.cart,remarks:'Order file/Excel should contain '+S.cart.length+' spare line(s).'};try{let d=await api('/api/submit-spare',{method:'POST',body:JSON.stringify(p)});msg('orderMsg','Order submitted with Excel file: '+d.orderNo,true);S.cart=[];drawCart();await loadOrders();renderOrders()}catch(e){msg('orderMsg',e.message)}}
-function backendOrderDownloadLink(r){
-  const f = r && r.fields ? r.fields : {};
-  const no = f['Spare Order No'] || f['Spare Order Case'] || f['Order No'] || '';
-  const tableId = r && (r._table_id || r.tableId || r.table_id) || '';
-  const recordId = r && r.record_id || '';
-  if(!tableId || !recordId) return '-';
-  const url = `/api/download-order-excel?tableId=${encodeURIComponent(tableId)}&record_id=${encodeURIComponent(recordId)}&orderNo=${encodeURIComponent(no)}`;
-  return `<a class="btn-light" href="${url}" target="_blank" rel="noopener">Download Excel</a>`;
-}
-function backendOrderDownloadLink(r){
-  return backendOrderDownloadLink(row);
-}
-function backendOrderDownloadLink(r){
-  return backendOrderDownloadLink(row);
-}
+
+
 
 
 function orderNoValue(rowOrFields){
@@ -482,16 +469,6 @@ function orderNoValue(rowOrFields){
   );
 }
 
-function getSpareOrderNoFromRow(r){
-  const f = r && r.fields ? r.fields : {};
-  return (
-    f['Spare Order Case'] ||
-    f['Spare Order No'] ||
-    f['Order No'] ||
-    f['Case No'] ||
-    ''
-  );
-}
 
 async function uploadInvoiceForRow(r, inputId){
   const inp = document.getElementById(inputId);
@@ -529,7 +506,31 @@ async function uploadReceiptForRow(r, inputId){
   renderSpare();
 }
 
-function renderOrders(){let e=$('orderRows');if(!e)return;e.innerHTML=(Array.isArray(S.orders)?S.orders:[]).map(r=>{let f=r.fields||{};return `<tr><td>${esc(orderNoValue(f))}</td><td>${esc(f['Company Name'])}</td><td>${esc(f['Billing Address']||'')}</td><td>${esc(f['Country']||'')}</td><td>${esc(f['Invoice Currency']||'')}</td><td>${statusCell(r,'spare')}</td><td>${orderFileCellR2(r)}</td><td>${invoiceDownloadCell(r)}</td><td>${paymentReceiptCell(r)}</td><td>${Array.isArray(f['Invoice Upload'])?'Download':'-'}</td></tr>`}).join('')}
+function getSpareOrderNoFromRow(r){
+  const f = r && r.fields ? r.fields : {};
+  return (
+    f['Spare Order Case'] ||
+    f['Spare Order No'] ||
+    f['Order No'] ||
+    f['Case No'] ||
+    ''
+  );
+}
+
+function backendOrderDownloadLink(r){
+  const no = getSpareOrderNoFromRow(r);
+  const tableId = r && (r._table_id || r.tableId || r.table_id) || '';
+  const recordId = r && r.record_id || '';
+  if(!tableId || !recordId) return '-';
+  const url = `/api/download-order-excel?tableId=${encodeURIComponent(tableId)}&record_id=${encodeURIComponent(recordId)}&orderNo=${encodeURIComponent(no)}`;
+  return `<a class="btn-light" href="${url}" target="_blank" rel="noopener">Download Excel</a>`;
+}
+
+function localOrderDownloadLink(orderNo, fileVal, row){
+  return backendOrderDownloadLink(row);
+}
+
+function renderOrders(){let e=$('orderRows');if(!e)return;e.innerHTML=(Array.isArray(S.orders)?S.orders:[]).map(r=>{let f=r.fields||{};return `<tr><td>${esc(orderNoValue(f))}</td><td>${esc(f['Company Name'])}</td><td>${esc(f['Billing Address']||'')}</td><td>${esc(f['Country']||'')}</td><td>${esc(f['Invoice Currency']||'')}</td><td>${statusCell(r,'spare')}</td><td>${backendOrderDownloadLink(r)}</td><td>${invoiceDownloadCell(r)}</td><td>${paymentReceiptCell(r)}</td><td>${Array.isArray(f['Invoice Upload'])?'Download':'-'}</td></tr>`}).join('')}
 
 function readFileBase64(inputId){
   return new Promise(resolve=>{
