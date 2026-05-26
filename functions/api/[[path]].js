@@ -536,11 +536,15 @@ async function handle(req, env) {
       "Spare Order Case": no,
 
       "Company Name": b.companyName || "",
+      "Name": b.companyName || "",
       "Contact Name": b.contactName || "",
+      "Contact": b.contactName || "",
+      "Contact Person": b.contactName || "",
       "Contact Person": b.contactName || "",
       "Contact Email": b.contactEmail || b.email || "",
 
       "Address ( Receiver Info )": b.address || b.receiverAddress || "",
+      "Receiver Address": b.address || b.receiverAddress || "",
       "Address": b.address || b.receiverAddress || "",
       "Receiver Address": b.address || b.receiverAddress || "",
 
@@ -554,6 +558,7 @@ async function handle(req, env) {
       "Issue Description": b.details || b.issueDescription || b.issue || b.description || "",
 
       "Upload all the required details link": uploadRequiredLink,
+      "Upload all the required details": uploadRequiredLink,
       "Upload all required details link": uploadRequiredLink,
       "Required Details Link": uploadRequiredLink,
 
@@ -574,6 +579,7 @@ async function handle(req, env) {
     const fieldTypes = await getFieldTypes(env, tableId);
     const urlFieldNames = new Set([
       "Upload all the required details link",
+      "Upload all the required details",
       "Upload all required details link",
       "Required Details Link",
       "Log File",
