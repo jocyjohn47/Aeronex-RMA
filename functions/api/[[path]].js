@@ -147,19 +147,7 @@ function repairTable(env, country) {
   return lower(country).includes("ksa") ? env.REPAIR_KSA_TABLE_ID : env.REPAIR_UAE_TABLE_ID;
 }
 
-function spareOrderNo(fields) {
-  return norm(
-    fields?.["Spare Order No"] ||
-    fields?.["Spare Order Case"] ||
-    fields?.["Order No"] ||
-    fields?.["Case No"] ||
-    ""
-  );
-}
 
-function getOrderFolderKey(orderNo, fileName) {
-  return `aeronex-orders/${orderNo}/${fileName}`;
-}
 
 function orderNo(fields) {
   return norm(fields["Spare Order No"] || fields["Spare Order Case"]);
@@ -228,6 +216,30 @@ async function resolveOrderNoForUpload(env, b) {
     } catch (_) {}
   }
   return no;
+}
+
+function makeSpareOrderNo(country) {
+  // ONE order number used everywhere: Lark record, order.xls, invoice.pdf, payment-receipt.pdf.
+  // Country-specific prefix:
+  // UAE/Other Region => UAEASPAREyyyyMMddHHmmss
+  // KSA              => KSAASPAREyyyyMMddHHmmss
+  const ts = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
+  const prefix = lower(country).includes("ksa") ? "KSAASPARE" : "UAEASPARE";
+  return `${prefix}${ts}`;
+}
+
+function spareOrderNo(fields) {
+  return norm(
+    fields?.["Spare Order Case"] ||
+    fields?.["Spare Order No"] ||
+    fields?.["Order No"] ||
+    fields?.["Case No"] ||
+    ""
+  );
+}
+
+function getOrderFolderKey(orderNo, fileName) {
+  return `aeronex-orders/${orderNo}/${fileName}`;
 }
 
 async function handle(req, env) {
@@ -308,11 +320,11 @@ async function handle(req, env) {
     const country = norm(b.country || "UAE & Other Region");
     const tableId = spareTable(env, country);
     const items = b.items || b.cart || [];
-    const prefix = lower(country).includes("ksa") ? "KSA" : "UAE";
-    const no = `${prefix}ASPARE${new Date().toISOString().replace(/\D/g, "").slice(0, 14)}`;
+    const no = makeSpareOrderNo(country);
 
     const fields = {
       "Spare Order Case": no,
+      "Spare Order No": no,
       "Company Name": b.companyName || "",
       "Contact Name": b.contactName || "",
       "Contact Email": b.contactEmail || b.email || "",
