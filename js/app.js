@@ -1,4 +1,3 @@
-
 function save(user){
   localStorage.setItem('aeronexUser', JSON.stringify(user || {}));
   localStorage.setItem('aeronex_user', JSON.stringify(user || {}));
@@ -19,11 +18,15 @@ function logout(){
 }
 function msg(id, text){
   const el = document.getElementById(id);
-  if (el) el.textContent = text || '';
+  if(el) el.textContent = text || '';
 }
-
-
-
+function requireLogin(){
+  if(!S.user || !S.user.email){
+    location.href='/index.html';
+    return false;
+  }
+  return true;
+}
 
 
 function currentUserRoleText(){
@@ -246,7 +249,9 @@ async function refreshAfterCreateRepair(){
   renderRepairStatus();
 }
 
-function canManageOrders(){let role=String(S.user?.role||S.user?.fields?.['User Role']||'').toLowerCase();return role.includes('admin')||role.includes('technician')||role.includes('tech')}
+function canManageOrders(){
+  return currentUserIsAdminTech();
+}
 function larkOrderTableUrl(row){
   const c = (row.fields?.Country || selectedCountry() || '').toString();
   if(c.includes('KSA')) return window.LARK_SPARE_ORDER_KSA_URL || '';
@@ -334,7 +339,8 @@ function fileDownloadLink(v){
 async function api(url,opt={}){
   let r=await fetch(url,{...opt,headers:{'Content-Type':'application/json',...(opt.headers||{})}});
   let d=await r.json().catch(()=>({}));
-  if(!r.ok)throw new Error(d.error||JSON.stringify(d));
+  if(!r.ok) throw new Error(d.error||JSON.stringify(d));
+  if(Array.isArray(d)) return d;
   if(url.startsWith('/api/spares') && d.items) return d.items;
   if(url.startsWith('/api/spare-list') && d.items) return d.items;
   if(url.startsWith('/api/dealers') && d.dealers) return d.dealers;
@@ -342,15 +348,6 @@ async function api(url,opt={}){
   if(url.startsWith('/api/my-orders') && d.orders) return d.orders;
   if(url.startsWith('/api/my-repairs') && d.repairs) return d.repairs;
   return d;
-}
-function currencyOptions(){
-  const c = selectedCountry();
-  return c.includes('KSA')
-    ? '<option>SAR</option><option>USD</option>'
-    : '<option>USD</option><option>AED</option>';
-}
-function selectedInvoiceCurrency(){
-  return $('invoiceCurrency') ? $('invoiceCurrency').value : (selectedCountry().includes('KSA') ? 'SAR' : 'USD');
 }
 
 function selectedCountry(){
@@ -370,9 +367,6 @@ async function login(){
   }catch(e){
     msg('msg', e.message || 'Invalid login');
   }
-}
-function dealerAddress(){
-  return parseRemark(uf('Remarks',''),'Address') || uf('Remarks','');
 }
 function dealerPhone(){
   return parseRemark(uf('Remarks',''),'Contact No') || '';
@@ -396,7 +390,7 @@ function addListed(){let v=$('spareSelect').value;if(!v)return msg('orderMsg','S
 function addCustom(){let n=$('customName').value.trim();if(!n)return msg('orderMsg','Enter custom material name');S.cart.push({materialCode:$('customCode').value.trim(),materialName:n,compatibleModel:'Custom',price:'-',stock:'-',qty:$('customQty').value||'1'});$('customCode').value='';$('customName').value='';drawCart()}
 function drawCart(){let e=$('cartRows');if(!e)return;e.innerHTML=S.cart.map((x,i)=>`<tr><td>${esc(x.materialCode||'CUSTOM')}</td><td>${esc(x.materialName)}</td><td>${esc(x.compatibleModel)}</td><td>${esc(x.qty)}</td><td><button class="btn-danger" onclick="S.cart.splice(${i},1);drawCart()">Remove</button></td></tr>`).join('')}
 async function submitOrder(){if(!S.cart.length)return msg('orderMsg','Add at least one item');let p={companyName:uf('Company Name','AERO NEX'),contactName:uf('Contact Person',''),billingAddress:dealerAddress(),invoiceCurrency:selectedInvoiceCurrency(),country:selectedCountry(),items:S.cart,remarks:'Order file/Excel should contain '+S.cart.length+' spare line(s).'};try{let d=await api('/api/submit-spare',{method:'POST',body:JSON.stringify(p)});msg('orderMsg','Order submitted with Excel file: '+d.orderNo,true);S.cart=[];drawCart();await loadOrders();renderOrders()}catch(e){msg('orderMsg',e.message)}}
-function renderOrders(){let e=$('orderRows');if(!e)return;e.innerHTML=S.orders.map(r=>{let f=r.fields||{};return `<tr><td>${esc(orderNoValue(f))}</td><td>${esc(f['Company Name'])}</td><td>${esc(f['Billing Address']||'')}</td><td>${esc(f['Country']||'')}</td><td>${esc(f['Invoice Currency']||'')}</td><td>${statusCell(r,'spare')}</td><td>${orderFileCellR2(r)}</td><td>${invoiceDownloadCell(r)}</td><td>${paymentReceiptCell(r)}</td><td>${Array.isArray(f['Invoice Upload'])?'Download':'-'}</td></tr>`}).join('')}
+function renderOrders(){let e=$('orderRows');if(!e)return;e.innerHTML=(Array.isArray(S.orders)?S.orders:[]).map(r=>{let f=r.fields||{};return `<tr><td>${esc(orderNoValue(f))}</td><td>${esc(f['Company Name'])}</td><td>${esc(f['Billing Address']||'')}</td><td>${esc(f['Country']||'')}</td><td>${esc(f['Invoice Currency']||'')}</td><td>${statusCell(r,'spare')}</td><td>${orderFileCellR2(r)}</td><td>${invoiceDownloadCell(r)}</td><td>${paymentReceiptCell(r)}</td><td>${Array.isArray(f['Invoice Upload'])?'Download':'-'}</td></tr>`}).join('')}
 
 function readFileBase64(inputId){
   return new Promise(resolve=>{
@@ -449,7 +443,7 @@ async function submitRepair(){
   try{let d=await api('/api/repair-case',{method:'POST',body:JSON.stringify(p)});msg('repairMsg','Repair case created',true);await loadRepairs();renderRepairStatus()}catch(e){msg('repairMsg',e.message)}
 }
 function renderRepairStatus(){
-  $('repairStatus').innerHTML=`<div class="panel"><h2>Repair Status <button class="btn-light" onclick="refreshRepairs()">Refresh</button></h2><div class="table-wrap"><table><thead><tr><th>Repair Case No</th><th>Dealer / Company</th><th>Model No</th><th>Serial No</th><th>Date</th><th>Status</th><th>Log Link</th><th>Issue Media / Required Details</th><th>Remarks</th><th>Notes</th></tr></thead><tbody>${S.repairs.map(r=>{let f=r.fields||{};return `<tr><td>${esc(f['REPAIR CASE']||f['Repair Case']||'')}</td><td>${esc(f['Company Name']||f['Dealer Name']||'')}</td><td>${esc(f['Model No']||'')}</td><td>${esc(f['Serial No']||'')}</td><td>${esc(f['Date of Purchase / Activation date']||f['Date Of Activation']||'')}</td><td>${statusCell(r,'repair')}</td><td>${linkCell(f['Log File']||f['Log for Drone and RC'])}</td><td>${linkCell(f['Upload all the required details']||f['Issue Video and Pictures'])}</td><td>${esc(f['Remarks']||'')}</td><td>${esc(f['Notes']||'')}</td></tr>`}).join('')}</tbody></table></div></div>`;
+  $('repairStatus').innerHTML=`<div class="panel"><h2>Repair Status <button class="btn-light" onclick="refreshRepairs()">Refresh</button></h2><div class="table-wrap"><table><thead><tr><th>Repair Case No</th><th>Dealer / Company</th><th>Model No</th><th>Serial No</th><th>Date</th><th>Status</th><th>Log Link</th><th>Issue Media / Required Details</th><th>Remarks</th><th>Notes</th></tr></thead><tbody>${(Array.isArray(S.repairs)?S.repairs:[]).map(r=>{let f=r.fields||{};return `<tr><td>${esc(f['REPAIR CASE']||f['Repair Case']||'')}</td><td>${esc(f['Company Name']||f['Dealer Name']||'')}</td><td>${esc(f['Model No']||'')}</td><td>${esc(f['Serial No']||'')}</td><td>${esc(f['Date of Purchase / Activation date']||f['Date Of Activation']||'')}</td><td>${statusCell(r,'repair')}</td><td>${linkCell(f['Log File']||f['Log for Drone and RC'])}</td><td>${linkCell(f['Upload all the required details']||f['Issue Video and Pictures'])}</td><td>${esc(f['Remarks']||'')}</td><td>${esc(f['Notes']||'')}</td></tr>`}).join('')}</tbody></table></div></div>`;
 }
 function linkCell(v){if(!v)return '-'; if(typeof v==='object'&&v.link)return `<a href="${esc(v.link)}" target="_blank">Open</a>`; return `<a href="${esc(v)}" target="_blank">Open</a>`;}
 function renderDealers(){
@@ -466,7 +460,7 @@ async function saveDealer(record_id){
   try{await api('/api/dealer-update',{method:'POST',body:JSON.stringify(p)});msg('dealerMsg','Dealer details saved',true);S.dealers=await api('/api/dealers');renderDealers()}catch(e){msg('dealerMsg',e.message)}
 }
 function renderNotes(){
-  $('portalNotes').innerHTML=`<div class="panel"><h2>Portal Notes</h2><div class="notice">Important announcements, policies, and external document links.</div><div class="table-wrap"><table><thead><tr><th>Title</th><th>Page</th><th>Note</th><th>Country</th><th>Document Link</th></tr></thead><tbody>${S.notes.map(r=>{let f=r.fields||{};let doc=f['Document Link']||f.Document||f.Link||f.URL||f['Document URL'];return `<tr><td>${esc(f.Title||'')}</td><td>${esc(f.Page||'')}</td><td>${esc(f.Note||f.Description||'')}</td><td>${esc(f.Country||'All')}</td><td>${portalDocumentLink(doc)}</td></tr>`}).join('')}</tbody></table></div></div>`;
+  $('portalNotes').innerHTML=`<div class="panel"><h2>Portal Notes</h2><div class="notice">Important announcements, policies, and external document links.</div><div class="table-wrap"><table><thead><tr><th>Title</th><th>Page</th><th>Note</th><th>Country</th><th>Document Link</th></tr></thead><tbody>${(Array.isArray(S.notes)?S.notes:[]).map(r=>{let f=r.fields||{};let doc=f['Document Link']||f.Document||f.Link||f.URL||f['Document URL'];return `<tr><td>${esc(f.Title||'')}</td><td>${esc(f.Page||'')}</td><td>${esc(f.Note||f.Description||'')}</td><td>${esc(f.Country||'All')}</td><td>${portalDocumentLink(doc)}</td></tr>`}).join('')}</tbody></table></div></div>`;
 }
 function renderAdmin(){
   $('admin').innerHTML=`<div class="panel"><h2>Admin Dashboard</h2><div class="notice">Admin tools: reset passwords, mandatory fields planning, spare Excel sync planning, portal notes planning.</div>
@@ -474,7 +468,7 @@ function renderAdmin(){
   <div class="table-wrap"><table><thead><tr><th>Company</th><th>User Email</th><th>Contact</th><th>Role</th><th>Country</th><th>Action</th></tr></thead><tbody>${visibleDealers().map(r=>{let f=r.fields||{};return `<tr><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Username ( Email )']||'')}</td><td>${esc(f['Contact Person']||'')}</td><td>${esc(f['User Role']||'')}</td><td>${esc(f['Country']||'')}</td><td><button onclick="resetUserPassword('${r.record_id}')">Reset Password</button></td></tr>`}).join('')}</tbody></table></div>
   <div class="cards"><div class="card"><h3>Mandatory Field Settings</h3><p>Coming next: configurable required fields.</p></div><div class="card"><h3>Spare List Excel Sync</h3><p>Coming next: upload/merge spare list.</p></div><div class="card"><h3>Portal Notes</h3><p>Use Lark Portal Note table with external document links.</p></div></div></div>`;
 }
-async function loadOrders(){S.orders=await api('/api/my-orders?country='+encodeURIComponent(selectedCountry())+'&role='+encodeURIComponent(S.user.role||'')+'&email='+encodeURIComponent(S.user.email||S.user.username||''))}
+async function loadOrders(){S.orders=await api('/api/my-orders?country='+encodeURIComponent(selectedCountry())+'&role='+encodeURIComponent(S.user.role||''))}
 async function loadRepairs(){S.repairs=await api('/api/my-repairs?country='+encodeURIComponent(selectedCountry())+'&role='+encodeURIComponent(S.user.role||''))}
 async function initApp(){if(!requireLogin())return;layout();renderDashboard();try{S.spares=await api('/api/spares')}catch{}try{await loadOrders()}catch{}try{await loadRepairs()}catch{}try{S.dealers=await api('/api/dealers')}catch{}try{S.notes=await api('/api/portal-notes')}catch{}renderSpare();renderRepairCreate();renderRepairStatus();renderDealers();renderNotes();renderChangePassword();renderAdmin()}
 
