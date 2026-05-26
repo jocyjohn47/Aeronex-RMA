@@ -184,6 +184,17 @@ async function uploadPaymentReceipt(recordId, tableId, orderNo, input){
     await loadOrders(); renderOrders();
   }catch(e){ alert(e.message); }
 }
+function getSpareOrderNoFromRow(r){
+  const f = r && r.fields ? r.fields : {};
+  return (
+    f['Spare Order Case'] ||
+    f['Spare Order No'] ||
+    f['Order No'] ||
+    f['Case No'] ||
+    ''
+  );
+}
+
 function invoiceDownloadCell(row){
   const f = (row && row.fields) || {};
   const url = linkUrlValue(f['Invoice Download'] || f['Invoice Link'] || f['Invoice URL']);
@@ -506,19 +517,6 @@ async function uploadReceiptForRow(r, inputId){
   renderSpare();
 }
 
-
-
-
-function getSpareOrderNoFromRow(r){
-  const f = r && r.fields ? r.fields : {};
-  return (
-    f['Spare Order Case'] ||
-    f['Spare Order No'] ||
-    f['Order No'] ||
-    f['Case No'] ||
-    ''
-  );
-}
 
 function backendOrderDownloadLink(r){
   const no = getSpareOrderNoFromRow(r);
