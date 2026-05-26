@@ -1,16 +1,18 @@
 
 function save(user){
+  localStorage.setItem('aeronexUser', JSON.stringify(user || {}));
   localStorage.setItem('aeronex_user', JSON.stringify(user || {}));
   localStorage.setItem('user', JSON.stringify(user || {}));
 }
 function loadUser(){
   try{
-    return JSON.parse(localStorage.getItem('aeronex_user') || localStorage.getItem('user') || '{}');
+    return JSON.parse(localStorage.getItem('aeronexUser') || localStorage.getItem('aeronex_user') || localStorage.getItem('user') || 'null');
   }catch(e){
-    return {};
+    return null;
   }
 }
 function logout(){
+  localStorage.removeItem('aeronexUser');
   localStorage.removeItem('aeronex_user');
   localStorage.removeItem('user');
   location.href='/index.html';
@@ -307,7 +309,7 @@ function portalDocumentLink(v){
 }
 
 
-let S={user:JSON.parse(localStorage.getItem('aeronexUser')||'null'),spares:[],cart:[],orders:[],repairs:[],dealers:[],notes:[]};
+let S={user:loadUser(),spares:[],cart:[],orders:[],repairs:[],dealers:[],notes:[]};
 function $(id){return document.getElementById(id)}function esc(v){return String(v??'').replace(/[&<>"]/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]))}
 
 
