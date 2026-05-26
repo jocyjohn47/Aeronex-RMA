@@ -225,17 +225,20 @@ async function resolveOrderNoForUpload(env, b) {
 
 
 function makeSpareOrderNo(country) {
-  const ts = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
-  return `DXBRMASPARE${ts}`;
+  const d = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  const date = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
+  const seq = `${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}`;
+  return `DXBRMASPARE${date}${seq}`;
 }
 
 function isValidSpareOrderNo(no) {
-  return /^DXBRMASPARE\d{14}$/.test(norm(no));
+  return /^DXBRMASPARE\d{12}$/.test(norm(no));
 }
 
 function assertValidSpareOrderNo(no) {
   if (!isValidSpareOrderNo(no)) {
-    throw new Error("Invalid spare order number. Expected DXBRMASPAREyyyyMMddHHmmss, got: " + norm(no));
+    throw new Error("Invalid spare order number. Expected DXBRMASPAREYYYYMMDD0000, got: " + norm(no));
   }
   return norm(no);
 }
