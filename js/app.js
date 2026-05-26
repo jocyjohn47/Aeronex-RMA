@@ -1,3 +1,14 @@
+
+function isAdmin(){
+  return currentUserIsAdmin();
+}
+function isAdminTech(){
+  return currentUserIsAdminTech();
+}
+function canManageOrders(){
+  return currentUserIsAdminTech();
+}
+
 function save(user){
   localStorage.setItem('aeronexUser', JSON.stringify(user || {}));
   localStorage.setItem('aeronex_user', JSON.stringify(user || {}));
