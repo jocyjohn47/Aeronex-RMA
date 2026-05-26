@@ -207,7 +207,7 @@ function csvBytes(caseNo, fields, items) {
 }
 
 async function resolveOrderNoForUpload(env, b) {
-  let no = norm(b.orderNo || b.caseNo);
+  let no = "";
   if (b.tableId && b.record_id) {
     try {
       const rec = await getRecord(env, b.tableId, b.record_id);
@@ -215,6 +215,7 @@ async function resolveOrderNoForUpload(env, b) {
       if (fromRecord) no = fromRecord;
     } catch (_) {}
   }
+  if (!no) no = norm(b.orderNo || b.caseNo);
   return no;
 }
 
