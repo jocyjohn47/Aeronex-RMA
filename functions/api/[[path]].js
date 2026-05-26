@@ -204,6 +204,108 @@ function csvBytes(caseNo, fields, items) {
   return new TextEncoder().encode(csv);
 }
 
+function htmlExcelBytes(orderNo, fields, items) {
+  const escHtml = v => String(v ?? "").replace(/[&<>"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]));
+  const itemRows = (items || []).map((i, idx) => `
+    <tr>
+      <td>${idx + 1}</td>
+      <td>${escHtml(i.materialCode || i["Material Code"] || "")}</td>
+      <td>${escHtml(i.materialName || i["Material Name"] || "")}</td>
+      <td>${escHtml(i.compatibleModel || i["Compatible Model"] || "")}</td>
+      <td>${escHtml(i.qty || i.Qty || 1)}</td>
+    </tr>`).join("");
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body{font-family:Arial,sans-serif}
+  h1{font-size:20px;color:#1f3b8a}
+  h2{font-size:16px;margin-top:20px}
+  table{border-collapse:collapse;width:100%}
+  th{background:#1f3b8a;color:#fff;font-weight:bold}
+  th,td{border:1px solid #777;padding:8px;text-align:left}
+  .meta th{width:220px}
+</style>
+</head>
+<body>
+<h1>AERO NEX Spare Order</h1>
+<table class="meta">
+<tr><th>Spare Order No</th><td>${escHtml(orderNo)}</td></tr>
+<tr><th>Company Name</th><td>${escHtml(fields["Company Name"])}</td></tr>
+<tr><th>Contact Name</th><td>${escHtml(fields["Contact Name"] || fields["Contact Person"])}</td></tr>
+<tr><th>Billing Address</th><td>${escHtml(fields["Billing Address"] || fields["Invoice Address"])}</td></tr>
+<tr><th>Country</th><td>${escHtml(fields.Country)}</td></tr>
+<tr><th>Invoice Currency</th><td>${escHtml(fields["Invoice Currency"])}</td></tr>
+<tr><th>Status</th><td>${escHtml(fields.Status || "Submitted")}</td></tr>
+</table>
+<h2>Spare Parts</h2>
+<table>
+<thead><tr><th>No</th><th>Material Code</th><th>Material Name</th><th>Compatible Model</th><th>Qty</th></tr></thead>
+<tbody>${itemRows || '<tr><td colspan="5">No items</td></tr>'}</tbody>
+</table>
+</body>
+</html>`;
+  return new TextEncoder().encode(html);
+}
+
+function orderAttachmentValue(fileToken, fileName) {
+  return [{ file_token: fileToken, name: fileName || "order.xls" }];
+}
+
+async function larkUploadBitableAttachment(env, tableId, recordId, fieldName, bytes, fileName, mimeType) {
+  const token = await larkToken(env);
+  const boundary = "----aeronex" + Math.random().toString(16).slice(2);
+  const enc = new TextEncoder();
+  const meta = JSON.stringify({
+    parent_type: "bitable_file",
+    parent_node: env.LARK_BASE_TOKEN,
+    size: bytes.length,
+    file_name: fileName
+  });
+
+  const parts = [
+    enc.encode(`--${boundary}\r\nContent-Disposition: form-data; name="file_name"\r\n\r\n${fileName}\r\n`),
+    enc.encode(`--${boundary}\r\nContent-Disposition: form-data; name="parent_type"\r\n\r\nbitable_file\r\n`),
+    enc.encode(`--${boundary}\r\nContent-Disposition: form-data; name="parent_node"\r\n\r\n${env.LARK_BASE_TOKEN}\r\n`),
+    enc.encode(`--${boundary}\r\nContent-Disposition: form-data; name="size"\r\n\r\n${bytes.length}\r\n`),
+    enc.encode(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\nContent-Type: ${mimeType || "application/vnd.ms-excel"}\r\n\r\n`),
+    bytes,
+    enc.encode(`\r\n--${boundary}--\r\n`)
+  ];
+
+  let size = 0;
+  for (const p of parts) size += p.length;
+  const body = new Uint8Array(size);
+  let offset = 0;
+  for (const p of parts) { body.set(p, offset); offset += p.length; }
+
+  const res = await fetch("https://open.larksuite.com/open-apis/drive/v1/medias/upload_all", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": `multipart/form-data; boundary=${boundary}`
+    },
+    body
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.code) throw new Error("Lark upload_all error: " + JSON.stringify(data));
+
+  const fileToken = data.data?.file_token || data.data?.file?.file_token || data.file_token;
+  if (!fileToken) throw new Error("No file_token from Lark upload_all: " + JSON.stringify(data));
+
+  await updateRecord(env, tableId, recordId, { [fieldName]: orderAttachmentValue(fileToken, fileName) });
+  return { ok: true, fileToken };
+}
+
+async function attachOrderExcelToLark(env, tableId, recordId, bytes, fileName) {
+  if (!recordId) throw new Error("Missing record_id for Order File attachment");
+  const ftypes = await getFieldTypes(env, tableId);
+  if (!ftypes["Order File"]) return { skipped: true, reason: "Order File field not found" };
+  return await larkUploadBitableAttachment(env, tableId, recordId, "Order File", bytes, fileName, "application/vnd.ms-excel");
+}
+
 async function handle(req, env) {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: H });
 
@@ -301,14 +403,19 @@ async function handle(req, env) {
       "Remarks": b.remarks || ""
     };
 
-    const fileUrl = await putR2(env, `aeronex-orders/${no}/order.xls`, csvBytes(no, fields, items), "application/vnd.ms-excel");
+    const excelFileName = `${no}.xls`;
+    const excelData = htmlExcelBytes(no, fields, items);
+    const fileUrl = await putR2(env, `aeronex-orders/${no}/order.xls`, excelData, "application/vnd.ms-excel");
     fields.Remarks = fields.Remarks ? `${fields.Remarks}\nOrder File URL: ${fileUrl}` : `Order File URL: ${fileUrl}`;
 
     const fieldTypes = await getFieldTypes(env, tableId);
     const sendFields = {};
     for (const [k, v] of Object.entries(fields)) if (fieldTypes[k]) sendFields[k] = v;
     const result = await createRecord(env, tableId, sendFields);
-    return json({ ok: true, orderNo: no, r2ExcelUrl: fileUrl, r2OrderFileUrl: fileUrl, result: result.data });
+    let orderFileUpload = null;
+    try { orderFileUpload = await attachOrderExcelToLark(env, tableId, result.data?.record?.record_id || result.data?.record_id, excelData, excelFileName); }
+    catch(e) { orderFileUpload = { ok:false, error:e.message || String(e) }; }
+    return json({ ok: true, orderNo: no, r2ExcelUrl: fileUrl, r2OrderFileUrl: fileUrl, orderFileUpload, result: result.data });
   }
 
   if ((p === "/api/create-repair" || p === "/api/repair-case") && req.method === "POST") {
@@ -395,12 +502,7 @@ if (p === "/api/download-order-excel") {
     const max = Math.max(materialCodes.length, materialNames.length, qtys.length, 1);
     const items = [];
     for (let i = 0; i < max; i++) {
-      items.push({
-        materialCode: materialCodes[i] || "",
-        materialName: materialNames[i] || "",
-        compatibleModel: "",
-        qty: qtys[i] || "1"
-      });
+      items.push({ materialCode: materialCodes[i] || "", materialName: materialNames[i] || "", compatibleModel: "", qty: qtys[i] || "1" });
     }
     const bytes = htmlExcelBytes(no, fields, items);
     return new Response(bytes, {
