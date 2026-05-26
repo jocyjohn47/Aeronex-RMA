@@ -327,6 +327,37 @@ async function attachOrderExcelToLark(env, tableId, recordId, bytes, fileName) {
   return { ok: true, fileToken };
 }
 
+function toLarkDateTimeValue(v) {
+  const s = norm(v);
+  if (!s) return "";
+  if (/^\d+$/.test(s)) return Number(s);
+
+  let d = null;
+
+  // Browser date input: 2026-05-04
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 0, 0, 0));
+
+  // Display style sometimes received from UI: 04-May-2026
+  if (!d) {
+    m = s.match(/^(\d{1,2})-([A-Za-z]{3,})-(\d{4})$/);
+    if (m) {
+      const months = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,sept:8,oct:9,nov:10,dec:11};
+      const mon = months[m[2].toLowerCase()];
+      if (mon !== undefined) d = new Date(Date.UTC(Number(m[3]), mon, Number(m[1]), 0, 0, 0));
+    }
+  }
+
+  // Fallback parse for ISO or browser accepted strings.
+  if (!d) {
+    const parsed = new Date(s);
+    if (!Number.isNaN(parsed.getTime())) d = parsed;
+  }
+
+  if (!d || Number.isNaN(d.getTime())) return s;
+  return d.getTime();
+}
+
 async function handle(req, env) {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: H });
 
@@ -536,7 +567,9 @@ async function handle(req, env) {
     const fieldTypes = await getFieldTypes(env, tableId);
     const sendFields = {};
     for (const [k, v] of Object.entries(fields)) {
-      if (fieldTypes[k] && v !== undefined && v !== null && v !== "") sendFields[k] = v;
+      if (fieldTypes[k] && v !== undefined && v !== null && v !== "") {
+        sendFields[k] = fieldTypes[k] === 5 ? toLarkDateTimeValue(v) : v;
+      }
     }
 
     const result = await createRecord(env, tableId, sendFields);
