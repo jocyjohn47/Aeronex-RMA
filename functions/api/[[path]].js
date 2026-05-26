@@ -5,7 +5,7 @@ const H = {
   "access-control-allow-headers": "content-type,x-user-role,x-user-email"
 };
 
-const json = (d, s = 200) => new Response(JSON.stringify(d), { status: s, headers: H });
+const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: H });
 const norm = v => String(v ?? "").trim();
 const lower = v => norm(v).toLowerCase();
 
@@ -19,30 +19,30 @@ function fieldText(v) {
   return norm(v);
 }
 
-function first(f, names) {
+function firstField(f, names) {
   for (const n of names) {
     if (f && f[n] !== undefined && f[n] !== null && fieldText(f[n]) !== "") return f[n];
   }
   return "";
 }
 
-function getEmail(f) { return lower(fieldText(first(f, ["Username ( Email )","Username (Email)","Username","Email","Contact Email","Login Email"]))); }
-function getPass(f) { return norm(fieldText(first(f, ["Reset Password","Password","Temp Password","Temporary Password","Login Password"]))); }
-function getRole(f) { return fieldText(first(f, ["User Role","Role","User Type"])); }
-function getCompany(f) { return fieldText(first(f, ["Company Name","Dealer / Company","Company"])); }
-function getContact(f) { return fieldText(first(f, ["Contact Person","Contact Name","Name"])); }
-function getCountry(f) { return fieldText(first(f, ["Country","Region"])); }
+function userEmail(f) { return lower(fieldText(firstField(f, ["Username ( Email )","Username (Email)","Username","Email","Contact Email","Login Email"]))); }
+function userPassword(f) { return norm(fieldText(firstField(f, ["Reset Password","Password","Temp Password","Temporary Password","Login Password"]))); }
+function userRole(f) { return fieldText(firstField(f, ["User Role","Role","User Type"])); }
+function userCompany(f) { return fieldText(firstField(f, ["Company Name","Dealer / Company","Company"])); }
+function userContact(f) { return fieldText(firstField(f, ["Contact Person","Contact Name","Name"])); }
+function userCountry(f) { return fieldText(firstField(f, ["Country","Region"])); }
 
 function publicUser(r) {
   const f = r.fields || {};
   return {
     record_id: r.record_id,
-    email: getEmail(f),
-    username: getEmail(f),
-    companyName: getCompany(f),
-    contactName: getContact(f),
-    role: getRole(f),
-    country: getCountry(f),
+    email: userEmail(f),
+    username: userEmail(f),
+    companyName: userCompany(f),
+    contactName: userContact(f),
+    role: userRole(f),
+    country: userCountry(f),
     fields: f
   };
 }
@@ -58,12 +58,12 @@ async function larkToken(env) {
   return data.tenant_access_token;
 }
 
-async function lf(env, path, init = {}) {
-  const t = await larkToken(env);
+async function larkFetch(env, path, init = {}) {
+  const token = await larkToken(env);
   const res = await fetch("https://open.larksuite.com/open-apis" + path, {
     ...init,
     headers: {
-      authorization: `Bearer ${t}`,
+      authorization: `Bearer ${token}`,
       "content-type": "application/json; charset=utf-8",
       ...(init.headers || {})
     }
@@ -73,57 +73,63 @@ async function lf(env, path, init = {}) {
   return data;
 }
 
-async function list(env, table) {
-  if (!table) return [];
-  let out = [], pt = "";
+async function listRecords(env, tableId) {
+  if (!tableId) return [];
+  let rows = [];
+  let pageToken = "";
   do {
     const qs = new URLSearchParams({ page_size: "500" });
-    if (pt) qs.set("page_token", pt);
-    const d = await lf(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${table}/records?${qs}`);
-    out.push(...(d.data?.items || []));
-    pt = d.data?.page_token || "";
-  } while (pt);
+    if (pageToken) qs.set("page_token", pageToken);
+    const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/records?${qs}`);
+    rows.push(...(data.data?.items || []));
+    pageToken = data.data?.page_token || "";
+  } while (pageToken);
+  return rows;
+}
+
+async function getFieldTypes(env, tableId) {
+  if (!tableId) return {};
+  const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields`);
+  const out = {};
+  for (const f of data.data?.items || []) out[f.field_name] = f.type;
   return out;
 }
 
-async function types(env, table) {
-  if (!table) return {};
-  const d = await lf(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${table}/fields`);
-  const o = {};
-  for (const f of d.data?.items || []) o[f.field_name] = f.type;
-  return o;
-}
-
-async function create(env, table, fields) {
-  return lf(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${table}/records`, {
+async function createRecord(env, tableId, fields) {
+  return larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/records`, {
     method: "POST",
     body: JSON.stringify({ fields })
   });
 }
 
-async function update(env, table, id, fields) {
-  return lf(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${table}/records/${id}`, {
+async function updateRecord(env, tableId, recordId, fields) {
+  return larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/records/${recordId}`, {
     method: "PUT",
     body: JSON.stringify({ fields })
   });
 }
 
-async function del(env, table, id) {
-  return lf(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${table}/records/${id}`, { method: "DELETE" });
+async function deleteRecord(env, tableId, recordId) {
+  return larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/records/${recordId}`, {
+    method: "DELETE"
+  });
 }
 
-function larkUrl(url, text) { return { link: url, text: text || url }; }
+function larkUrl(url, label) {
+  return { link: url, text: label || url };
+}
 
-function b64(dataUrl) {
+function bytesFromDataUrl(dataUrl) {
   const s = String(dataUrl || "").includes(",") ? String(dataUrl).split(",").pop() : String(dataUrl || "");
   const bin = atob(s);
-  const a = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
-  return a;
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
 }
 
-async function putR2(env, key, bytes, ct) {
-  await env.R2.put(key, bytes, { httpMetadata: { contentType: ct || "application/octet-stream" } });
+async function putR2(env, key, bytes, contentType) {
+  if (!env.R2) throw new Error("R2 binding missing. Add binding name R2 to bucket aeronex-rma.");
+  await env.R2.put(key, bytes, { httpMetadata: { contentType: contentType || "application/octet-stream" } });
   return `${String(env.R2_PUBLIC_URL || "").replace(/\/+$/, "")}/${key}`;
 }
 
@@ -135,28 +141,45 @@ function repairTable(env, country) {
   return lower(country).includes("ksa") ? env.REPAIR_KSA_TABLE_ID : env.REPAIR_UAE_TABLE_ID;
 }
 
-function orderNo(f) { return norm(f["Spare Order No"] || f["Spare Order Case"]); }
-function repairNo(f) { return norm(f["Repair Case No"] || f["Repair No"] || f["Repair Case"]); }
+function orderNo(fields) {
+  return norm(fields["Spare Order No"] || fields["Spare Order Case"]);
+}
 
-function orderFileUrl(env, r) {
-  const f = r.fields || {};
-  const m = String((f.Remarks || "") + "\n" + (f.Notes || "")).match(/Order File URL:\s*(https?:\/\/\S+)/i);
+function repairNo(fields) {
+  return norm(fields["Repair Case No"] || fields["Repair No"] || fields["Repair Case"]);
+}
+
+function orderFileUrl(env, row) {
+  const f = row.fields || {};
+  const text = String((f.Remarks || "") + "\n" + (f.Notes || ""));
+  const m = text.match(/Order File URL:\s*(https?:\/\/\S+)/i);
   if (m) return m[1];
   const no = orderNo(f);
   return no ? `${String(env.R2_PUBLIC_URL || "").replace(/\/+$/, "")}/aeronex-orders/${no}/order.xls` : "";
 }
 
-function withSpareMeta(env, table, r) {
-  return { ...r, _table_id: table, r2OrderFileUrl: orderFileUrl(env, r) };
+function withSpareMeta(env, tableId, row) {
+  return { ...row, _table_id: tableId, r2OrderFileUrl: orderFileUrl(env, row) };
 }
 
-function withRepairMeta(env, table, r) {
-  return { ...r, _table_id: table };
+function withRepairMeta(env, tableId, row) {
+  return { ...row, _table_id: tableId };
 }
 
-function excelBytes(no, fields, items) {
+function canSeeAll(role) {
+  const r = lower(role);
+  return r.includes("admin") || r.includes("technician") || r.includes("tech");
+}
+
+function filterOwn(rows, email, role) {
+  if (canSeeAll(role) || !email) return rows;
+  const e = lower(email);
+  return rows.filter(r => lower(r.fields?.["Contact Email"] || r.fields?.["Username ( Email )"] || r.fields?.Email) === e);
+}
+
+function csvBytes(caseNo, fields, items) {
   const rows = [
-    ["Case No", no],
+    ["Case No", caseNo],
     ["Company Name", fields["Company Name"] || ""],
     ["Contact Name", fields["Contact Name"] || fields["Contact Person"] || ""],
     ["Billing Address", fields["Billing Address"] || fields["Invoice Address"] || ""],
@@ -175,63 +198,65 @@ function excelBytes(no, fields, items) {
   return new TextEncoder().encode(csv);
 }
 
-function filterOwn(rows, email, role) {
-  const admin = lower(role).includes("admin") || lower(role).includes("technician") || lower(role).includes("tech");
-  if (admin || !email) return rows;
-  const e = lower(email);
-  return rows.filter(r => lower(r.fields?.["Contact Email"] || r.fields?.["Username ( Email )"] || r.fields?.["Email"]) === e);
-}
-
 async function handle(req, env) {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: H });
+
   const url = new URL(req.url);
   const p = url.pathname;
 
   if (p === "/api/health") return json({ ok: true, cloudflare_pages_functions: true });
 
-  if (p === "/api/debug-env") return json({ ok: true, has: {
-    LARK_APP_ID: !!env.LARK_APP_ID,
-    LARK_APP_SECRET: !!env.LARK_APP_SECRET,
-    LARK_BASE_TOKEN: !!env.LARK_BASE_TOKEN,
-    USER_TABLE_ID: !!env.USER_TABLE_ID,
-    SPARE_LIST_TABLE_ID: !!env.SPARE_LIST_TABLE_ID,
-    SPARE_ORDER_UAE_TABLE_ID: !!env.SPARE_ORDER_UAE_TABLE_ID,
-    SPARE_ORDER_KSA_TABLE_ID: !!env.SPARE_ORDER_KSA_TABLE_ID,
-    REPAIR_UAE_TABLE_ID: !!env.REPAIR_UAE_TABLE_ID,
-    REPAIR_KSA_TABLE_ID: !!env.REPAIR_KSA_TABLE_ID,
-    PORTAL_NOTES_TABLE_ID: !!env.PORTAL_NOTES_TABLE_ID,
-    R2_PUBLIC_URL: !!env.R2_PUBLIC_URL,
-    R2: !!env.R2
-  }});
+  if (p === "/api/debug-env") {
+    return json({ ok: true, has: {
+      LARK_APP_ID: !!env.LARK_APP_ID,
+      LARK_APP_SECRET: !!env.LARK_APP_SECRET,
+      LARK_BASE_TOKEN: !!env.LARK_BASE_TOKEN,
+      USER_TABLE_ID: !!env.USER_TABLE_ID,
+      SPARE_LIST_TABLE_ID: !!env.SPARE_LIST_TABLE_ID,
+      SPARE_ORDER_UAE_TABLE_ID: !!env.SPARE_ORDER_UAE_TABLE_ID,
+      SPARE_ORDER_KSA_TABLE_ID: !!env.SPARE_ORDER_KSA_TABLE_ID,
+      REPAIR_UAE_TABLE_ID: !!env.REPAIR_UAE_TABLE_ID,
+      REPAIR_KSA_TABLE_ID: !!env.REPAIR_KSA_TABLE_ID,
+      PORTAL_NOTES_TABLE_ID: !!env.PORTAL_NOTES_TABLE_ID,
+      R2_PUBLIC_URL: !!env.R2_PUBLIC_URL,
+      R2: !!env.R2
+    }});
+  }
 
+  // Block public user dump.
   if (p === "/api/users") return json({ error: "Forbidden" }, 403);
 
   if (p === "/api/login" && req.method === "POST") {
     const b = await readBody(req);
     const email = lower(b.username || b.email);
     const pass = norm(b.password);
-    const users = await list(env, env.USER_TABLE_ID);
-    const rec = users.find(r => getEmail(r.fields || {}) === email);
+    const rows = await listRecords(env, env.USER_TABLE_ID);
+    const rec = rows.find(r => userEmail(r.fields || {}) === email);
     if (!rec) return json({ error: "Invalid login: email not found" }, 401);
-    if (getPass(rec.fields || {}) !== pass) return json({ error: "Invalid login: password mismatch" }, 401);
+    if (userPassword(rec.fields || {}) !== pass) return json({ error: "Invalid login: password mismatch" }, 401);
     return json({ ok: true, user: publicUser(rec) });
   }
 
-  if (p === "/api/dealers") return json(await list(env, env.USER_TABLE_ID));
+  if (p === "/api/dealers") {
+    return json(await listRecords(env, env.USER_TABLE_ID));
+  }
 
-  if (p === "/api/spares" || p === "/api/spare-list") return json(await list(env, env.SPARE_LIST_TABLE_ID));
+  if (p === "/api/spares" || p === "/api/spare-list") {
+    return json(await listRecords(env, env.SPARE_LIST_TABLE_ID));
+  }
 
-  if (p === "/api/portal-notes") return json(await list(env, env.PORTAL_NOTES_TABLE_ID));
+  if (p === "/api/portal-notes") {
+    return json(await listRecords(env, env.PORTAL_NOTES_TABLE_ID));
+  }
 
   if (p === "/api/my-orders") {
     const country = norm(url.searchParams.get("country"));
     const email = norm(url.searchParams.get("email"));
     const role = norm(url.searchParams.get("role"));
-    let rows = [];
-    const wantKsa = lower(country).includes("ksa");
-    const wantUae = lower(country).includes("uae") || !country;
-    if (wantUae) rows.push(...(await list(env, env.SPARE_ORDER_UAE_TABLE_ID)).map(r => withSpareMeta(env, env.SPARE_ORDER_UAE_TABLE_ID, r)));
-    if (wantKsa || !country) rows.push(...(await list(env, env.SPARE_ORDER_KSA_TABLE_ID)).map(r => withSpareMeta(env, env.SPARE_ORDER_KSA_TABLE_ID, r)));
+    const rows = [];
+    const q = lower(country);
+    if (!q || q.includes("uae")) rows.push(...(await listRecords(env, env.SPARE_ORDER_UAE_TABLE_ID)).map(r => withSpareMeta(env, env.SPARE_ORDER_UAE_TABLE_ID, r)));
+    if (!q || q.includes("ksa")) rows.push(...(await listRecords(env, env.SPARE_ORDER_KSA_TABLE_ID)).map(r => withSpareMeta(env, env.SPARE_ORDER_KSA_TABLE_ID, r)));
     return json(filterOwn(rows, email, role));
   }
 
@@ -239,18 +264,17 @@ async function handle(req, env) {
     const country = norm(url.searchParams.get("country"));
     const email = norm(url.searchParams.get("email"));
     const role = norm(url.searchParams.get("role"));
-    let rows = [];
-    const wantKsa = lower(country).includes("ksa");
-    const wantUae = lower(country).includes("uae") || !country;
-    if (wantUae) rows.push(...(await list(env, env.REPAIR_UAE_TABLE_ID)).map(r => withRepairMeta(env, env.REPAIR_UAE_TABLE_ID, r)));
-    if (wantKsa || !country) rows.push(...(await list(env, env.REPAIR_KSA_TABLE_ID)).map(r => withRepairMeta(env, env.REPAIR_KSA_TABLE_ID, r)));
+    const rows = [];
+    const q = lower(country);
+    if (!q || q.includes("uae")) rows.push(...(await listRecords(env, env.REPAIR_UAE_TABLE_ID)).map(r => withRepairMeta(env, env.REPAIR_UAE_TABLE_ID, r)));
+    if (!q || q.includes("ksa")) rows.push(...(await listRecords(env, env.REPAIR_KSA_TABLE_ID)).map(r => withRepairMeta(env, env.REPAIR_KSA_TABLE_ID, r)));
     return json(filterOwn(rows, email, role));
   }
 
   if ((p === "/api/submit-spare" || p === "/api/spare-order") && req.method === "POST") {
     const b = await readBody(req);
     const country = norm(b.country || "UAE & Other Region");
-    const table = spareTable(env, country);
+    const tableId = spareTable(env, country);
     const items = b.items || b.cart || [];
     const prefix = lower(country).includes("ksa") ? "KSA" : "UAE";
     const no = `${prefix}ASPARE${new Date().toISOString().replace(/\D/g, "").slice(0, 14)}`;
@@ -271,20 +295,20 @@ async function handle(req, env) {
       "Remarks": b.remarks || ""
     };
 
-    const fileUrl = await putR2(env, `aeronex-orders/${no}/order.xls`, excelBytes(no, fields, items), "application/vnd.ms-excel");
+    const fileUrl = await putR2(env, `aeronex-orders/${no}/order.xls`, csvBytes(no, fields, items), "application/vnd.ms-excel");
     fields.Remarks = fields.Remarks ? `${fields.Remarks}\nOrder File URL: ${fileUrl}` : `Order File URL: ${fileUrl}`;
 
-    const t = await types(env, table);
-    const finalFields = {};
-    for (const [k, v] of Object.entries(fields)) if (t[k]) finalFields[k] = v;
-    const r = await create(env, table, finalFields);
-    return json({ ok: true, orderNo: no, r2ExcelUrl: fileUrl, r2OrderFileUrl: fileUrl, result: r.data });
+    const fieldTypes = await getFieldTypes(env, tableId);
+    const sendFields = {};
+    for (const [k, v] of Object.entries(fields)) if (fieldTypes[k]) sendFields[k] = v;
+    const result = await createRecord(env, tableId, sendFields);
+    return json({ ok: true, orderNo: no, r2ExcelUrl: fileUrl, r2OrderFileUrl: fileUrl, result: result.data });
   }
 
   if ((p === "/api/create-repair" || p === "/api/repair-case") && req.method === "POST") {
     const b = await readBody(req);
     const country = norm(b.country || "UAE & Other Region");
-    const table = repairTable(env, country);
+    const tableId = repairTable(env, country);
     const prefix = lower(country).includes("ksa") ? "KSARMA" : "DXBRMA";
     const no = `${prefix}REPAIR${new Date().toISOString().replace(/\D/g, "").slice(0, 14)}`;
 
@@ -303,11 +327,11 @@ async function handle(req, env) {
       "Remarks": b.remarks || ""
     };
 
-    const t = await types(env, table);
-    const finalFields = {};
-    for (const [k, v] of Object.entries(fields)) if (t[k]) finalFields[k] = v;
-    const r = await create(env, table, finalFields);
-    return json({ ok: true, repairNo: no, caseNo: no, result: r.data });
+    const fieldTypes = await getFieldTypes(env, tableId);
+    const sendFields = {};
+    for (const [k, v] of Object.entries(fields)) if (fieldTypes[k]) sendFields[k] = v;
+    const result = await createRecord(env, tableId, sendFields);
+    return json({ ok: true, repairNo: no, caseNo: no, result: result.data });
   }
 
   if (p === "/api/upload-invoice" && req.method === "POST") {
@@ -316,10 +340,10 @@ async function handle(req, env) {
     if (!no) return json({ error: "Missing orderNo" }, 400);
     const name = b.file?.name || "invoice.pdf";
     const ext = name.includes(".") ? name.split(".").pop() : "pdf";
-    const fileUrl = await putR2(env, `aeronex-orders/${no}/invoice.${ext}`, b64(b.file?.data), b.file?.type || "application/pdf");
+    const fileUrl = await putR2(env, `aeronex-orders/${no}/invoice.${ext}`, bytesFromDataUrl(b.file?.data), b.file?.type || "application/pdf");
     if (b.record_id && b.tableId) {
-      const t = await types(env, b.tableId);
-      await update(env, b.tableId, b.record_id, { "Invoice Download": t["Invoice Download"] === 15 ? larkUrl(fileUrl, "Invoice Download") : fileUrl });
+      const fieldTypes = await getFieldTypes(env, b.tableId);
+      await updateRecord(env, b.tableId, b.record_id, { "Invoice Download": fieldTypes["Invoice Download"] === 15 ? larkUrl(fileUrl, "Invoice Download") : fileUrl });
     }
     return json({ ok: true, url: fileUrl });
   }
@@ -330,23 +354,25 @@ async function handle(req, env) {
     if (!no) return json({ error: "Missing orderNo" }, 400);
     const name = b.file?.name || "payment-receipt.pdf";
     const ext = name.includes(".") ? name.split(".").pop() : "pdf";
-    const fileUrl = await putR2(env, `aeronex-orders/${no}/payment-receipt.${ext}`, b64(b.file?.data), b.file?.type || "application/pdf");
+    const fileUrl = await putR2(env, `aeronex-orders/${no}/payment-receipt.${ext}`, bytesFromDataUrl(b.file?.data), b.file?.type || "application/pdf");
     if (b.record_id && b.tableId) {
-      const t = await types(env, b.tableId);
-      await update(env, b.tableId, b.record_id, { "Payment Receipt": t["Payment Receipt"] === 15 ? larkUrl(fileUrl, "Payment Receipt") : fileUrl });
+      const fieldTypes = await getFieldTypes(env, b.tableId);
+      await updateRecord(env, b.tableId, b.record_id, { "Payment Receipt": fieldTypes["Payment Receipt"] === 15 ? larkUrl(fileUrl, "Payment Receipt") : fileUrl });
     }
     return json({ ok: true, url: fileUrl });
   }
 
   if (p === "/api/update-status" && req.method === "POST") {
     const b = await readBody(req);
-    await update(env, b.tableId, b.record_id, { Status: b.status });
+    if (!b.tableId || !b.record_id) return json({ error: "Missing tableId/record_id" }, 400);
+    await updateRecord(env, b.tableId, b.record_id, { Status: b.status });
     return json({ ok: true });
   }
 
   if (p === "/api/delete-order" && req.method === "POST") {
     const b = await readBody(req);
-    await del(env, b.tableId, b.record_id);
+    if (!b.tableId || !b.record_id) return json({ error: "Missing tableId/record_id" }, 400);
+    await deleteRecord(env, b.tableId, b.record_id);
     return json({ ok: true });
   }
 
@@ -354,6 +380,9 @@ async function handle(req, env) {
 }
 
 export async function onRequest(context) {
-  try { return await handle(context.request, context.env); }
-  catch (e) { return json({ error: e.message || String(e) }, 500); }
+  try {
+    return await handle(context.request, context.env);
+  } catch (e) {
+    return json({ error: e.message || String(e) }, 500);
+  }
 }
