@@ -224,16 +224,19 @@ function makeSpareOrderNo(country) {
   const pad = n => String(n).padStart(2, "0");
   const date = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
   const seq = `${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}`;
-  return `DXBRMASPARE${date}${seq}`;
+  const c = lower(country);
+  const prefix = (c.includes("ksa") || c.includes("saudi")) ? "KSARMASPARE" : "DXBRMASPARE";
+  return `${prefix}${date}${seq}`;
 }
 
 function isValidSpareOrderNo(no) {
-  return /^DXBRMASPARE\d{12}$/.test(norm(no));
+  const s = norm(no);
+  return /^DXBRMASPARE\d{12}$/.test(s) || /^KSARMASPARE\d{12}$/.test(s);
 }
 
 function assertValidSpareOrderNo(no) {
   if (!isValidSpareOrderNo(no)) {
-    throw new Error("Invalid spare order number. Expected Lark format DXBRMASPAREYYYYMMDD0000, got: " + norm(no));
+    throw new Error("Invalid spare order number. Expected DXBRMASPAREYYYYMMDD0000 or KSARMASPAREYYYYMMDD0000, got: " + norm(no));
   }
   return norm(no);
 }
