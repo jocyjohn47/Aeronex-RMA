@@ -453,7 +453,10 @@ async function handle(req, env) {
     const b = await readBody(req);
     const country = norm(b.country || "UAE & Other Region");
     const tableId = spareTable(env, country);
-    const items = b.items || b.cart || [];
+    const rawItems = b.items ?? b.cart ?? [];
+    const items = Array.isArray(rawItems)
+      ? rawItems
+      : (rawItems && typeof rawItems === "object" ? Object.values(rawItems) : []);
 
     // Temporary fallback only. Lark row is the authority for final order number.
     const fallbackNo = makeSpareOrderNo(country);
