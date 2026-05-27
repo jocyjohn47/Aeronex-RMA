@@ -464,20 +464,27 @@ function renderSpareOptions(){let q=($('spareSearch')?.value||'').toLowerCase(),
 function addListed(){let v=$('spareSelect').value;if(!v)return msg('orderMsg','Select material first');let o=JSON.parse(decodeURIComponent(v));o.qty=$('spareQty').value||'1';S.cart.push(o);drawCart()}
 function addCustom(){let n=$('customName').value.trim();if(!n)return msg('orderMsg','Enter custom material name');S.cart.push({materialCode:$('customCode').value.trim(),materialName:n,compatibleModel:'Custom',price:'-',stock:'-',qty:$('customQty').value||'1'});$('customCode').value='';$('customName').value='';drawCart()}
 function drawCart(){let e=$('cartRows');if(!e)return;e.innerHTML=S.cart.map((x,i)=>`<tr><td>${esc(x.materialCode||'CUSTOM')}</td><td>${esc(x.materialName)}</td><td>${esc(x.compatibleModel)}</td><td>${esc(x.qty)}</td><td><button class="btn-danger" onclick="S.cart.splice(${i},1);drawCart()">Remove</button></td></tr>`).join('')}
-async function submitOrder(){if(!S.cart.length)return msg('orderMsg','Add at least one item');let p={remarks:($('spareRemarks')&&$('spareRemarks').value)||'',companyName:uf('Company Name','AERO NEX'),contactName:uf('Contact Person',''),billingAddress:dealerAddress(),invoiceCurrency:selectedInvoiceCurrency(),country:selectedCountry(),items:S.cart+S.cart.length+' spare line(s).'};try{let d=await api('/api/submit-spare',{method:'POST',body:JSON.stringify(p)});msg('orderMsg','Order submitted with Excel file: '+d.orderNo,true);S.cart=[];drawCart();await loadOrders();renderOrders()}catch(e){msg('orderMsg',e.message)}}
-
-
-
-
-function orderNoValue(rowOrFields){
-  const f = rowOrFields && rowOrFields.fields ? rowOrFields.fields : (rowOrFields || {});
-  return (
-    f['Spare Order No'] ||
-    f['Spare Order Case'] ||
-    f['Order No'] ||
-    f['Case No'] ||
-    ''
-  );
+async function submitOrder(){
+  if(!Array.isArray(S.cart) || !S.cart.length) return msg('orderMsg','Add at least one item');
+  const remarksEl = $('spareRemarks');
+  const p = {
+    companyName: uf('Company Name','AERO NEX'),
+    contactName: uf('Contact Person',''),
+    billingAddress: dealerAddress(),
+    invoiceCurrency: selectedInvoiceCurrency(),
+    country: selectedCountry(),
+    items: S.cart,
+    remarks: remarksEl ? remarksEl.value.trim() : ''
+  };
+  try{
+    let r = await api('/api/submit-spare',{method:'POST',body:JSON.stringify(p)});
+    S.cart = [];
+    msg('orderMsg','Order submitted' + (r.orderNo ? ': ' + r.orderNo : ''));
+    await loadOrders();
+    renderSpare();
+  }catch(e){
+    msg('orderMsg', e.message || String(e));
+  }
 }
 
 
