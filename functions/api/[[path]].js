@@ -506,11 +506,7 @@ async function handle(req, env) {
     }
 
     const updateFields = {};
-    const newRemarks = (savedFields.Remarks || fields.Remarks || "")
-      ? `${savedFields.Remarks || fields.Remarks}\nOrder File URL: ${fileUrl}`
-      : `Order File URL: ${fileUrl}`;
-    if (fieldTypes["Remarks"]) updateFields["Remarks"] = newRemarks;
-    // Only update order number fields if they are writable. Formula/autonumber fields may ignore or reject; errors are non-fatal.
+// Only update order number fields if they are writable. Formula/autonumber fields may ignore or reject; errors are non-fatal.
     if (fieldTypes["Spare Order Case"]) updateFields["Spare Order Case"] = no;
     if (fieldTypes["Spare Order No"]) updateFields["Spare Order No"] = no;
     if (Object.keys(updateFields).length) {
