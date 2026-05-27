@@ -504,20 +504,7 @@ async function handle(req, env) {
     } catch (e) {
       orderFileUpload = { ok: false, error: e.message || String(e) };
     }
-
-    const updateFields = {};
-    const newRemarks = (savedFields.Remarks || fields.Remarks || "")
-      ? `${savedFields.Remarks || fields.Remarks}\nOrder File URL: ${fileUrl}`
-      : `Order File URL: ${fileUrl}`;
-    if (fieldTypes["Remarks"]) updateFields["Remarks"] = newRemarks;
-    // Only update order number fields if they are writable. Formula/autonumber fields may ignore or reject; errors are non-fatal.
-    if (fieldTypes["Spare Order Case"]) updateFields["Spare Order Case"] = no;
-    if (fieldTypes["Spare Order No"]) updateFields["Spare Order No"] = no;
-    if (Object.keys(updateFields).length) {
-      try { await updateRecord(env, tableId, recordId, updateFields); } catch (_) {}
-    }
-
-    return json({ ok: true, orderNo: no, r2ExcelUrl: fileUrl, r2OrderFileUrl: fileUrl, orderFileUpload, result: result.data });
+return json({ ok: true, orderNo: no, r2ExcelUrl: fileUrl, r2OrderFileUrl: fileUrl, orderFileUpload, result: result.data });
   }
 
   if ((p === "/api/create-repair" || p === "/api/repair-case") && req.method === "POST") {
