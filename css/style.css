@@ -43,3 +43,35 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}th,td{b
   cursor:pointer;
 }
 .mini-upload input{display:none;}
+
+/* Dashboard Address Boxes */
+.address-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:40px;
+  margin:50px auto 30px;
+  max-width:1200px;
+}
+
+.address-box{
+  background:#fff;
+  border:2px dashed #dc2626;
+  border-radius:14px;
+  padding:28px;
+  min-height:220px;
+  box-shadow:0 8px 24px rgba(0,0,0,.12);
+}
+
+.address-box h2{
+  color:#dc2626;
+  font-size:26px;
+  margin-bottom:16px;
+}
+
+.address-box p{
+  color:#111827;
+  font-size:16px;
+  line-height:1.7;
+  white-space:pre-line;
+}
+
