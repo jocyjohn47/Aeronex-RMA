@@ -44,8 +44,59 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}th,td{b
 }
 .mini-upload input{display:none;}
 
-/* Dashboard Address Boxes */
-/* Dashboard Address Boxes */
+/* =========================
+   DASHBOARD TOP CARDS
+========================= */
+
+.cards{
+  display:grid;
+  grid-template-columns:repeat(5, 1fr);
+  gap:18px;
+  margin-bottom:40px;
+}
+
+.card{
+  background:#fff;
+  border:1px solid #dce6f2;
+  border-radius:14px;
+  padding:24px;
+  min-height:220px;
+  box-shadow:0 8px 24px rgba(0,0,0,.08);
+}
+
+.card h3{
+  margin:0 0 12px;
+  font-size:18px;
+  color:#0f172a;
+}
+
+.card p{
+  color:#64748b;
+  line-height:1.5;
+  font-size:15px;
+}
+
+.card a{
+  color:#2563eb;
+  font-weight:700;
+}
+
+.ico{
+  width:54px;
+  height:54px;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  background:#e8f1ff;
+  font-size:27px;
+  margin-bottom:12px;
+}
+
+
+/* =========================
+   ADDRESS SECTION
+========================= */
+
 .address-grid{
   display:grid;
   grid-template-columns:450px 450px;
@@ -58,21 +109,57 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}th,td{b
   background:#fff;
   border:none;
   border-radius:14px;
-  padding:28px;
+  padding:32px;
   width:450px;
-  min-height:220px;
-  box-shadow:0 8px 24px rgba(0,0,0,.12);
+  min-height:260px;
+  box-shadow:0 8px 24px rgba(0,0,0,.08);
 }
 
 .address-box h2{
   color:#2563eb;
-  font-size:16px;
-  margin-bottom:16px;
+  font-size:22px;
+  margin-bottom:24px;
+  font-weight:700;
 }
 
 .address-box p{
   color:#111827;
-  font-size:16px;
-  line-height:1.5;
+  font-size:18px;
+  line-height:1.6;
   white-space:pre-line;
+}
+
+
+/* =========================
+   MOBILE RESPONSIVE
+========================= */
+
+@media(max-width:1200px){
+
+  .cards{
+    grid-template-columns:repeat(2,1fr);
+  }
+
+  .address-grid{
+    grid-template-columns:1fr;
+  }
+
+  .address-box{
+    width:100%;
+  }
+}
+
+@media(max-width:700px){
+
+  .cards{
+    grid-template-columns:1fr;
+  }
+
+  .address-box{
+    padding:24px;
+  }
+
+  .address-box p{
+    font-size:16px;
+  }
 }
