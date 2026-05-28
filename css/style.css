@@ -50,7 +50,7 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}th,td{b
 
 .cards{
   display:grid;
-  grid-template-columns:repeat(5, 1fr);
+  grid-template-columns:repeat(5, 260px);
   gap:18px;
   margin-bottom:40px;
 }
@@ -99,7 +99,7 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}th,td{b
 
 .address-grid{
   display:grid;
-  grid-template-columns:450px 450px;
+  grid-template-columns:520px 520px;
   gap:30px;
   margin:50px 0 30px;
   justify-content:flex-start;
@@ -110,7 +110,6 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}th,td{b
   border:none;
   border-radius:14px;
   padding:32px;
-  width:450px;
   min-height:260px;
   box-shadow:0 8px 24px rgba(0,0,0,.08);
 }
@@ -127,39 +126,4 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}th,td{b
   font-size:18px;
   line-height:1.6;
   white-space:pre-line;
-}
-
-
-/* =========================
-   MOBILE RESPONSIVE
-========================= */
-
-@media(max-width:1200px){
-
-  .cards{
-    grid-template-columns:repeat(2,1fr);
-  }
-
-  .address-grid{
-    grid-template-columns:1fr;
-  }
-
-  .address-box{
-    width:100%;
-  }
-}
-
-@media(max-width:700px){
-
-  .cards{
-    grid-template-columns:1fr;
-  }
-
-  .address-box{
-    padding:24px;
-  }
-
-  .address-box p{
-    font-size:16px;
-  }
 }
