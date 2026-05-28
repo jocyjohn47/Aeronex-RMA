@@ -439,25 +439,25 @@ function renderDashboard(){$('dashboard').classList.add('active');$('dashboard')
   <div class="address-box">
     <h2>UAE Address</h2>
     <p>
-AERONEX UAE & Other Region
-Aeronex Drone Trading
-C706-708, C Wing
-Dubai Silicon Oasis HQ Building , DSO
-Dubai, UAE
-MON - FRI ( 9AM - 5PM ) FRI - SAT ( CLOSED )
-Email: support@aeronex.ae
+AERONEX (UAE & Other Region )
+Comapny Name : Aeronex Drone Trading LLC
+Address :      C706-708, C Wing
+               Dubai Silicon Oasis HQ Building , DSO
+               Dubai, UAE
+Working Time : MON - FRI ( 9AM - 5PM )  SAT & SUN ( CLOSED )
+Email :        support@aeronex.ae
     </p>
   </div>
 
   <div class="address-box">
     <h2>KSA Address</h2>
     <p>
-AERONEX KSA (KSA Only )
-AERONEX - CHARKA MESAA TAYARAH
-OFFICE NO 403, Al JAWHARA TOWER ,
-OLAYA STREET. AL OLAYA , RIYAD , KSA .
-SUN - THU ( 9AM - 6 PM ) FRI - SAT ( CLOSED )
-Email: support.ksa@aeronex.ae
+AERONEX  (KSA Only )
+Company Name :  CHARKA MESAA TAYARAH
+Address :       OFFICE NO 403, Al JAWHARA TOWER ,
+                OLAYA STREET. AL OLAYA , RIYAD , KSA .
+Working Time :  SUN - THU ( 9AM - 6 PM ) FRI & SAT ( CLOSED )
+Email :         support.ksa@aeronex.ae
     </p>
   </div>
 </div></div>`}
