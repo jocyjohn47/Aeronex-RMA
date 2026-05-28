@@ -440,10 +440,10 @@ function renderDashboard(){$('dashboard').classList.add('active');$('dashboard')
     <h2>UAE Address</h2>
     <p>
 AERONEX (UAE & Other Region )
-Comapny Name : Aeronex Drone Trading LLC
-Address :      C706-708, C Wing
-               Dubai Silicon Oasis HQ Building , DSO
-               Dubai, UAE
+Comapny Name : AERONEX DRONE TRADING LLC
+Address :      C-WING , C706-708
+               DUBAI SILICON OASIS HQ BUILDING
+               DSO , DUBAI , UAE
 Working Time : MON - FRI ( 9AM - 5PM )  SAT & SUN ( CLOSED )
 Email :        support@aeronex.ae
     </p>
