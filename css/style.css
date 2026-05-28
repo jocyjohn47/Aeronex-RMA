@@ -55,7 +55,7 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}th,td{b
 
 .address-box{
   background:#fff;
-  border:2px dashed #dc2626;
+  border:none;
   border-radius:14px;
   padding:28px;
   min-height:220px;
