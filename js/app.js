@@ -444,7 +444,7 @@ Aeronex Drone Trading
 C706-708, C Wing
 Dubai Silicon Oasis HQ Building , DSO
 Dubai, UAE
-SUN - FRI ( 9AM - 5PM ) FRI - SAT ( CLOSED )
+MON - FRI ( 9AM - 5PM ) FRI - SAT ( CLOSED )
 Email: support@aeronex.ae
     </p>
   </div>
