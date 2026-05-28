@@ -439,11 +439,12 @@ function renderDashboard(){$('dashboard').classList.add('active');$('dashboard')
   <div class="address-box">
     <h2>UAE Address</h2>
     <p>
-AERO NEX FZCO
+AERONEX UAE & Other Region
+Aeronex Drone Trading
 C706-708, C Wing
-Dubai Silicon Oasis
+Dubai Silicon Oasis HQ Building , DSO
 Dubai, UAE
-
+SUN - FRI ( 9AM - 5PM ) FRI - SAT ( CLOSED )
 Email: support@aeronex.ae
     </p>
   </div>
@@ -451,9 +452,12 @@ Email: support@aeronex.ae
   <div class="address-box">
     <h2>KSA Address</h2>
     <p>
-Type KSA address here...
-
-Email: support@aeronex.ae
+AERONEX KSA (KSA Only )
+AERONEX - CHARKA MESAA TAYARAH
+OFFICE NO 403, Al JAWHARA TOWER ,
+OLAYA STREET. AL OLAYA , RIYAD , KSA .
+SUN - THU ( 9AM - 6 PM ) FRI - SAT ( CLOSED )
+Email: support.ksa@aeronex.ae
     </p>
   </div>
 </div></div>`}
