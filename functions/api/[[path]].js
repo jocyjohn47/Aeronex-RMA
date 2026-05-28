@@ -410,23 +410,55 @@ async function handle(req, env) {
     t => now - t < 60000
   );
 
-  if (LOGIN_ATTEMPTS[ip].length >= 10) {
+  if (LOGIN_ATTEMPTS[ip].length >= 5) {
     return json(
       { error: "Too many login attempts. Please try again later." },
       429
     );
-  }
+}
+
+const remaining = 5 - LOGIN_ATTEMPTS[ip].length;
+
+const b = await readBody(req);
+
+const email = lower(b.username || b.email);
+
+const pass = norm(b.password);
+
+const rows = await listRecords(env, env.USER_TABLE_ID);
+
+const rec = rows.find(
+  r => userEmail(r.fields || {}) === email
+);
+
+if (!rec) {
 
   LOGIN_ATTEMPTS[ip].push(now);
-    const b = await readBody(req);
-    const email = lower(b.username || b.email);
-    const pass = norm(b.password);
-    const rows = await listRecords(env, env.USER_TABLE_ID);
-    const rec = rows.find(r => userEmail(r.fields || {}) === email);
-    if (!rec) return json({ error: "Invalid login: email not found" }, 401);
-    if (userPassword(rec.fields || {}) !== pass) return json({ error: "Invalid login: password mismatch" }, 401);
-    return json({ ok: true, user: publicUser(rec) });
-  }
+
+  return json(
+    { error: `Invalid email. ${remaining - 1} attempt(s) remaining.` },
+    401
+  );
+}
+
+if (userPassword(rec.fields || {}) !== pass) {
+
+  LOGIN_ATTEMPTS[ip].push(now);
+
+  return json(
+    { error: `Invalid password. ${remaining - 1} attempt(s) remaining.` },
+    401
+  );
+}
+
+LOGIN_ATTEMPTS[ip] = [];
+
+return json({
+  ok: true,
+  user: publicUser(rec)
+});
+
+}
 
   if (p === "/api/change-password" && req.method === "POST") {
     const b = await readBody(req);
