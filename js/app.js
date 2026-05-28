@@ -461,7 +461,39 @@ Email :         support.ksa@aeronex.ae
     </p>
   </div>
 </div></div>`}
-function renderChangePassword(){$('changePassword').innerHTML=`<div class="panel" style="max-width:620px;margin:auto"><h2>Change Password</h2><label>Current Password</label><input type="password"><label>New Password</label><input id="newPassword" type="password"><label>Confirm New Password</label><input id="confirmPassword" type="password"><button onclick="changePassword()">Update Password</button><div id="cpMsg" class="msg"></div></div>`}
+function renderChangePassword(){$('changePassword').innerHTML=`<div class="panel" style="max-width:620px;margin:auto"><h2>Change Password</h2><label>Current Password</label><input id="currentPassword" type="password"><label>New Password</label><input id="newPassword" type="password"><label>Confirm New Password</label><input id="confirmPassword" type="password"><button onclick="changePassword()">Update Password</button><div id="cpMsg" class="msg"></div></div>`}
+
+async function changePassword(){
+  const currentPassword = $('currentPassword')?.value || '';
+  const newPassword = $('newPassword')?.value || '';
+  const confirmPassword = $('confirmPassword')?.value || '';
+
+  if(!currentPassword || !newPassword || !confirmPassword){
+    return msg('cpMsg','Please fill all password fields');
+  }
+
+  if(newPassword !== confirmPassword){
+    return msg('cpMsg','New password and confirm password do not match');
+  }
+
+  try{
+    await api('/api/change-password',{
+      method:'POST',
+      body:JSON.stringify({
+        email:userEmail(),
+        currentPassword,
+        newPassword
+      })
+    });
+
+    msg('cpMsg','Password updated successfully');
+    $('currentPassword').value = '';
+    $('newPassword').value = '';
+    $('confirmPassword').value = '';
+  }catch(e){
+    msg('cpMsg',e.message || 'Password update failed');
+  }
+}
 
 function dealerAddress(){
   const u = S.user || {};
