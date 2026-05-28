@@ -407,6 +407,32 @@ async function handle(req, env) {
     return json({ ok: true, user: publicUser(rec) });
   }
 
+  if (p === "/api/change-password" && req.method === "POST") {
+    const b = await readBody(req);
+    const email = lower(b.email);
+    const currentPassword = norm(b.currentPassword);
+    const newPassword = norm(b.newPassword);
+
+    if (!email || !currentPassword || !newPassword) {
+      return json({ error: "Missing password details" }, 400);
+    }
+
+    const rows = await listRecords(env, env.USER_TABLE_ID);
+    const rec = rows.find(r => userEmail(r.fields || {}) === email);
+
+    if (!rec) return json({ error: "User not found" }, 404);
+
+    if (userPassword(rec.fields || {}) !== currentPassword) {
+      return json({ error: "Current password is incorrect" }, 401);
+    }
+
+    await updateRecord(env, env.USER_TABLE_ID, rec.record_id, {
+      "Reset Password": newPassword
+    });
+
+    return json({ ok: true });
+  }
+
   if (p === "/api/dealers") {
     return json(await listRecords(env, env.USER_TABLE_ID));
   }
