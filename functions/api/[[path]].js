@@ -397,6 +397,27 @@ async function handle(req, env) {
   if (p === "/api/users") return json({ error: "Forbidden" }, 403);
 
   if (p === "/api/login" && req.method === "POST") {
+
+  const ip = req.headers.get("CF-Connecting-IP") || req.headers.get("X-Forwarded-For") || "unknown";
+
+  globalThis.LOGIN_ATTEMPTS ||= {};
+
+  const now = Date.now();
+
+  LOGIN_ATTEMPTS[ip] ||= [];
+
+  LOGIN_ATTEMPTS[ip] = LOGIN_ATTEMPTS[ip].filter(
+    t => now - t < 60000
+  );
+
+  if (LOGIN_ATTEMPTS[ip].length >= 10) {
+    return json(
+      { error: "Too many login attempts. Please try again later." },
+      429
+    );
+  }
+
+  LOGIN_ATTEMPTS[ip].push(now);
     const b = await readBody(req);
     const email = lower(b.username || b.email);
     const pass = norm(b.password);
