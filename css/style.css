@@ -45,10 +45,11 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}th,td{b
 .mini-upload input{display:none;}
 
 /* Dashboard Address Boxes */
+/* Dashboard Address Boxes */
 .address-grid{
   display:grid;
-  grid-template-columns:280px 280px;
-  gap:24px;
+  grid-template-columns:450px 450px;
+  gap:30px;
   margin:50px 0 30px;
   justify-content:flex-start;
 }
@@ -75,4 +76,3 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}th,td{b
   line-height:1.5;
   white-space:pre-line;
 }
-
