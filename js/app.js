@@ -421,7 +421,7 @@ async function login(){
   }
 }
 function dealerPhone(){
-  return uf('Contact No','') || '';
+  return parseRemark(uf('Remarks',''),'Contact No') || '';
 }
 function dealerTrn(){
   return parseRemark(uf('Remarks',''),'TRN No') || '';
@@ -646,7 +646,7 @@ function renderRepairStatus(){
 }
 function linkCell(v){if(!v)return '-'; if(typeof v==='object'&&v.link)return `<a href="${esc(v.link)}" target="_blank">Open</a>`; return `<a href="${esc(v)}" target="_blank">Open</a>`;}
 function renderDealers(){
-  $('dealers').innerHTML=`<div class="panel"><h2>Dealer Details</h2><div id="dealerForm"></div><div class="table-wrap"><table><thead><tr><th>Company Name</th><th>Contact Name</th><th>Contact No</th><th>Contact Email</th><th>Address</th><th>TRN NO</th><th>P O Box</th><th>Country</th><th>Action</th></tr></thead><tbody>${visibleDealers().map((r,i)=>{let f=r.fields||{},phone=(String(f.Remarks||'').match(/(\\+?\\d[\\d\\s-]{7,})/)||[])[1]||'';return `<tr><td>${esc(f['Company Name'])}</td><td>${esc(f['Contact Person'])}</td><td>${esc(phone)}</td><td>${esc(f['Username ( Email )'])}</td><td>${esc(f.Address)}</td><td>${esc(f['TRN NO'])}</td><td>${esc(f['P O Box'])}</td><td>${esc(normalizeCountryValue(f.Country))}</td><td><button onclick="editDealer(${i})">Edit</button></td></tr>`}).join('')}</tbody></table></div></div>`;
+  $('dealers').innerHTML=`<div class="panel"><h2>Dealer Details</h2><div id="dealerForm"></div><div class="table-wrap"><table><thead><tr><th>Company Name</th><th>Contact Name</th><th>Contact No</th><th>Contact Email</th><th>Address</th><th>TRN NO</th><th>P O Box</th><th>Country</th><th>Action</th></tr></thead><tbody>${visibleDealers().map((r,i)=>{let f=r.fields||{},phone=f['Contact No']||f['Contact Number']||f['Phone']||f['Mobile']||'';return `<tr><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Contact Person']||'')}</td><td>${esc(phone)}</td><td>${esc(f['Username ( Email )']||'')}</td><td>${esc(f.Address||'')}</td><td>${esc(f['TRN NO']||'')}</td><td>${esc(f['P O Box']||'')}</td><td>${esc(normalizeCountryValue(f.Country))}</td><td><button onclick="editDealer(${i})">Edit</button></td></tr>`}).join('')}</tbody></table></div></div>`;
 }
 function editDealer(i){
   const r=visibleDealers()[i], f=r.fields||{};
