@@ -650,7 +650,7 @@ function renderDealers(){
 }
 function editDealer(i){
   const r=visibleDealers()[i], f=r.fields||{};
-  const phone=(String(f.Remarks||'').match(/(\\+?\\d[\\d\\s-]{7,})/)||[])[1]||'';
+  const phone = f['Contact No'] || (String(f.Remarks||'').match(/(\\+?\\d[\\d\\s-]{7,})/)||[])[1] || '';
   $('dealerForm').innerHTML=`<h3>Edit Dealer Details</h3><div class="grid3"><div><label>Company Name</label><input id="dCompany" value="${esc(f['Company Name']||'')}"></div><div><label>Contact Name</label><input id="dContact" value="${esc(f['Contact Person']||'')}"></div><div><label>Contact No</label><input id="dPhone" value="${esc(phone)}"></div></div><div class="grid3"><div><label>Contact Email</label><input value="${esc(f['Username ( Email )']||'')}" disabled></div><div><label>TRN NO</label><input id="dTrn" value="${esc(f['TRN NO']||'')}"></div><div><label>P O Box</label><input id="dPo" value="${esc(f['P O Box']||'')}"></div></div><label>Address</label><input id="dAddress" value="${esc(f.Address||'')}"><label>Country</label><select id="dCountry" multiple size="2"><option>UAE & Other Region</option><option>KSA - SAUDI ARABIA</option></select><br><button onclick="saveDealer('${r.record_id}')">Save Dealer Details</button><div id="dealerMsg" class="msg"></div>`;
   Array.from($('dCountry').options).forEach(o=>o.selected=countryHas(f.Country,o.value));
 }
