@@ -421,7 +421,7 @@ async function login(){
   }
 }
 function dealerPhone(){
-  return parseRemark(uf('Remarks',''),'Contact No') || '';
+  return uf('Contact No','') || '';
 }
 function dealerTrn(){
   return parseRemark(uf('Remarks',''),'TRN No') || '';
