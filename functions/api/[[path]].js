@@ -397,68 +397,15 @@ async function handle(req, env) {
   if (p === "/api/users") return json({ error: "Forbidden" }, 403);
 
   if (p === "/api/login" && req.method === "POST") {
-
-  const ip = req.headers.get("CF-Connecting-IP") || req.headers.get("X-Forwarded-For") || "unknown";
-
-  globalThis.LOGIN_ATTEMPTS ||= {};
-
-  const now = Date.now();
-
-  LOGIN_ATTEMPTS[ip] ||= [];
-
-  LOGIN_ATTEMPTS[ip] = LOGIN_ATTEMPTS[ip].filter(
-    t => now - t < 60000
-  );
-
-  if (LOGIN_ATTEMPTS[ip].length >= 5) {
-    return json(
-      { error: "Too many login attempts. Please try again later." },
-      429
-    );
-}
-
-const remaining = 5 - LOGIN_ATTEMPTS[ip].length;
-
-const b = await readBody(req);
-
-const email = lower(b.username || b.email);
-
-const pass = norm(b.password);
-
-const rows = await listRecords(env, env.USER_TABLE_ID);
-
-const rec = rows.find(
-  r => userEmail(r.fields || {}) === email
-);
-
-if (!rec) {
-
-  LOGIN_ATTEMPTS[ip].push(now);
-
-  return json(
-    { error: `Invalid email. ${remaining - 1} attempt(s) remaining.` },
-    401
-  );
-}
-
-if (userPassword(rec.fields || {}) !== pass) {
-
-  LOGIN_ATTEMPTS[ip].push(now);
-
-  return json(
-    { error: `Invalid password. ${remaining - 1} attempt(s) remaining.` },
-    401
-  );
-}
-
-LOGIN_ATTEMPTS[ip] = [];
-
-return json({
-  ok: true,
-  user: publicUser(rec)
-});
-
-}
+    const b = await readBody(req);
+    const email = lower(b.username || b.email);
+    const pass = norm(b.password);
+    const rows = await listRecords(env, env.USER_TABLE_ID);
+    const rec = rows.find(r => userEmail(r.fields || {}) === email);
+    if (!rec) return json({ error: "Invalid login: email not found" }, 401);
+    if (userPassword(rec.fields || {}) !== pass) return json({ error: "Invalid login: password mismatch" }, 401);
+    return json({ ok: true, user: publicUser(rec) });
+  }
 
   if (p === "/api/change-password" && req.method === "POST") {
     const b = await readBody(req);
@@ -524,6 +471,59 @@ return json({
   if (p === "/api/debug-repair-fields") {
     const country = norm(url.searchParams.get("country") || "UAE & Other Region");
     const tableId = repairTable(env, country);
+    const todayKey = new Date().toISOString().slice(0,10).replace(/-/g, "");
+
+    const newEmail = lower(fields["Contact Email"] || "");
+    const newSerial = lower(fields["Serial No"] || "");
+    const newModel = lower(fields["Model No"] || "");
+
+    const existingRows = await listRecords(env, tableId);
+
+    const duplicate = existingRows.some(r => {
+      const f = r.fields || {};
+
+      const oldEmail = lower(
+        f["Contact Email"] ||
+        f["Username ( Email )"] ||
+        f["Email"] ||
+        ""
+      );
+
+      const oldSerial = lower(f["Serial No"] || "");
+      const oldModel = lower(f["Model No"] || "");
+
+      const caseNo = String(
+        f["REPAIR CASE"] ||
+        f["Repair Case No"] ||
+        f["Repair Case"] ||
+        ""
+      );
+
+      let createdKey = "";
+
+      const caseDateMatch = caseNo.match(/20\d{6}/);
+      if (caseDateMatch) createdKey = caseDateMatch[0];
+
+      if (!createdKey && r.created_time) {
+        const d = new Date(Number(r.created_time));
+        if (!isNaN(d.getTime())) {
+          createdKey = d.toISOString().slice(0,10).replace(/-/g, "");
+        }
+      }
+
+      return oldEmail === newEmail &&
+             oldSerial === newSerial &&
+             oldModel === newModel &&
+             createdKey === todayKey;
+    });
+
+    if (duplicate) {
+      return json(
+        { error: "Duplicate repair case detected. Same model and serial number was already submitted today." },
+        409
+      );
+    }
+
     const fieldTypes = await getFieldTypes(env, tableId);
     return json({ ok: true, tableId, fields: Object.keys(fieldTypes) });
   }
