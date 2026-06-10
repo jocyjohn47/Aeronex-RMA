@@ -1,3 +1,4 @@
+let REPAIR_SUBMITTING = false;
 
 function isTechnician(){
   return currentUserRoleText().includes('technician') || currentUserRoleText().includes('tech');
@@ -421,7 +422,7 @@ async function login(){
   }
 }
 function dealerPhone(){
-  return parseRemark(uf('Remarks',''),'Contact No') || '';
+  return uf('Contact No','') || '';
 }
 function dealerTrn(){
   return parseRemark(uf('Remarks',''),'TRN No') || '';
@@ -615,38 +616,66 @@ function renderRepairCreate(){
   $('rcCountry').value=selectedCountry().includes('KSA')?'KSA - SAUDI ARABIA':'UAE & Other Region';
 }
 async function submitRepair(){
-  for(let id of ['rcAddress','rcCountry','rcModel','rcSerial','rcDate','rcDetails']) {
-    if(!$(id).value.trim()) return msg('repairMsg','Please fill required fields');
+  if(REPAIR_SUBMITTING) return;
+  REPAIR_SUBMITTING = true;
+
+  const btn = (typeof event !== 'undefined' && event && event.target) ? event.target : null;
+  if(btn){
+    btn.disabled = true;
+    btn.textContent = 'Submitting...';
   }
-  const isKsaForm = $('rcCountry').value.includes('KSA');
-  const gacaDocument = isKsaForm ? await readFileBase64('gacaDocument') : null;
-  let p={
-    companyName:$('rcCompany').value,
-    contactName:$('rcContact').value,
-    contactEmail:$('rcEmail').value,
-    address:$('rcAddress').value,
-    country:$('rcCountry').value,
-    modelNo:$('rcModel').value,
-    serialNo:$('rcSerial').value,
-    purchaseDate:$('rcDate').value,
-    details:$('rcDetails').value,
-    warrantyStatus: isKsaForm ? ($('rcWarranty')?.value||'') : '',
-    gacaDocument,
-    requiredDetailsLink: isKsaForm ? '' : ($('requiredDetailsLink')?.value||''),
-    issueMediaLink: isKsaForm ? ($('issueMediaLink')?.value||'') : '',
-    logFileLink:($('logFileLink')?.value||''),
-    remarks:$('rcRemarks')?.value||'',
-    notes:$('rcNotes')?.value||'',
-    username:S.user.username
-  };
-  try{let d=await api('/api/repair-case',{method:'POST',body:JSON.stringify(p)});msg('repairMsg','Repair case created',true);await loadRepairs();renderRepairStatus()}catch(e){msg('repairMsg',e.message)}
+
+  try{
+    for(let id of ['rcAddress','rcCountry','rcModel','rcSerial','rcDate','rcDetails']) {
+      if(!$(id).value.trim()) {
+        msg('repairMsg','Please fill required fields');
+        return;
+      }
+    }
+
+    const isKsaForm = $('rcCountry').value.includes('KSA');
+    const gacaDocument = isKsaForm ? await readFileBase64('gacaDocument') : null;
+
+    let p={
+      companyName:$('rcCompany').value,
+      contactName:$('rcContact').value,
+      contactEmail:$('rcEmail').value,
+      address:$('rcAddress').value,
+      country:$('rcCountry').value,
+      modelNo:$('rcModel').value,
+      serialNo:$('rcSerial').value,
+      purchaseDate:$('rcDate').value,
+      details:$('rcDetails').value,
+      warrantyStatus: isKsaForm ? ($('rcWarranty')?.value||'') : '',
+      gacaDocument,
+      requiredDetailsLink: isKsaForm ? '' : ($('requiredDetailsLink')?.value||''),
+      issueMediaLink: isKsaForm ? ($('issueMediaLink')?.value||'') : '',
+      logFileLink:($('logFileLink')?.value||''),
+      remarks:$('rcRemarks')?.value||'',
+      notes:$('rcNotes')?.value||'',
+      username:S.user.username
+    };
+
+    let d=await api('/api/repair-case',{method:'POST',body:JSON.stringify(p)});
+    msg('repairMsg','Repair case created',true);
+    await loadRepairs();
+    renderRepairStatus();
+  }catch(e){
+    msg('repairMsg',e.message || 'Submit failed');
+  }finally{
+    REPAIR_SUBMITTING = false;
+    if(btn){
+      btn.disabled = false;
+      btn.textContent = 'Submit Repair Case';
+    }
+  }
 }
 function renderRepairStatus(){
-  $('repairStatus').innerHTML=`<div class="panel"><h2>Repair Status <button class="btn-light" onclick="refreshRepairs()">Refresh</button></h2><div class="table-wrap"><table><thead><tr><th>Repair Case No</th><th>Dealer / Company</th><th>Model No</th><th>Serial No</th><th>Date</th><th>Status</th><th>Log Link</th><th>Issue Media / Required Details</th><th>Remarks</th><th>Notes</th></tr></thead><tbody>${(Array.isArray(S.repairs)?S.repairs:[]).map(r=>{let f=r.fields||{};return `<tr><td>${esc(f['REPAIR CASE']||f['Repair Case']||'')}</td><td>${esc(f['Company Name']||f['Dealer Name']||'')}</td><td>${esc(f['Model No']||'')}</td><td>${esc(f['Serial No']||'')}</td><td>${new Date(Number(f['Date of Purchase / Activation date']||f['Date Of Activation']||'')).toLocaleDateString('en-GB')}</td><td>${statusCell(r,'repair')}</td><td>${linkCell(f['Log File']||f['Log for Drone and RC'])}</td><td>${linkCell(f['Upload all the required details']||f['Issue Video and Pictures'])}</td><td>${esc(f['Remarks']||'')}</td><td>${esc(f['Notes']||'')}</td></tr>`}).join('')}</tbody></table></div></div>`;
+  $('repairStatus').innerHTML=`<div class="panel"><h2>Repair Status <button class="btn-light" onclick="refreshRepairs()">Refresh</button></h2><div class="table-wrap"><table><thead><tr><th>Repair Case No</th><th>Dealer / Company</th><th>Model No</th><th>Serial No</th><th>Date</th><th>Status</th><th>Log Link</th><th>Issue Media / Required Details</th><th>Remarks</th><th>Notes</th><th>Case Close Comment</th></tr></thead><tbody>${(Array.isArray(S.repairs)?S.repairs:[]).map(r=>{let f=r.fields||{};return `<tr><td>${esc(f['REPAIR CASE']||f['Repair Case']||'')}</td><td>${esc(f['Company Name']||f['Dealer Name']||'')}</td><td>${esc(f['Model No']||'')}</td><td>${esc(f['Serial No']||'')}</td><td>${new Date(Number(f['Date of Purchase / Activation date']||f['Date Of Activation']||'')).toLocaleDateString('en-GB')}</td><td>${statusCell(r,'repair')}</td><td>${linkCell(f['Log File']||f['Log for Drone and RC'])}</td><td>${linkCell(f['Upload all the required details']||f['Issue Video and Pictures'])}</td><td>${esc(f['Remarks']||'')}</td><td>${esc(f['Notes']||'')}</td><td>${esc(f['Case Close Comment']||'')}</td></tr>`}).join('')}</tbody></table></div></div>`;
 }
 function linkCell(v){if(!v)return '-'; if(typeof v==='object'&&v.link)return `<a href="${esc(v.link)}" target="_blank">Open</a>`; return `<a href="${esc(v)}" target="_blank">Open</a>`;}
 function renderDealers(){
-  $('dealers').innerHTML=`<div class="panel"><h2>Dealer Details</h2><div id="dealerForm"></div><div class="table-wrap"><table><thead><tr><th>Company Name</th><th>Contact Name</th><th>Contact No</th><th>Contact Email</th><th>Address</th><th>TRN NO</th><th>P O Box</th><th>Country</th><th>Action</th></tr></thead><tbody>${visibleDealers().map((r,i)=>{let f=r.fields||{},phone=f['Contact No']||f['Contact Number']||f['Phone']||f['Mobile']||'';return `<tr><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Contact Person']||'')}</td><td>${esc(phone)}</td><td>${esc(f['Username ( Email )']||'')}</td><td>${esc(f.Address||'')}</td><td>${esc(f['TRN NO']||'')}</td><td>${esc(f['P O Box']||'')}</td><td>${esc(normalizeCountryValue(f.Country))}</td><td><button onclick="editDealer(${i})">Edit</button></td></tr>`}).join('')}</tbody></table></div></div>`;
+  $('dealers').innerHTML=`<div class="panel"><h2>Dealer Details</h2><div id="dealerForm"></div><div class="table-wrap"><table><thead><tr><th>Company Name</th><th>Contact Name</th><th>Contact No</th><th>Contact Email</th><th>Address</th><th>TRN NO</th><th>P O Box</th><th>Country</th><th>Action</th></tr></thead><tbody>${visibleDealers().map((r,i)=>{let f=r.fields||{},phone=f['Contact No']||f['Contact Number']||f['Phone']||f['Mobile']||'';return `<tr><td>${esc(f['Company Name'])}</td><td>${esc(f['Contact Person'])}</td><td>${esc(phone)}</td><td>${esc(f['Username ( Email )'])}</td><td>${esc(f.Address)}</td><td>${esc(f['TRN NO'])}</td><td>${esc(f['P O Box'])}</td><td>${esc(normalizeCountryValue(f.Country))}</td><td><button onclick="editDealer(${i})">Edit</button></td></tr>`}).join('')}</tbody></table></div></div>`;
 }
 function editDealer(i){
   const r=visibleDealers()[i], f=r.fields||{};
