@@ -185,42 +185,22 @@ function filterOwn(rows, email, role) {
   return rows.filter(r => lower(r.fields?.["Contact Email"] || r.fields?.["Username ( Email )"] || r.fields?.Email) === e);
 }
 
-
-function backendCleanPrice(v) {
-  if (v === null || v === undefined || v === "") return 0;
-  const n = Number(String(v).replace(/[^0-9.\-]/g, ""));
-  return Number.isFinite(n) ? n : 0;
-}
-function backendItemUnitPrice(item, currency) {
-  const c = norm(currency || item.selectedCurrency || item.currency || "USD").toUpperCase();
-  if (c === "AED") return backendCleanPrice(item.unitPrice ?? item.priceAED ?? item["AED (Without Tax & Duty)"]);
-  if (c === "SAR") return backendCleanPrice(item.unitPrice ?? item.priceSAR ?? item["SAR (Without Tax & Duty)"]);
-  return backendCleanPrice(item.unitPrice ?? item.priceUSD ?? item["Price (USD ) Without Tax & Duty"] ?? item.price);
-}
-
 function csvBytes(caseNo, fields, items) {
-  const currency = norm(fields["Invoice Currency"] || "USD").toUpperCase();
   const rows = [
     ["Case No", caseNo],
     ["Company Name", fields["Company Name"] || ""],
     ["Contact Name", fields["Contact Name"] || fields["Contact Person"] || ""],
     ["Billing Address", fields["Billing Address"] || fields["Invoice Address"] || ""],
     ["Country", fields.Country || ""],
-    ["Invoice Currency", currency],
+    ["Invoice Currency", fields["Invoice Currency"] || ""],
     [],
-    ["Material Code", "Material Name", "Compatible Model", "Qty", `Unit Price (${currency})`, `Total (${currency})`],
-    ...(items || []).map(i => {
-      const qty = backendCleanPrice(i.qty || i.Qty || 1) || 1;
-      const unit = backendItemUnitPrice(i, currency);
-      return [
-        i.materialCode || i["Material Code"] || "",
-        i.materialName || i["Material Name"] || "",
-        i.compatibleModel || i["Compatible Model"] || "",
-        qty,
-        unit.toFixed(2),
-        (unit * qty).toFixed(2)
-      ];
-    })
+    ["Material Code", "Material Name", "Compatible Model", "Qty"],
+    ...(items || []).map(i => [
+      i.materialCode || i["Material Code"] || "",
+      i.materialName || i["Material Name"] || "",
+      i.compatibleModel || i["Compatible Model"] || "",
+      i.qty || i.Qty || 1
+    ])
   ];
   const csv = rows.map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
   return new TextEncoder().encode(csv);
@@ -278,25 +258,17 @@ function getOrderFolderKey(orderNo, fileName) {
 
 function htmlExcelBytes(orderNo, fields, items) {
   const escHtml = v => String(v ?? "").replace(/[&<>"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]));
-  const currency = norm(fields["Invoice Currency"] || "USD").toUpperCase();
-  const itemRows = (items || []).map((i, idx) => {
-    const qty = backendCleanPrice(i.qty || i.Qty || 1) || 1;
-    const unit = backendItemUnitPrice(i, currency);
-    const total = unit * qty;
-    return `
+  const itemRows = (items || []).map((i, idx) => `
     <tr>
       <td>${idx + 1}</td>
       <td>${escHtml(i.materialCode || i["Material Code"] || "")}</td>
       <td>${escHtml(i.materialName || i["Material Name"] || "")}</td>
       <td>${escHtml(i.compatibleModel || i["Compatible Model"] || "")}</td>
-      <td>${escHtml(qty)}</td>
-      <td>${escHtml(unit.toFixed(2))}</td>
-      <td>${escHtml(total.toFixed(2))}</td>
-    </tr>`;
-  }).join("");
+      <td>${escHtml(i.qty || i.Qty || 1)}</td>
+    </tr>`).join("");
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
-body{font-family:Arial,sans-serif}h1{font-size:20px;color:#1f3b8a}table{border-collapse:collapse;width:100%}th{background:#1f3b8a;color:#fff}th,td{border:1px solid #777;padding:8px;text-align:left}.meta th{width:220px}.footer{margin-top:20px;font-size:12px;color:#555;text-align:center;border-top:1px solid #ccc;padding-top:10px}
+body{font-family:Arial,sans-serif}h1{font-size:20px;color:#1f3b8a}table{border-collapse:collapse;width:100%}th{background:#1f3b8a;color:#fff}th,td{border:1px solid #777;padding:8px;text-align:left}.meta th{width:220px}
 </style></head><body>
 <h1>AERO NEX Spare Order</h1>
 <table class="meta">
@@ -305,13 +277,12 @@ body{font-family:Arial,sans-serif}h1{font-size:20px;color:#1f3b8a}table{border-c
 <tr><th>Contact Name</th><td>${escHtml(fields["Contact Name"] || fields["Contact Person"])}</td></tr>
 <tr><th>Billing Address</th><td>${escHtml(fields["Billing Address"] || fields["Invoice Address"])}</td></tr>
 <tr><th>Country</th><td>${escHtml(fields.Country)}</td></tr>
-<tr><th>Invoice Currency</th><td>${escHtml(currency)}</td></tr>
+<tr><th>Invoice Currency</th><td>${escHtml(fields["Invoice Currency"])}</td></tr>
 <tr><th>Status</th><td>${escHtml(fields.Status || "Submitted")}</td></tr>
 </table>
 <h2>Spare Parts</h2>
-<table><thead><tr><th>No</th><th>Material Code</th><th>Material Name</th><th>Compatible Model</th><th>Qty</th><th>Unit Price (${escHtml(currency)})</th><th>Total (${escHtml(currency)})</th></tr></thead>
-<tbody>${itemRows || '<tr><td colspan="7">No items</td></tr>'}</tbody></table>
-<div class="footer">© 2025 AeroNex FZCO. All Rights Reserved.<br>This portal and its contents are proprietary and confidential.</div>
+<table><thead><tr><th>No</th><th>Material Code</th><th>Material Name</th><th>Compatible Model</th><th>Qty</th></tr></thead>
+<tbody>${itemRows || '<tr><td colspan="5">No items</td></tr>'}</tbody></table>
 </body></html>`;
   return new TextEncoder().encode(html);
 }
@@ -563,74 +534,6 @@ async function handle(req, env) {
     const tableId = spareTable(env, country);
     const items = b.items || b.cart || [];
 
-    const todayKey = new Date().toISOString().slice(0,10).replace(/-/g, "");
-    const newEmail = lower(b.contactEmail || b.email || "");
-    const newCurrency = lower(b.invoiceCurrency || "USD");
-
-    const itemKey = (items || []).map(i => {
-      const code = lower(i.materialCode || i["Material Code"] || "");
-      const name = lower(i.materialName || i["Material Name"] || "");
-      const qty = String(i.qty || i.Qty || 1).trim();
-      return `${code}|${name}|${qty}`;
-    }).sort().join("||");
-
-    const existingRows = await listRecords(env, tableId);
-
-    const duplicate = existingRows.some(r => {
-      const f = r.fields || {};
-
-      const oldEmail = lower(
-        f["Contact Email"] ||
-        f["Username ( Email )"] ||
-        f["Email"] ||
-        ""
-      );
-
-      const oldCurrency = lower(f["Invoice Currency"] || "USD");
-
-      const oldCodes = String(f["Material Code"] || "").split(",").map(x => lower(x.trim()));
-      const oldNames = String(f["Material Name"] || "").split(",").map(x => lower(x.trim()));
-      const oldQtys = String(f["Qty"] || "").split(",").map(x => String(x.trim() || "1"));
-
-      const oldItemKey = oldCodes.map((code, idx) => {
-        const name = oldNames[idx] || "";
-        const qty = oldQtys[idx] || "1";
-        return `${code}|${name}|${qty}`;
-      }).sort().join("||");
-
-      const orderNo = String(
-        f["Spare Order Case"] ||
-        f["Spare Order No"] ||
-        f["Order No"] ||
-        ""
-      );
-
-      let createdKey = "";
-
-      const orderDateMatch = orderNo.match(/20\d{6}/);
-      if (orderDateMatch) createdKey = orderDateMatch[0];
-
-      if (!createdKey && r.created_time) {
-        const d = new Date(Number(r.created_time));
-        if (!isNaN(d.getTime())) {
-          createdKey = d.toISOString().slice(0,10).replace(/-/g, "");
-        }
-      }
-
-      return oldEmail === newEmail &&
-             oldCurrency === newCurrency &&
-             oldItemKey === itemKey &&
-             createdKey === todayKey;
-    });
-
-    if (duplicate) {
-      return json(
-        { error: "Duplicate spare order detected. The same items were already submitted today." },
-        409
-      );
-    }
-
-
     // Temporary fallback only. Lark row is the authority for final order number.
     const fallbackNo = makeSpareOrderNo(country);
 
@@ -648,12 +551,6 @@ async function handle(req, env) {
       "Material Name": items.map(i => i.materialName || i["Material Name"] || "").filter(Boolean).join(", "),
       "Material Code": items.map(i => i.materialCode || i["Material Code"] || "").filter(Boolean).join(", "),
       "Qty": items.map(i => i.qty || i.Qty || 1).join(", "),
-      "Unit Price": items.map(i => backendItemUnitPrice(i, b.invoiceCurrency || "USD").toFixed(2)).join(", "),
-      "Total": items.map(i => {
-        const qty = backendCleanPrice(i.qty || i.Qty || 1) || 1;
-        const unit = backendItemUnitPrice(i, b.invoiceCurrency || "USD");
-        return (unit * qty).toFixed(2);
-      }).join(", "),
       "Notes": b.notes || "",
       "Remarks": b.remarks || ""
     };
