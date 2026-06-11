@@ -510,26 +510,71 @@ function dealerAddress(){
     ''
   );
 }
+function allowedInvoiceCurrencies(){
+  return selectedCountry().includes('KSA') ? ['USD','SAR'] : ['USD','AED'];
+}
 function selectedInvoiceCurrency(){
   const el = document.getElementById('invoiceCurrency');
-  return (el && el.value) || 'USD';
+  const allowed = allowedInvoiceCurrencies();
+  const cur = (el && el.value) || allowed[0] || 'USD';
+  return allowed.includes(cur) ? cur : (allowed[0] || 'USD');
 }
 function currencyOptions(){
   const cur = selectedInvoiceCurrency();
-  return ['USD','AED','SAR'].map(c => `<option ${cur===c?'selected':''}>${c}</option>`).join('');
+  return allowedInvoiceCurrencies().map(c => `<option ${cur===c?'selected':''}>${c}</option>`).join('');
+}
+function priceLabel(prefix, currency){
+  return `${prefix} ${currency} (Without Tax & Duty)`;
+}
+function cleanPrice(v){
+  if(v===null || v===undefined || v==='') return 0;
+  const n = Number(String(v).replace(/[^0-9.\-]/g,''));
+  return Number.isFinite(n) ? n : 0;
+}
+function itemUnitPrice(item, currency){
+  const c = currency || selectedInvoiceCurrency();
+  if(c==='AED') return cleanPrice(item.priceAED ?? item['AED (Without Tax & Duty)']);
+  if(c==='SAR') return cleanPrice(item.priceSAR ?? item['SAR (Without Tax & Duty)']);
+  return cleanPrice(item.priceUSD ?? item['Price (USD ) Without Tax & Duty'] ?? item.price);
+}
+function fmtPrice(v){
+  return cleanPrice(v).toFixed(2);
 }
 
-function renderSpare(){$('spare').innerHTML=`<div class="panel"><h2>Spare Order</h2><div class="notice">Select material by name or material code. Review before submit. No edit after apply; cancel request only.${isAdmin()?`<br><b>Country:</b> <select style="max-width:260px;display:inline-block;margin-left:10px" onchange="setAdminCountry(this.value)"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select>`:''}</div><div class="grid4"><div><label>Company Name</label><input value="${esc(uf('Company Name','AERO NEX'))}" disabled></div><div><label>Contact Name</label><input value="${esc(uf('Contact Person',''))}" disabled></div><div><label>Billing Address</label><input value="${esc(dealerAddress())}" disabled></div><div><label>Country</label><input value="${esc(selectedCountry())}" disabled></div></div><div style="max-width:260px"><label>Invoice Currency</label><select id="invoiceCurrency">${currencyOptions()}</select></div><label>Add from Spare Part List</label><div class="row"><input id="spareSearch" placeholder="Search by Material Code or Material Name..." oninput="renderSpareOptions()"><input id="spareQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addListed()">Add Item</button></div><select id="spareSelect"></select><h3>Custom Spare (if not in list)</h3><div class="row"><input id="customCode" placeholder="Material Code (if known)"><input id="customName" placeholder="Material Name"><input id="customQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addCustom()">Add Custom</button></div><label>Notes</label><textarea id="spareNotes" placeholder="Optional notes for this spare order" style="min-height:80px"></textarea><h3>Review Items</h3><div class="table-wrap"><table><thead><tr><th>Material Code</th><th>Material Name</th><th>Compatible Model</th><th>Qty</th><th>Action</th></tr></thead><tbody id="cartRows"></tbody></table></div><button onclick="submitOrder()">Submit Order</button> <button class="btn-light" onclick="S.cart=[];drawCart()">Clear All</button><div id="orderMsg" class="msg"></div><h3>My Order History <button class="btn-light" onclick="loadOrders().then(renderOrders)">Refresh</button></h3><div class="table-wrap"><table><thead><tr><th>Spare Order No</th><th>Company Name</th><th>Billing Address</th><th>Country</th><th>Invoice Currency</th><th>Status</th><th>Order File (Admin/Technician)</th><th>Invoice Download</th><th>Payment Receipt</th>${canManageOrders()?'<th>Action</th>':''}</tr></thead><tbody id="orderRows"></tbody></table>${renderPageNote(window.AERONEX_SPARE_ORDER_NOTE)}</div></div>`;renderSpareOptions();drawCart();renderOrders()}
-function renderSpareOptions(){let q=($('spareSearch')?.value||'').toLowerCase(),s=$('spareSelect');if(!s)return;s.innerHTML=S.spares.filter(x=>{let f=x.fields||{};return `${f['Material Code']||''} ${f['Material Name']||''} ${f['Compatible Model']||''}`.toLowerCase().includes(q)}).map(x=>{let f=x.fields||{},o={materialCode:f['Material Code']||'',materialName:f['Material Name']||'',compatibleModel:f['Compatible Model']||'',price:f['Price (USD ) Without Tax & Duty']||'',stock:f['Local Stock']||''};return `<option value="${encodeURIComponent(JSON.stringify(o))}">${esc(o.materialCode)} - ${esc(o.materialName)} ${o.compatibleModel?'('+esc(o.compatibleModel)+')':''}</option>`}).join('')}
+function renderSpare(){$('spare').innerHTML=`<div class="panel"><h2>Spare Order</h2><div class="notice">Select material by name or material code. Review before submit. No edit after apply; cancel request only.${isAdmin()?`<br><b>Country:</b> <select style="max-width:260px;display:inline-block;margin-left:10px" onchange="setAdminCountry(this.value)"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select>`:''}</div><div class="grid4"><div><label>Company Name</label><input value="${esc(uf('Company Name','AERO NEX'))}" disabled></div><div><label>Contact Name</label><input value="${esc(uf('Contact Person',''))}" disabled></div><div><label>Billing Address</label><input value="${esc(dealerAddress())}" disabled></div><div><label>Country</label><input value="${esc(selectedCountry())}" disabled></div></div><div style="max-width:260px"><label>Invoice Currency</label><select id="invoiceCurrency" onchange="drawCart()">${currencyOptions()}</select></div><label>Add from Spare Part List</label><div class="row"><input id="spareSearch" placeholder="Search by Material Code or Material Name..." oninput="renderSpareOptions()"><input id="spareQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addListed()">Add Item</button></div><select id="spareSelect"></select><h3>Custom Spare (if not in list)</h3><div class="row"><input id="customCode" placeholder="Material Code (if known)"><input id="customName" placeholder="Material Name"><input id="customQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addCustom()">Add Custom</button></div><label>Notes</label><textarea id="spareNotes" placeholder="Optional notes for this spare order" style="min-height:80px"></textarea><h3>Review Items</h3><div class="table-wrap"><table><thead><tr><th>Material Code</th><th>Material Name</th><th>Compatible Model</th><th>Qty</th><th id="cartUnitPriceHead">Unit Price</th><th id="cartTotalHead">Total</th><th>Action</th></tr></thead><tbody id="cartRows"></tbody></table></div><button onclick="submitOrder()">Submit Order</button> <button class="btn-light" onclick="S.cart=[];drawCart()">Clear All</button><div id="orderMsg" class="msg"></div><h3>My Order History <button class="btn-light" onclick="loadOrders().then(renderOrders)">Refresh</button></h3><div class="table-wrap"><table><thead><tr><th>Spare Order No</th><th>Company Name</th><th>Billing Address</th><th>Country</th><th>Invoice Currency</th><th>Status</th><th>Order File (Admin/Technician)</th><th>Invoice Download</th><th>Payment Receipt</th>${canManageOrders()?'<th>Action</th>':''}</tr></thead><tbody id="orderRows"></tbody></table>${renderPageNote(window.AERONEX_SPARE_ORDER_NOTE)}</div></div>`;renderSpareOptions();drawCart();renderOrders()}
+function renderSpareOptions(){let q=($('spareSearch')?.value||'').toLowerCase(),s=$('spareSelect');if(!s)return;s.innerHTML=S.spares.filter(x=>{let f=x.fields||{};return `${f['Material Code']||''} ${f['Material Name']||''} ${f['Compatible Model']||''}`.toLowerCase().includes(q)}).map(x=>{let f=x.fields||{},o={materialCode:f['Material Code']||'',materialName:f['Material Name']||'',compatibleModel:f['Compatible Model']||'',priceUSD:f['Price (USD ) Without Tax & Duty']||'',priceAED:f['AED (Without Tax & Duty)']||'',priceSAR:f['SAR (Without Tax & Duty)']||'',price:f['Price (USD ) Without Tax & Duty']||'',stock:f['Local Stock']||''};return `<option value="${encodeURIComponent(JSON.stringify(o))}">${esc(o.materialCode)} - ${esc(o.materialName)} ${o.compatibleModel?'('+esc(o.compatibleModel)+')':''}</option>`}).join('')}
 function addListed(){let v=$('spareSelect').value;if(!v)return msg('orderMsg','Select material first');let o=JSON.parse(decodeURIComponent(v));o.qty=$('spareQty').value||'1';S.cart.push(o);drawCart()}
-function addCustom(){let n=$('customName').value.trim();if(!n)return msg('orderMsg','Enter custom material name');S.cart.push({materialCode:$('customCode').value.trim(),materialName:n,compatibleModel:'Custom',price:'-',stock:'-',qty:$('customQty').value||'1'});$('customCode').value='';$('customName').value='';drawCart()}
-function drawCart(){let e=$('cartRows');if(!e)return;e.innerHTML=S.cart.map((x,i)=>`<tr><td>${esc(x.materialCode||'CUSTOM')}</td><td>${esc(x.materialName)}</td><td>${esc(x.compatibleModel)}</td><td>${esc(x.qty)}</td><td><button class="btn-danger" onclick="S.cart.splice(${i},1);drawCart()">Remove</button></td></tr>`).join('')}
+function addCustom(){let n=$('customName').value.trim();if(!n)return msg('orderMsg','Enter custom material name');S.cart.push({materialCode:$('customCode').value.trim(),materialName:n,compatibleModel:'Custom',priceUSD:0,priceAED:0,priceSAR:0,price:0,stock:'-',qty:$('customQty').value||'1'});$('customCode').value='';$('customName').value='';drawCart()}
+function drawCart(){
+  let e=$('cartRows');
+  if(!e)return;
+  const cur = selectedInvoiceCurrency();
+  const unitHead = $('cartUnitPriceHead');
+  const totalHead = $('cartTotalHead');
+  if(unitHead) unitHead.textContent = priceLabel('Unit Price', cur);
+  if(totalHead) totalHead.textContent = priceLabel('Total', cur);
+  e.innerHTML=S.cart.map((x,i)=>{
+    const qty = cleanPrice(x.qty || 1) || 1;
+    const unit = itemUnitPrice(x, cur);
+    const total = unit * qty;
+    x.selectedCurrency = cur;
+    x.unitPrice = unit;
+    x.totalPrice = total;
+    return `<tr><td>${esc(x.materialCode||'CUSTOM')}</td><td>${esc(x.materialName)}</td><td>${esc(x.compatibleModel)}</td><td>${esc(x.qty)}</td><td>${fmtPrice(unit)}</td><td>${fmtPrice(total)}</td><td><button class="btn-danger" onclick="S.cart.splice(${i},1);drawCart()">Remove</button></td></tr>`;
+  }).join('');
+}
 async function submitOrder(){
   if(SPARE_SUBMITTING) return;
   SPARE_SUBMITTING = true;
   try{
     if(!S.cart.length) return msg('orderMsg','Add at least one item');
-    let p={companyName:uf('Company Name','AERO NEX'),contactName:uf('Contact Person',''),billingAddress:dealerAddress(),invoiceCurrency:selectedInvoiceCurrency(),country:selectedCountry(),items:S.cart,notes:(($('spareNotes')&&$('spareNotes').value)||'').trim()};
+    const currency = selectedInvoiceCurrency();
+    const pricedItems = S.cart.map(x=>{
+      const qty = cleanPrice(x.qty || 1) || 1;
+      const unit = itemUnitPrice(x, currency);
+      return {...x, selectedCurrency:currency, unitPrice:unit, totalPrice:unit*qty, price:unit};
+    });
+    let p={companyName:uf('Company Name','AERO NEX'),contactName:uf('Contact Person',''),billingAddress:dealerAddress(),invoiceCurrency:currency,country:selectedCountry(),items:pricedItems,notes:(($('spareNotes')&&$('spareNotes').value)||'').trim()};
     let d=await api('/api/submit-spare',{method:'POST',body:JSON.stringify(p)});
     msg('orderMsg','Order submitted with Excel file: '+d.orderNo,true);
     S.cart=[];
