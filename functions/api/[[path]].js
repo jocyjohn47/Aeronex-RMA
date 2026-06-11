@@ -185,22 +185,45 @@ function filterOwn(rows, email, role) {
   return rows.filter(r => lower(r.fields?.["Contact Email"] || r.fields?.["Username ( Email )"] || r.fields?.Email) === e);
 }
 
+
+function backendCleanPrice(v) {
+  if (v === null || v === undefined || v === "") return 0;
+  const n = Number(String(v).replace(/[^0-9.\-]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+function backendPriceLabel(prefix, currency) {
+  return `${prefix} ${currency} (Without Tax & Duty)`;
+}
+function backendItemUnitPrice(item, currency) {
+  const c = norm(currency || item.selectedCurrency || item.currency || "USD").toUpperCase();
+  if (c === "AED") return backendCleanPrice(item.unitPrice ?? item.priceAED ?? item["AED (Without Tax & Duty)"]);
+  if (c === "SAR") return backendCleanPrice(item.unitPrice ?? item.priceSAR ?? item["SAR (Without Tax & Duty)"]);
+  return backendCleanPrice(item.unitPrice ?? item.priceUSD ?? item["Price (USD ) Without Tax & Duty"] ?? item.price);
+}
+
 function csvBytes(caseNo, fields, items) {
+  const currency = norm(fields["Invoice Currency"] || "USD").toUpperCase();
   const rows = [
     ["Case No", caseNo],
     ["Company Name", fields["Company Name"] || ""],
     ["Contact Name", fields["Contact Name"] || fields["Contact Person"] || ""],
     ["Billing Address", fields["Billing Address"] || fields["Invoice Address"] || ""],
     ["Country", fields.Country || ""],
-    ["Invoice Currency", fields["Invoice Currency"] || ""],
+    ["Invoice Currency", currency],
     [],
-    ["Material Code", "Material Name", "Compatible Model", "Qty"],
-    ...(items || []).map(i => [
-      i.materialCode || i["Material Code"] || "",
-      i.materialName || i["Material Name"] || "",
-      i.compatibleModel || i["Compatible Model"] || "",
-      i.qty || i.Qty || 1
-    ])
+    ["Material Code", "Material Name", "Compatible Model", "Qty", backendPriceLabel("Unit Price", currency), backendPriceLabel("Total", currency)],
+    ...(items || []).map(i => {
+      const qty = backendCleanPrice(i.qty || i.Qty || 1) || 1;
+      const unit = backendItemUnitPrice(i, currency);
+      return [
+        i.materialCode || i["Material Code"] || "",
+        i.materialName || i["Material Name"] || "",
+        i.compatibleModel || i["Compatible Model"] || "",
+        qty,
+        unit.toFixed(2),
+        (unit * qty).toFixed(2)
+      ];
+    })
   ];
   const csv = rows.map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
   return new TextEncoder().encode(csv);
@@ -258,14 +281,22 @@ function getOrderFolderKey(orderNo, fileName) {
 
 function htmlExcelBytes(orderNo, fields, items) {
   const escHtml = v => String(v ?? "").replace(/[&<>"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]));
-  const itemRows = (items || []).map((i, idx) => `
+  const currency = norm(fields["Invoice Currency"] || "USD").toUpperCase();
+  const itemRows = (items || []).map((i, idx) => {
+    const qty = backendCleanPrice(i.qty || i.Qty || 1) || 1;
+    const unit = backendItemUnitPrice(i, currency);
+    const total = unit * qty;
+    return `
     <tr>
       <td>${idx + 1}</td>
       <td>${escHtml(i.materialCode || i["Material Code"] || "")}</td>
       <td>${escHtml(i.materialName || i["Material Name"] || "")}</td>
       <td>${escHtml(i.compatibleModel || i["Compatible Model"] || "")}</td>
-      <td>${escHtml(i.qty || i.Qty || 1)}</td>
-    </tr>`).join("");
+      <td>${escHtml(qty)}</td>
+      <td>${escHtml(unit.toFixed(2))}</td>
+      <td>${escHtml(total.toFixed(2))}</td>
+    </tr>`;
+  }).join("");
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
 body{font-family:Arial,sans-serif}h1{font-size:20px;color:#1f3b8a}table{border-collapse:collapse;width:100%}th{background:#1f3b8a;color:#fff}th,td{border:1px solid #777;padding:8px;text-align:left}.meta th{width:220px}
@@ -277,12 +308,12 @@ body{font-family:Arial,sans-serif}h1{font-size:20px;color:#1f3b8a}table{border-c
 <tr><th>Contact Name</th><td>${escHtml(fields["Contact Name"] || fields["Contact Person"])}</td></tr>
 <tr><th>Billing Address</th><td>${escHtml(fields["Billing Address"] || fields["Invoice Address"])}</td></tr>
 <tr><th>Country</th><td>${escHtml(fields.Country)}</td></tr>
-<tr><th>Invoice Currency</th><td>${escHtml(fields["Invoice Currency"])}</td></tr>
+<tr><th>Invoice Currency</th><td>${escHtml(currency)}</td></tr>
 <tr><th>Status</th><td>${escHtml(fields.Status || "Submitted")}</td></tr>
 </table>
 <h2>Spare Parts</h2>
-<table><thead><tr><th>No</th><th>Material Code</th><th>Material Name</th><th>Compatible Model</th><th>Qty</th></tr></thead>
-<tbody>${itemRows || '<tr><td colspan="5">No items</td></tr>'}</tbody></table>
+<table><thead><tr><th>No</th><th>Material Code</th><th>Material Name</th><th>Compatible Model</th><th>Qty</th><th>${escHtml(backendPriceLabel("Unit Price", currency))}</th><th>${escHtml(backendPriceLabel("Total", currency))}</th></tr></thead>
+<tbody>${itemRows || '<tr><td colspan="7">No items</td></tr>'}</tbody></table>
 </body></html>`;
   return new TextEncoder().encode(html);
 }
