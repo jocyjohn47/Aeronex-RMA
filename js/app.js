@@ -1,5 +1,4 @@
 let REPAIR_SUBMITTING = false;
-let SPARE_SUBMITTING = false;
 
 function isTechnician(){
   return currentUserRoleText().includes('technician') || currentUserRoleText().includes('tech');
@@ -434,7 +433,7 @@ function dealerPoBox(){
 
 function country(){return normalizeCountryValue(S.user?.country||S.user?.fields?.Country||'UAE & Other Region')}function uf(k,d=''){return S.user?.fields?.[k]??d}
 function layout(){let n=S.user?.displayName||S.user?.username||'User';document.body.innerHTML=`<header class="topbar"><div class="brand"><div class="brand-title">AERO NEX</div><div class="brand-sub">RMA & Spare Order Portal</div></div><nav class="nav">
-<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a><a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${isAdmin()?`<a data-sec="admin" href="#" onclick="show('admin')">⚙ Admin</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealers','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
+<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a><a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${isAdmin()?`<a data-sec="admin" href="#" onclick="show('admin')">⚙ Admin</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealers','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX<br>Developed by Jocy John<br>Support: support@aeronex.ae</footer>`}
 function show(sec){document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));$(sec)?.classList.add('active');document.querySelectorAll('.nav a').forEach(a=>a.classList.toggle('active',a.dataset.sec===sec));scrollTo(0,0)}
 function renderDashboard(){$('dashboard').classList.add('active');$('dashboard').innerHTML=`<div class="hero"><h2>Welcome back, ${esc(S.user.displayName||S.user.username)}</h2><div class="muted">Here's what you can do today</div>${isAdmin()?`<div class="notice"><b>Country:</b> <select style="max-width:260px;display:inline-block;margin-left:10px" onchange="setAdminCountry(this.value)"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select></div>`:''}</div><div class="cards">${[['🛒','Spare Order','Order spare parts from inventory.','spare','Go to Spare Order'],['🔧','Create Repair Case','Submit a new repair request.','repairCreate','Create Case'],['📋','Repair Status','Track repair cases, reports and invoices.','repairStatus','View Status'],['🏢','Dealer Details','View and manage dealer information.','dealers','View Dealers'],['📄','Portal Notes','Important information and announcements.','portalNotes','View Notes']].map(c=>`<div class="card"><div class="ico">${c[0]}</div><h3>${c[1]}</h3><p>${c[2]}</p><a href="#" onclick="show('${c[3]}')">${c[4]} →</a></div>`).join('')}
 <div class="address-grid">
@@ -524,10 +523,7 @@ function renderSpareOptions(){let q=($('spareSearch')?.value||'').toLowerCase(),
 function addListed(){let v=$('spareSelect').value;if(!v)return msg('orderMsg','Select material first');let o=JSON.parse(decodeURIComponent(v));o.qty=$('spareQty').value||'1';S.cart.push(o);drawCart()}
 function addCustom(){let n=$('customName').value.trim();if(!n)return msg('orderMsg','Enter custom material name');S.cart.push({materialCode:$('customCode').value.trim(),materialName:n,compatibleModel:'Custom',price:'-',stock:'-',qty:$('customQty').value||'1'});$('customCode').value='';$('customName').value='';drawCart()}
 function drawCart(){let e=$('cartRows');if(!e)return;e.innerHTML=S.cart.map((x,i)=>`<tr><td>${esc(x.materialCode||'CUSTOM')}</td><td>${esc(x.materialName)}</td><td>${esc(x.compatibleModel)}</td><td>${esc(x.qty)}</td><td><button class="btn-danger" onclick="S.cart.splice(${i},1);drawCart()">Remove</button></td></tr>`).join('')}
-async function submitOrder(){
-  if(SPARE_SUBMITTING) return;
-  SPARE_SUBMITTING = true;
-  try{if(!S.cart.length)return msg('orderMsg','Add at least one item');let p={companyName:uf('Company Name','AERO NEX'),contactName:uf('Contact Person',''),billingAddress:dealerAddress(),invoiceCurrency:selectedInvoiceCurrency(),country:selectedCountry(),items:S.cart,notes:(($('spareNotes')&&$('spareNotes').value)||'').trim()};try{let d=await api('/api/submit-spare',{method:'POST',body:JSON.stringify(p)});msg('orderMsg','Order submitted with Excel file: '+d.orderNo,true);S.cart=[];drawCart();await loadOrders();renderOrders()}catch(e){msg('orderMsg',e.message)}}
+async function submitOrder(){if(!S.cart.length)return msg('orderMsg','Add at least one item');let p={companyName:uf('Company Name','AERO NEX'),contactName:uf('Contact Person',''),billingAddress:dealerAddress(),invoiceCurrency:selectedInvoiceCurrency(),country:selectedCountry(),items:S.cart,notes:(($('spareNotes')&&$('spareNotes').value)||'').trim()};try{let d=await api('/api/submit-spare',{method:'POST',body:JSON.stringify(p)});msg('orderMsg','Order submitted with Excel file: '+d.orderNo,true);S.cart=[];drawCart();await loadOrders();renderOrders()}catch(e){msg('orderMsg',e.message)}}
 
 
 
@@ -541,9 +537,6 @@ function orderNoValue(rowOrFields){
     f['Case No'] ||
     ''
   );
-  } finally {
-    SPARE_SUBMITTING = false;
-  }
 }
 
 
