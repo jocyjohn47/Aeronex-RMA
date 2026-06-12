@@ -69,9 +69,7 @@ async function larkFetch(env, path, init = {}) {
     }
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok || data.code) {
-    throw new Error("Lark API error at " + (init.method || "GET") + " " + path + ": " + JSON.stringify(data));
-  }
+  if (!res.ok || data.code) throw new Error("Lark API error: " + JSON.stringify(data));
   return data;
 }
 
@@ -96,8 +94,6 @@ async function getFieldTypes(env, tableId) {
   for (const f of data.data?.items || []) out[f.field_name] = f.type;
   return out;
 }
-
-
 
 async function getRecord(env, tableId, recordId) {
   if (!tableId || !recordId) throw new Error("Missing tableId or record_id");
