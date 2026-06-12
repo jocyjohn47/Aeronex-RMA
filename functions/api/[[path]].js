@@ -69,7 +69,9 @@ async function larkFetch(env, path, init = {}) {
     }
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok || data.code) throw new Error("Lark API error: " + JSON.stringify(data));
+  if (!res.ok || data.code) {
+    throw new Error("Lark API error at " + (init.method || "GET") + " " + path + ": " + JSON.stringify(data));
+  }
   return data;
 }
 
@@ -93,6 +95,17 @@ async function getFieldTypes(env, tableId) {
   const out = {};
   for (const f of data.data?.items || []) out[f.field_name] = f.type;
   return out;
+}
+
+
+async function getFieldMeta(env, tableId) {
+  if (!tableId) return [];
+  const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields`);
+  return (data.data?.items || []).map(f => ({
+    field_name: f.field_name,
+    type: f.type,
+    property: f.property || null
+  }));
 }
 
 async function getRecord(env, tableId, recordId) {
@@ -405,7 +418,7 @@ function isDealerRepairLocked(status){const s=norm(status);return s==="Repaired 
 function dealerRepairCanAccess(company,role,recordFields){if(canSeeAll(role))return true;const uc=norm(company),rc=norm((recordFields||{})["Company Name"]);return uc&&rc&&lower(uc)===lower(rc)}
 function parseDealerRepairMaterialsText(s){return String(s||"").split(";").map(x=>x.trim()).filter(Boolean).map(x=>{const m=x.match(/^(.*?)\s*-\s*(.*?)\s+x\s*([0-9.]+)$/i);if(m)return{materialCode:m[1].trim(),materialName:m[2].trim(),qty:m[3].trim()};const m2=x.match(/^(.*?)\s+x\s*([0-9.]+)$/i);if(m2)return{materialCode:"",materialName:m2[1].trim(),qty:m2[2].trim()};return{materialCode:"",materialName:x,qty:1}})}
 function formatDealerRepairMaterials(items){return(items||[]).map(i=>{const code=norm(i.materialCode||i["Material Code"]||"CUSTOM")||"CUSTOM";const name=norm(i.materialName||i["Material Name"]||"");const qty=norm(i.qty||i.Qty||1)||"1";return`${code} - ${name} x${qty}`}).join("; ")}
-function dealerRepairExcelBytes(caseNo,fields){const escHtml=v=>String(v??"").replace(/[&<>"]/g,s=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[s]));const materials=parseDealerRepairMaterialsText(fields["Material Replaced"]||"");const rows=materials.map((i,idx)=>`<tr><td>${idx+1}</td><td>${escHtml(i.materialCode||"CUSTOM")}</td><td>${escHtml(i.materialName||"")}</td><td>${escHtml(i.qty||1)}</td></tr>`).join("");const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif}h1{font-size:20px;color:#1f3b8a}table{border-collapse:collapse;width:100%}th{background:#1f3b8a;color:#fff}th,td{border:1px solid #777;padding:8px;text-align:left}.meta th{width:230px}</style></head><body><h1>AERO NEX Dealer Repair Case</h1><table class="meta"><tr><th>Case Register No</th><td>${escHtml(caseNo)}</td></tr><tr><th>Company Name</th><td>${escHtml(fields["Company Name"])}</td></tr><tr><th>Model No</th><td>${escHtml(fields["Model No"])}</td></tr><tr><th>Serial No</th><td>${escHtml(fields["Serial No"])}</td></tr><tr><th>Activation Date / Invoice Date</th><td>${escHtml(fields["Activation Date / Invoice Date"])}</td></tr><tr><th>Technician Name</th><td>${escHtml(fields["Technician Name"])}</td></tr><tr><th>Repair Type</th><td>${escHtml(fields["Repair Type"])}</td></tr><tr><th>Repair Status</th><td>${escHtml(fields["Repair Status"])}</td></tr><tr><th>Upload Repair Data</th><td>${escHtml(fields["Upload Repair Data"])}</td></tr></table><h2>Device Issue</h2><p>${escHtml(fields["Device Issue"])}</p><h2>Technician Note</h2><p>${escHtml(fields["Technicain Note"])}</p><h2>Material Replaced</h2><table><thead><tr><th>No</th><th>Material Code</th><th>Material Name</th><th>Qty</th></tr></thead><tbody>${rows||'<tr><td colspan="4">No materials</td></tr>'}</tbody></table></body></html>`;return new TextEncoder().encode(html)}
+function dealerRepairExcelBytes(caseNo,fields){const escHtml=v=>String(v??"").replace(/[&<>"]/g,s=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[s]));const materials=parseDealerRepairMaterialsText(fields["Material Replaced"]||"");const rows=materials.map((i,idx)=>`<tr><td>${idx+1}</td><td>${escHtml(i.materialCode||"CUSTOM")}</td><td>${escHtml(i.materialName||"")}</td><td>${escHtml(i.qty||1)}</td></tr>`).join("");const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif}h1{font-size:20px;color:#1f3b8a}table{border-collapse:collapse;width:100%}th{background:#1f3b8a;color:#fff}th,td{border:1px solid #777;padding:8px;text-align:left}.meta th{width:230px}</style></head><body><h1>AERO NEX Dealer Repair Case</h1><table class="meta"><tr><th>Case Register No</th><td>${escHtml(caseNo)}</td></tr><tr><th>Company Name</th><td>${escHtml(fields["Company Name"])}</td></tr><tr><th>Model No</th><td>${escHtml(fields["Model No"])}</td></tr><tr><th>Serial No</th><td>${escHtml(fields["Serial No"])}</td></tr><tr><th>Activation Date / Invoice Date</th><td>${escHtml(fields["Activation Date / Invoice Date"])}</td></tr><tr><th>Technician Name</th><td>${escHtml(fields["Technician Name"])}</td></tr><tr><th>Repair Type</th><td>${escHtml(fields["Repair Type"])}</td></tr><tr><th>Repair Status</th><td>${escHtml(fields["Repair Status"])}</td></tr><tr><th>Upload Repair Data</th><td>${escHtml(fields["Upload Repair Data"])}</td></tr></table><h2>Device Issue</h2><p>${escHtml(fields["Device Issue"])}</p><h2>Technician Note</h2><p>${escHtml(fields["Technician Note"])}</p><h2>Material Replaced</h2><table><thead><tr><th>No</th><th>Material Code</th><th>Material Name</th><th>Qty</th></tr></thead><tbody>${rows||'<tr><td colspan="4">No materials</td></tr>'}</tbody></table></body></html>`;return new TextEncoder().encode(html)}
 async function resolveDealerRepairNo(env){const d=new Date();const ymd=d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");const prefix=`DRC${ymd}`;const rows=await listRecords(env,env.DEALER_REPAIR_CASE_TABLE_ID);let max=0;for(const r of rows||[]){const no=dealerRepairCaseNo(r.fields||{});if(String(no).startsWith(prefix)){const n=Number(String(no).slice(prefix.length));if(Number.isFinite(n)&&n>max)max=n}}return prefix+String(max+1).padStart(4,"0")}
 
 async function handle(req, env) {
@@ -473,6 +486,52 @@ async function handle(req, env) {
     return json({ ok: true });
   }
 
+
+  if (p === "/api/admin-dealer-repair-field-diagnostics") {
+    const role = norm(url.searchParams.get("role"));
+    if (!canSeeAll(role)) return json({ error: "Forbidden" }, 403);
+
+    const out = {
+      ok: false,
+      dealerRepairTableIdPresent: !!env.DEALER_REPAIR_CASE_TABLE_ID,
+      dealerRepairTableId: env.DEALER_REPAIR_CASE_TABLE_ID || "",
+      fields: [],
+      uploadRepairData: null,
+      technicainNote: null,
+      tests: []
+    };
+
+    async function test(name, fn) {
+      try {
+        const data = await fn();
+        out.tests.push({ name, ok: true, sample: data });
+      } catch (e) {
+        out.tests.push({ name, ok: false, error: e.message || String(e) });
+      }
+    }
+
+    await test("get-field-meta", async () => {
+      const meta = await getFieldMeta(env, env.DEALER_REPAIR_CASE_TABLE_ID);
+      out.fields = meta.map(f => ({ field_name: f.field_name, type: f.type }));
+      out.uploadRepairData = meta.find(f => f.field_name === "Upload Repair Data") || null;
+      out.technicainNote = meta.find(f => f.field_name === "Technicain Note") || null;
+      return {
+        count: meta.length,
+        uploadRepairData: out.uploadRepairData,
+        technicainNote: out.technicainNote,
+        fields: out.fields
+      };
+    });
+
+    await test("list-records", async () => {
+      const rows = await listRecords(env, env.DEALER_REPAIR_CASE_TABLE_ID);
+      return { count: rows.length, firstRecordId: rows[0]?.record_id || "" };
+    });
+
+    out.ok = out.tests.every(t => t.ok);
+    return json(out, out.ok ? 200 : 500);
+  }
+
   if (p === "/api/dealers") {
     return json(await listRecords(env, env.USER_TABLE_ID));
   }
@@ -503,7 +562,7 @@ async function handle(req, env) {
       "Technician Name": b.technicianName || "",
       "Material Replaced": formatDealerRepairMaterials(b.parts || []),
       "Device Issue": b.deviceIssue || "",
-      "Technicain Note": b.technicianNote || "",
+      "Technician Note": b.technicianNote || "",
       "Repair Type": b.repairType || "Local Repair",
       "Upload Repair Data": b.uploadRepairData || "",
       "Repair Status": "Submitted"
@@ -512,7 +571,7 @@ async function handle(req, env) {
     const sendFields = {};
     for (const [k, v] of Object.entries(fields)) {
       if (fieldTypes[k] && v !== undefined && v !== null && v !== "") {
-        sendFields[k] = k === "Upload Repair Data" ? toLarkUrlValue(v, "Upload Repair Data") : v;
+        sendFields[k] = fieldTypes[k] === 15 && k === "Upload Repair Data" ? toLarkUrlValue(v, "Upload Repair Data") : v;
       }
     }
     const rec = await createRecord(env, env.DEALER_REPAIR_CASE_TABLE_ID, sendFields);
@@ -545,14 +604,14 @@ async function handle(req, env) {
       "Technician Name": b.technicianName || "",
       "Material Replaced": formatDealerRepairMaterials(b.parts || []),
       "Device Issue": b.deviceIssue || "",
-      "Technicain Note": b.technicianNote || "",
+      "Technician Note": b.technicianNote || "",
       "Repair Type": b.repairType || "Local Repair",
       "Upload Repair Data": b.uploadRepairData || ""
     };
     const fieldTypes = await getFieldTypes(env, env.DEALER_REPAIR_CASE_TABLE_ID);
     const sendFields = {};
     for (const [k, v] of Object.entries(fields)) {
-      if (fieldTypes[k]) sendFields[k] = k === "Upload Repair Data" ? toLarkUrlValue(v, "Upload Repair Data") : v;
+      if (fieldTypes[k]) sendFields[k] = fieldTypes[k] === 15 && k === "Upload Repair Data" ? toLarkUrlValue(v, "Upload Repair Data") : v;
     }
     const rec = await updateRecord(env, env.DEALER_REPAIR_CASE_TABLE_ID, recordId, sendFields);
     return json({ ok: true, caseNo: dealerRepairCaseNo(row.fields || {}), record: rec });
