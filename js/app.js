@@ -376,7 +376,7 @@ function portalDocumentLink(v){
 }
 
 
-let S={user:loadUser(),spares:[],cart:[],orders:[],repairs:[],dealers:[],notes:[]};
+let S={dealerRepairCases:[],drcParts:[],drcEditingId:'',drcSubmitting:false,user:loadUser(),spares:[],cart:[],orders:[],repairs:[],dealers:[],notes:[]};
 function $(id){return document.getElementById(id)}function esc(v){return String(v??'').replace(/[&<>"]/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]))}
 
 
@@ -434,8 +434,95 @@ function dealerPoBox(){
 
 function country(){return normalizeCountryValue(S.user?.country||S.user?.fields?.Country||'UAE & Other Region')}function uf(k,d=''){return S.user?.fields?.[k]??d}
 function layout(){let n=S.user?.displayName||S.user?.username||'User';document.body.innerHTML=`<header class="topbar"><div class="brand"><div class="brand-title">AERO NEX</div><div class="brand-sub">RMA & Spare Order Portal</div></div><nav class="nav">
-<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a><a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${isAdmin()?`<a data-sec="admin" href="#" onclick="show('admin')">⚙ Admin</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealers','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
+<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${isAdmin()?`<a data-sec="admin" href="#" onclick="show('admin')">⚙ Admin</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','dealers','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
 function show(sec){document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));$(sec)?.classList.add('active');document.querySelectorAll('.nav a').forEach(a=>a.classList.toggle('active',a.dataset.sec===sec));scrollTo(0,0)}
+
+function dealerRepairCaseEnabled(){
+  const f=S.user?.fields||{};
+  const v=String(f['Dealer Repair Case']||S.user?.['Dealer Repair Case']||S.user?.dealerRepairCase||'').trim().toLowerCase();
+  return v==='yes'||v==='true'||v==='1';
+}
+function dealerRepairCasesSectionVisible(){return dealerRepairCaseEnabled()||currentUserIsAdminTech()}
+function dealerRepairCompany(){return uf('Company Name','')||S.user?.companyName||S.user?.displayName||''}
+function dealerRepairCaseLocked(status){const s=String(status||'').trim();return s==='Repaired & Returned'||s==='Not Repair & Returned'}
+function dealerRepairCaseNoValue(rowOrFields){const f=rowOrFields&&rowOrFields.fields?rowOrFields.fields:(rowOrFields||{});return f['Case Register No']||f['Dealer Repair Case No']||f['Case No']||''}
+function dealerRepairDataLink(v){const url=linkUrlValue(v);return url?`<a class="btn-light" target="_blank" rel="noopener" href="${esc(url)}">Open Link</a>`:'-'}
+function dealerRepairExcelLink(row){const no=dealerRepairCaseNoValue(row),recordId=row&&row.record_id||'';if(!recordId)return'-';return`<a class="btn-light" href="/api/download-dealer-repair-case-excel?record_id=${encodeURIComponent(recordId)}&caseNo=${encodeURIComponent(no)}&email=${encodeURIComponent(userEmail())}&role=${encodeURIComponent(S.user.role||'')}&company=${encodeURIComponent(dealerRepairCompany())}" target="_blank" rel="noopener">Download Excel</a>`}
+function parseDealerRepairMaterials(text){
+  const s=String(text||'').trim();if(!s)return[];
+  return s.split(';').map(x=>x.trim()).filter(Boolean).map(x=>{
+    const m=x.match(/^(.*?)\s*-\s*(.*?)\s+x\s*([0-9.]+)$/i);
+    if(m)return{materialCode:m[1].trim(),materialName:m[2].trim(),qty:m[3].trim()};
+    const m2=x.match(/^(.*?)\s+x\s*([0-9.]+)$/i);
+    if(m2)return{materialCode:'',materialName:m2[1].trim(),qty:m2[2].trim()};
+    return{materialCode:'',materialName:x,qty:1};
+  });
+}
+function renderDealerRepairPartOptions(){
+  let q=($('drcPartSearch')?.value||'').toLowerCase(),s=$('drcPartSelect');if(!s)return;
+  s.innerHTML=(S.spares||[]).filter(x=>{let f=x.fields||{};return `${f['Material Code']||''} ${f['Material Name']||''} ${f['Compatible Model']||''}`.toLowerCase().includes(q)}).map(x=>{let f=x.fields||{},o={materialCode:f['Material Code']||'',materialName:f['Material Name']||'',compatibleModel:f['Compatible Model']||''};return `<option value="${encodeURIComponent(JSON.stringify(o))}">${esc(o.materialCode)} - ${esc(o.materialName)} ${o.compatibleModel?'('+esc(o.compatibleModel)+')':''}</option>`}).join('');
+}
+function addDealerRepairListedPart(){let s=$('drcPartSelect');if(!s||!s.value)return;let o=JSON.parse(decodeURIComponent(s.value));o.qty=$('drcPartQty').value||'1';S.drcParts=S.drcParts||[];S.drcParts.push(o);drawDealerRepairParts()}
+function addDealerRepairCustomPart(){
+  let name=($('drcCustomName')?.value||'').trim();if(!name)return msg('dealerRepairMsg','Enter custom material name');
+  S.drcParts=S.drcParts||[];
+  S.drcParts.push({materialCode:($('drcCustomCode')?.value||'CUSTOM').trim()||'CUSTOM',materialName:name,qty:($('drcCustomQty')?.value||'1')});
+  $('drcCustomCode').value='';$('drcCustomName').value='';$('drcCustomQty').value='1';drawDealerRepairParts();
+}
+function drawDealerRepairParts(){
+  let e=$('drcPartsRows');if(!e)return;S.drcParts=S.drcParts||[];
+  e.innerHTML=S.drcParts.map((x,i)=>`<tr><td>${esc(x.materialCode||'CUSTOM')}</td><td>${esc(x.materialName||'')}</td><td>${esc(x.qty||1)}</td><td><button class="btn-danger" onclick="S.drcParts.splice(${i},1);drawDealerRepairParts()">Remove</button></td></tr>`).join('');
+}
+function resetDealerRepairForm(){
+  S.drcEditingId='';S.drcParts=[];
+  ['drcModel','drcSerial','drcActivation','drcTech','drcIssue','drcNote','drcUploadLink'].forEach(id=>{let el=$(id);if(el)el.value=''});
+  if($('drcRepairType'))$('drcRepairType').value='Local Repair';
+  if($('drcSubmitBtn'))$('drcSubmitBtn').textContent='Submit Dealer Repair Case';
+  if($('drcCancelEdit'))$('drcCancelEdit').classList.add('hidden');
+  drawDealerRepairParts();
+}
+function editDealerRepairCase(recordId){
+  const row=(S.dealerRepairCases||[]).find(r=>r.record_id===recordId);if(!row)return;const f=row.fields||{};
+  if(dealerRepairCaseLocked(f['Repair Status']))return alert('This case is closed and cannot be edited.');
+  S.drcEditingId=recordId;
+  $('drcModel').value=f['Model No']||'';$('drcSerial').value=f['Serial No']||'';$('drcActivation').value=f['Activation Date / Invoice Date']||'';
+  $('drcTech').value=f['Technician Name']||'';$('drcIssue').value=f['Device Issue']||'';$('drcNote').value=f['Technician Note']||'';
+  $('drcRepairType').value=f['Repair Type']||'Local Repair';$('drcUploadLink').value=linkUrlValue(f['Upload Repair Data']||'')||f['Upload Repair Data']||'';
+  S.drcParts=parseDealerRepairMaterials(f['Material Replaced']||'');drawDealerRepairParts();
+  $('drcSubmitBtn').textContent='Update Dealer Repair Case';$('drcCancelEdit').classList.remove('hidden');show('dealerRepairCase');scrollTo(0,0);
+}
+async function loadDealerRepairCases(){if(!dealerRepairCasesSectionVisible()){S.dealerRepairCases=[];return}S.dealerRepairCases=await api('/api/dealer-repair-cases?email='+encodeURIComponent(userEmail())+'&role='+encodeURIComponent(S.user.role||'')+'&company='+encodeURIComponent(dealerRepairCompany()))}
+async function submitDealerRepairCase(){
+  if(S.drcSubmitting)return;S.drcSubmitting=true;
+  try{
+    const payload={record_id:S.drcEditingId||'',email:userEmail(),role:S.user.role||'',companyName:dealerRepairCompany(),modelNo:($('drcModel')?.value||'').trim(),serialNo:($('drcSerial')?.value||'').trim(),activationDate:($('drcActivation')?.value||'').trim(),technicianName:($('drcTech')?.value||'').trim(),deviceIssue:($('drcIssue')?.value||'').trim(),technicianNote:($('drcNote')?.value||'').trim(),repairType:($('drcRepairType')?.value||'Local Repair').trim(),uploadRepairData:($('drcUploadLink')?.value||'').trim(),parts:S.drcParts||[]};
+    if(!payload.companyName)return msg('dealerRepairMsg','Company Name missing from user profile');
+    if(!payload.modelNo||!payload.serialNo)return msg('dealerRepairMsg','Model No and Serial No are required');
+    if(!payload.parts.length)return msg('dealerRepairMsg','Add at least one replaced material');
+    const endpoint=payload.record_id?'/api/update-dealer-repair-case':'/api/create-dealer-repair-case';
+    const d=await api(endpoint,{method:'POST',body:JSON.stringify(payload)});
+    msg('dealerRepairMsg',(payload.record_id?'Dealer Repair Case updated: ':'Dealer Repair Case submitted: ')+(d.caseNo||''),true);
+    resetDealerRepairForm();await loadDealerRepairCases();renderDealerRepairCase();
+  }catch(e){msg('dealerRepairMsg',e.message)}finally{S.drcSubmitting=false}
+}
+function renderDealerRepairCase(){
+  if(!$('dealerRepairCase'))return;
+  if(!dealerRepairCasesSectionVisible()){$('dealerRepairCase').innerHTML=`<div class="panel"><h2>Dealer Repair Case</h2><div class="notice">You do not have permission to access Dealer Repair Case.</div></div>`;return}
+  S.drcParts=S.drcParts||[];const company=dealerRepairCompany();
+  $('dealerRepairCase').innerHTML=`<div class="panel"><h2>Dealer Repair Case</h2><div class="notice">Create and track dealer repair cases. Closed cases cannot be edited.</div>
+  <div class="grid3"><div><label>Company Name</label><input value="${esc(company)}" disabled></div><div><label>Model No *</label><input id="drcModel"></div><div><label>Serial No *</label><input id="drcSerial"></div></div>
+  <div class="grid3"><div><label>Activation Date / Invoice Date</label><input id="drcActivation" type="date"></div><div><label>Technician Name</label><input id="drcTech"></div><div><label>Repair Type</label><select id="drcRepairType"><option>Local Repair</option><option>DJI / Aeronex Repair</option></select></div></div>
+  <label>Device Issue</label><textarea id="drcIssue"></textarea><label>Technician Note</label><textarea id="drcNote"></textarea>
+  <label>Upload Repair Data</label><input id="drcUploadLink" placeholder="Google Drive link"><div class="muted">Upload the Google Drive Link (Include Issue Photos/Videos, Flight Logs or Crash Logs, After Repair Photos/Videos.)</div>
+  <h3>Material Replaced</h3>
+  <div class="row"><div><label>Search Spare Part List</label><input id="drcPartSearch" oninput="renderDealerRepairPartOptions()" placeholder="Search Material Code / Material Name"></div><div><label>Select Material</label><select id="drcPartSelect"></select></div><div class="qty"><label>Qty</label><input id="drcPartQty" type="number" min="1" value="1"></div><div class="act"><button onclick="addDealerRepairListedPart()">Add Part</button></div></div>
+  <div class="row"><div><label>Custom Material Code</label><input id="drcCustomCode" placeholder="CUSTOM"></div><div><label>Custom Material Name</label><input id="drcCustomName"></div><div class="qty"><label>Qty</label><input id="drcCustomQty" type="number" min="1" value="1"></div><div class="act"><button onclick="addDealerRepairCustomPart()">Add Custom</button></div></div>
+  <div class="table-wrap"><table><thead><tr><th>Material Code</th><th>Material Name</th><th>Qty</th><th>Action</th></tr></thead><tbody id="drcPartsRows"></tbody></table></div>
+  <div class="row"><button id="drcSubmitBtn" onclick="submitDealerRepairCase()">Submit Dealer Repair Case</button><button id="drcCancelEdit" class="btn-light hidden" onclick="resetDealerRepairForm()">Cancel Edit</button></div><div id="dealerRepairMsg" class="msg"></div></div>
+  <div class="panel"><h2>My Dealer Repair Case History</h2><div class="table-wrap"><table><thead><tr><th>Case Register No</th><th>Company Name</th><th>Model No</th><th>Serial No</th><th>Activation Date / Invoice Date</th><th>Repair Type</th><th>Repair Status</th><th>Upload Repair Data</th><th>Excel</th><th>Edit</th></tr></thead><tbody>${(S.dealerRepairCases||[]).map(r=>{let f=r.fields||{},locked=dealerRepairCaseLocked(f['Repair Status']);return `<tr><td>${esc(dealerRepairCaseNoValue(f))}</td><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Model No']||'')}</td><td>${esc(f['Serial No']||'')}</td><td>${esc(f['Activation Date / Invoice Date']||'')}</td><td>${esc(f['Repair Type']||'')}</td><td>${statusCell(r,'dealerRepair')}</td><td>${dealerRepairDataLink(f['Upload Repair Data'])}</td><td>${dealerRepairExcelLink(r)}</td><td>${locked?'<span class="muted">Locked</span>':`<button class="btn-light" onclick="editDealerRepairCase('${r.record_id}')">Edit</button>`}</td></tr>`}).join('')}</tbody></table></div></div>`;
+  renderDealerRepairPartOptions();drawDealerRepairParts();
+}
+
 function renderDashboard(){$('dashboard').classList.add('active');$('dashboard').innerHTML=`<div class="hero"><h2>Welcome back, ${esc(S.user.displayName||S.user.username)}</h2><div class="muted">Here's what you can do today</div>${isAdmin()?`<div class="notice"><b>Country:</b> <select style="max-width:260px;display:inline-block;margin-left:10px" onchange="setAdminCountry(this.value)"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select></div>`:''}</div><div class="cards">${[['🛒','Spare Order','Order spare parts from inventory.','spare','Go to Spare Order'],['🔧','Create Repair Case','Submit a new repair request.','repairCreate','Create Case'],['📋','Repair Status','Track repair cases, reports and invoices.','repairStatus','View Status'],['🏢','Dealer Details','View and manage dealer information.','dealers','View Dealers'],['📄','Portal Notes','Important information and announcements.','portalNotes','View Notes']].map(c=>`<div class="card"><div class="ico">${c[0]}</div><h3>${c[1]}</h3><p>${c[2]}</p><a href="#" onclick="show('${c[3]}')">${c[4]} →</a></div>`).join('')}
 <div class="address-grid">
   <div class="address-box">
