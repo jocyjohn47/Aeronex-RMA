@@ -840,11 +840,27 @@ async function saveDealer(record_id){
 function renderNotes(){
   $('portalNotes').innerHTML=`<div class="panel"><h2>Portal Notes</h2><div class="notice">Important announcements, policies, and external document links.</div><div class="table-wrap"><table><thead><tr><th>Title</th><th>Page</th><th>Note</th><th>Country</th><th>Document Link</th></tr></thead><tbody>${(Array.isArray(S.notes)?S.notes:[]).map(r=>{let f=r.fields||{};let doc=f['Document Link']||f.Document||f.Link||f.URL||f['Document URL'];return `<tr><td>${esc(f.Title||'')}</td><td>${esc(f.Page||'')}</td><td>${esc(f.Note||f.Description||'')}</td><td>${esc(f.Country||'All')}</td><td>${portalDocumentLink(doc)}</td></tr>`}).join('')}</tbody></table></div></div>`;
 }
+
+async function runDealerRepairFieldDiagnostics(){
+  const el=$('dealerRepairFieldDiagResult');
+  if(el) el.textContent='Running Dealer Repair Field Diagnostics...';
+  try{
+    const d=await api('/api/admin-dealer-repair-field-diagnostics?role='+encodeURIComponent(S.user.role||''));
+    if(el) el.textContent=JSON.stringify(d,null,2);
+  }catch(e){
+    if(el) el.textContent=e.message || String(e);
+  }
+}
+
 function renderAdmin(){
   $('admin').innerHTML=`<div class="panel"><h2>Admin Dashboard</h2><div class="notice">Admin tools: reset passwords, mandatory fields planning, spare Excel sync planning, portal notes planning.</div>
   <h3>User Management</h3>
   <div class="table-wrap"><table><thead><tr><th>Company</th><th>User Email</th><th>Contact</th><th>Role</th><th>Country</th><th>Action</th></tr></thead><tbody>${visibleDealers().map(r=>{let f=r.fields||{};return `<tr><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Username ( Email )']||'')}</td><td>${esc(f['Contact Person']||'')}</td><td>${esc(f['User Role']||'')}</td><td>${esc(f['Country']||'')}</td><td><button onclick="resetUserPassword('${r.record_id}')">Reset Password</button></td></tr>`}).join('')}</tbody></table></div>
   <div class="cards"><div class="card"><h3>Mandatory Field Settings</h3><p>Coming next: configurable required fields.</p></div><div class="card"><h3>Spare List Excel Sync</h3><p>Coming next: upload/merge spare list.</p></div><div class="card"><h3>Portal Notes</h3><p>Use Lark Portal Note table with external document links.</p></div></div></div>`;
+
+  if(isAdmin() && $('admin')){
+    $('admin').innerHTML += `<div class="panel"><h2>Dealer Repair Field Diagnostics</h2><div class="notice">Shows exact Lark API field types for Dealer Repair Case.</div><button onclick="runDealerRepairFieldDiagnostics()">Run Dealer Repair Field Diagnostics</button><pre id="dealerRepairFieldDiagResult" style="white-space:pre-wrap;background:#f6f8fb;border:1px solid #dbe3ef;border-radius:10px;padding:12px;max-height:420px;overflow:auto"></pre></div>`;
+  }
 }
 async function loadOrders(){S.orders=await api('/api/my-orders?country='+encodeURIComponent(selectedCountry())+'&role='+encodeURIComponent(S.user.role||''))}
 async function loadRepairs(){S.repairs=await api('/api/my-repairs?country='+encodeURIComponent(selectedCountry())+'&role='+encodeURIComponent(S.user.role||'')+'&email='+encodeURIComponent(userEmail()))}
