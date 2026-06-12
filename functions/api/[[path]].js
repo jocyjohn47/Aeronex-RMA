@@ -493,9 +493,9 @@ async function handle(req, env) {
     const b = await readBody(req);
     const companyName = norm(b.companyName);
     if (!companyName) return json({ error: "Company Name missing from user profile" }, 400);
-    const caseNo = await resolveDealerRepairNo(env);
+
+    // Case Register No is Lark auto-number. Do NOT write it from API.
     const fields = {
-      "Case Register No": caseNo,
       "Company Name": companyName,
       "Model No": b.modelNo || "",
       "Serial No": b.serialNo || "",
@@ -516,6 +516,14 @@ async function handle(req, env) {
       }
     }
     const rec = await createRecord(env, env.DEALER_REPAIR_CASE_TABLE_ID, sendFields);
+    const recordId = rec.data?.record?.record_id || rec.data?.record_id;
+    let caseNo = "";
+    if (recordId) {
+      try {
+        const saved = await getRecord(env, env.DEALER_REPAIR_CASE_TABLE_ID, recordId);
+        caseNo = dealerRepairCaseNo(saved.fields || {});
+      } catch (_) {}
+    }
     return json({ ok: true, caseNo, record: rec });
   }
 
