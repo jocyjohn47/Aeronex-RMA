@@ -69,9 +69,7 @@ async function larkFetch(env, path, init = {}) {
     }
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok || data.code) {
-    throw new Error("Lark API error at " + (init.method || "GET") + " " + path + ": " + JSON.stringify(data));
-  }
+  if (!res.ok || data.code) throw new Error("Lark API error: " + JSON.stringify(data));
   return data;
 }
 
@@ -430,7 +428,6 @@ async function handle(req, env) {
       REPAIR_UAE_TABLE_ID: !!env.REPAIR_UAE_TABLE_ID,
       REPAIR_KSA_TABLE_ID: !!env.REPAIR_KSA_TABLE_ID,
       PORTAL_NOTES_TABLE_ID: !!env.PORTAL_NOTES_TABLE_ID,
-      DEALER_REPAIR_CASE_TABLE_ID: !!env.DEALER_REPAIR_CASE_TABLE_ID,
       R2_PUBLIC_URL: !!env.R2_PUBLIC_URL,
       R2: !!env.R2
     }});
@@ -474,41 +471,6 @@ async function handle(req, env) {
     });
 
     return json({ ok: true });
-  }
-
-
-  if (p === "/api/admin-dealer-repair-diagnostics") {
-    const role = norm(url.searchParams.get("role"));
-    if (!canSeeAll(role)) return json({ error: "Forbidden" }, 403);
-
-    const out = {
-      ok: false,
-      dealerRepairTableIdPresent: !!env.DEALER_REPAIR_CASE_TABLE_ID,
-      dealerRepairTableId: env.DEALER_REPAIR_CASE_TABLE_ID || "",
-      tests: []
-    };
-
-    async function test(name, fn) {
-      try {
-        const data = await fn();
-        out.tests.push({ name, ok: true, sample: data });
-      } catch (e) {
-        out.tests.push({ name, ok: false, error: e.message || String(e) });
-      }
-    }
-
-    await test("get-fields", async () => {
-      const fields = await getFieldTypes(env, env.DEALER_REPAIR_CASE_TABLE_ID);
-      return { count: Object.keys(fields).length, fields: Object.keys(fields).slice(0, 50) };
-    });
-
-    await test("list-records", async () => {
-      const rows = await listRecords(env, env.DEALER_REPAIR_CASE_TABLE_ID);
-      return { count: rows.length, firstRecordId: rows[0]?.record_id || "" };
-    });
-
-    out.ok = out.tests.every(t => t.ok);
-    return json(out, out.ok ? 200 : 500);
   }
 
   if (p === "/api/dealers") {
