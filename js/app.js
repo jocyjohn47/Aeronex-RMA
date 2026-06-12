@@ -435,7 +435,20 @@ function dealerPoBox(){
 function country(){return normalizeCountryValue(S.user?.country||S.user?.fields?.Country||'UAE & Other Region')}function uf(k,d=''){return S.user?.fields?.[k]??d}
 function layout(){let n=S.user?.displayName||S.user?.username||'User';document.body.innerHTML=`<header class="topbar"><div class="brand"><div class="brand-title">AERO NEX</div><div class="brand-sub">RMA & Spare Order Portal</div></div><nav class="nav">
 <a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${isAdmin()?`<a data-sec="admin" href="#" onclick="show('admin')">⚙ Admin</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','dealers','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
-function show(sec){document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));$(sec)?.classList.add('active');document.querySelectorAll('.nav a').forEach(a=>a.classList.toggle('active',a.dataset.sec===sec));if(sec==='dealerRepairCase'){try{renderDealerRepairCase()}catch(e){console.error('renderDealerRepairCase failed',e);if($('dealerRepairCase'))$('dealerRepairCase').innerHTML='<div class="panel"><h2>Dealer Repair Case</h2><div class="msg err">Dealer Repair Case could not load. Check console for details.</div></div>'}}scrollTo(0,0)}
+function show(sec){
+  document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));
+  $(sec)?.classList.add('active');
+  document.querySelectorAll('.nav a').forEach(a=>a.classList.toggle('active',a.dataset.sec===sec));
+  if(sec==='dealerRepairCase'){
+    loadDealerRepairCases()
+      .then(()=>renderDealerRepairCase())
+      .catch(e=>{
+        console.error('dealer repair history refresh failed',e);
+        try{renderDealerRepairCase()}catch(err){console.error('renderDealerRepairCase failed',err)}
+      });
+  }
+  scrollTo(0,0)
+}
 
 function dealerRepairCaseEnabled(){
   const f=S.user?.fields||{};
@@ -443,7 +456,7 @@ function dealerRepairCaseEnabled(){
   return v==='yes'||v==='true'||v==='1';
 }
 function dealerRepairCasesSectionVisible(){return dealerRepairCaseEnabled()||currentUserIsAdminTech()}
-function dealerRepairCompany(){return uf('Company Name','')||S.user?.companyName||S.user?.displayName||''}
+function dealerRepairCompany(){return uf('Company Name','')||S.user?.companyName||S.user?.company||S.user?.displayName||''}
 function dealerRepairCaseLocked(status){const s=String(status||'').trim();return s==='Repaired & Returned'||s==='Not Repair & Returned'}
 function dealerRepairCaseNoValue(rowOrFields){const f=rowOrFields&&rowOrFields.fields?rowOrFields.fields:(rowOrFields||{});return f['Case Register No']||f['Dealer Repair Case No']||f['Case No']||''}
 function dealerRepairDataLink(v){const url=linkUrlValue(v);return url?`<a class="btn-light" target="_blank" rel="noopener" href="${esc(url)}">Open Link</a>`:'-'}
@@ -491,7 +504,15 @@ function editDealerRepairCase(recordId){
   S.drcParts=parseDealerRepairMaterials(f['Material Replaced']||'');drawDealerRepairParts();
   $('drcSubmitBtn').textContent='Update Dealer Repair Case';$('drcCancelEdit').classList.remove('hidden');show('dealerRepairCase');scrollTo(0,0);
 }
-async function loadDealerRepairCases(){if(!dealerRepairCasesSectionVisible()){S.dealerRepairCases=[];return}try{S.dealerRepairCases=await api('/api/dealer-repair-cases?email='+encodeURIComponent(userEmail())+'&role='+encodeURIComponent(S.user.role||'')+'&company='+encodeURIComponent(dealerRepairCompany()))}catch(e){console.warn('dealer repair cases load failed',e);S.dealerRepairCases=[]}}
+async function loadDealerRepairCases(){
+  if(!dealerRepairCasesSectionVisible()){S.dealerRepairCases=[];return}
+  try{
+    S.dealerRepairCases=await api('/api/dealer-repair-cases?email='+encodeURIComponent(userEmail())+'&role='+encodeURIComponent(S.user.role||'')+'&company='+encodeURIComponent(dealerRepairCompany()));
+  }catch(e){
+    console.warn('dealer repair cases load failed',e);
+    S.dealerRepairCases=[];
+  }
+}
 async function submitDealerRepairCase(){
   if(S.drcSubmitting)return;S.drcSubmitting=true;
   try{
@@ -840,8 +861,6 @@ async function saveDealer(record_id){
 function renderNotes(){
   $('portalNotes').innerHTML=`<div class="panel"><h2>Portal Notes</h2><div class="notice">Important announcements, policies, and external document links.</div><div class="table-wrap"><table><thead><tr><th>Title</th><th>Page</th><th>Note</th><th>Country</th><th>Document Link</th></tr></thead><tbody>${(Array.isArray(S.notes)?S.notes:[]).map(r=>{let f=r.fields||{};let doc=f['Document Link']||f.Document||f.Link||f.URL||f['Document URL'];return `<tr><td>${esc(f.Title||'')}</td><td>${esc(f.Page||'')}</td><td>${esc(f.Note||f.Description||'')}</td><td>${esc(f.Country||'All')}</td><td>${portalDocumentLink(doc)}</td></tr>`}).join('')}</tbody></table></div></div>`;
 }
-
-
 function renderAdmin(){
   $('admin').innerHTML=`<div class="panel"><h2>Admin Dashboard</h2><div class="notice">Admin tools: reset passwords, mandatory fields planning, spare Excel sync planning, portal notes planning.</div>
   <h3>User Management</h3>
