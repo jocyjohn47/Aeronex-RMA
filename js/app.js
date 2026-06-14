@@ -1,7 +1,7 @@
 
 (function(){
   const st=document.createElement('style');
-  st.textContent='\n.dji-warranty-banner{display:flex;align-items:center;gap:22px;background:#fff;border:1px solid #b8cdfd;border-radius:16px;padding:22px 28px;margin:28px 0 26px 0;box-shadow:0 8px 24px rgba(25,58,120,.06)}\n.dji-warranty-icon{width:56px;height:56px;border-radius:50%;background:#3152e8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;flex:0 0 auto}\n.dji-warranty-copy{border-left:1px solid #b8cdfd;padding-left:24px;font-size:18px;line-height:1.45;color:#07142f}\n.dji-warranty-copy a{display:inline-block;margin-top:4px;color:#3152e8;font-weight:700;text-decoration:none}\n.dji-warranty-copy a:hover{text-decoration:underline}\n';
+  st.textContent='\n.dji-warranty-banner{display:flex;align-items:center;gap:22px;background:#fff;border:1px solid #b8cdfd;border-radius:16px;padding:22px 28px;margin:28px 0 26px 0;box-shadow:0 8px 24px rgba(25,58,120,.06);width:100%;box-sizing:border-box}\n.dji-warranty-icon{width:56px;height:56px;border-radius:50%;background:#3152e8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;flex:0 0 auto}\n.dji-warranty-copy{border-left:1px solid #b8cdfd;padding-left:24px;font-size:18px;line-height:1.45;color:#07142f}\n.dji-warranty-copy a{display:inline-block;margin-top:4px;color:#3152e8;font-weight:700;text-decoration:none}\n.dji-warranty-copy a:hover{text-decoration:underline}\n';
   document.head.appendChild(st);
 })();
 
@@ -622,8 +622,8 @@ function djiWarrantyBanner(){
 
 function renderDashboard(){$('dashboard').classList.add('active');$('dashboard').innerHTML=`<div class="hero"><h2>Welcome back, ${esc(S.user.displayName||S.user.username)}</h2><div class="muted">Here's what you can do today</div>${isAdmin()?`<div class="notice"><b>Country:</b> <select style="max-width:260px;display:inline-block;margin-left:10px" onchange="setAdminCountry(this.value)"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select></div>`:''}</div><div class="cards">${[['🛒','Spare Order','Order spare parts from inventory.','spare','Go to Spare Order'],['🔧','Create Repair Case','Submit a new repair request.','repairCreate','Create Case'],['📋','Repair Status','Track repair cases, reports and invoices.','repairStatus','View Status'],['🏢','Dealer Details','View and manage dealer information.','dealers','View Dealers'],['📄','Portal Notes','Important information and announcements.','portalNotes','View Notes']].map(c=>`<div class="card"><div class="ico">${c[0]}</div><h3>${c[1]}</h3><p>${c[2]}</p><a href="#" onclick="show('${c[3]}')">${c[4]} →</a></div>`).join('')}
 <div class="address-grid">
-  <div class="address-box">
-    <h2>${djiWarrantyBanner()}UAE Address</h2>
+  ${djiWarrantyBanner()}<div class="address-box">
+    <h2>UAE Address</h2>
     <p>
 AERONEX (UAE & Other Region )
 Comapny Name : AERONEX DRONE TRADING LLC
