@@ -632,8 +632,8 @@ Email :         support.ksa@aeronex.ae
 <div style="
   margin-top:20px;
   text-align:center;
-  font-size:14px;
-  color:#666;
+  font-size:18px;
+  color:#2563eb;
 ">
   For official DJI warranty verification,
   <a href="https://repair.dji.com/device/Search?re=id&lang=en"
