@@ -556,9 +556,30 @@ function wsCell(fields,names){
   for(const n of names){const t=fieldTextDisplay(fields&&fields[n]);if(t)return t}
   return '';
 }
+function formatWarrantySoftwareDate(v){
+  const s=fieldTextDisplay(v);
+  if(!s)return '';
+  const n=Number(s);
+  if(Number.isFinite(n)){
+    const ms=n>1000000000000?n:n*1000;
+    const d=new Date(ms);
+    if(!isNaN(d.getTime())){
+      return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+    }
+  }
+  return s;
+}
+function wsDateCell(fields,names){
+  for(const n of names){
+    const t=formatWarrantySoftwareDate(fields&&fields[n]);
+    if(t)return t;
+  }
+  return '';
+}
+
 function renderWarrantySoftwareRows(rows,type){
   if(!rows||!rows.length)return `<tr><td colspan="8" class="muted">No ${type} records found</td></tr>`;
-  return rows.map(r=>{const f=r.fields||{};return `<tr><td>${esc(wsCell(f,['Serial Number','Serial No']))}</td><td>${esc(wsCell(f,['Activation Code']))}</td><td>${esc(wsCell(f,['Order No.','Order No','Order Number']))}</td><td>${esc(wsCell(f,['Customer Name']))}</td><td>${esc(wsCell(f,['Product Model','Product Name']))}</td><td>${esc(wsCell(f,['Shipping Date']))}</td><td>${esc(wsCell(f,['Warranty Years','Aerocare Warranty','Warranty Status','Software Status']))}</td><td>${esc(wsCell(f,['Remarks','Notes']))}</td></tr>`}).join('');
+  return rows.map(r=>{const f=r.fields||{};return `<tr><td>${esc(wsCell(f,['Serial Number','Serial No']))}</td><td>${esc(wsCell(f,['Activation Code']))}</td><td>${esc(wsCell(f,['Order No.','Order No','Order Number']))}</td><td>${esc(wsCell(f,['Customer Name']))}</td><td>${esc(wsCell(f,['Product Model','Product Name']))}</td><td>${esc(wsDateCell(f,['Shipping Date']))}</td><td>${esc(wsCell(f,['Warranty Years','Aerocare Warranty','Warranty Status','Software Status']))}</td><td>${esc(wsCell(f,['Remarks','Notes']))}</td></tr>`}).join('');
 }
 async function searchWarrantySoftwareStatus(){
   const q=($('wsSearchInput')?.value||'').trim();
