@@ -8,6 +8,13 @@
 
 (function(){
   const st=document.createElement('style');
+  st.textContent='\n\n\n\n\n\n\n\n';
+  document.head.appendChild(st);
+})();
+
+
+(function(){
+  const st=document.createElement('style');
   st.textContent='\n\n\n\n\n\n';
   document.head.appendChild(st);
 })();
@@ -631,7 +638,7 @@ function djiWarrantyBanner(){
 
 function renderDashboard(){$('dashboard').classList.add('active');$('dashboard').innerHTML=`<div class="hero"><h2>Welcome back, ${esc(S.user.displayName||S.user.username)}</h2><div class="muted">Here's what you can do today</div>${isAdmin()?`<div class="notice"><b>Country:</b> <select style="max-width:260px;display:inline-block;margin-left:10px" onchange="setAdminCountry(this.value)"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select></div>`:''}</div><div class="cards">${[['🛒','Spare Order','Order spare parts from inventory.','spare','Go to Spare Order'],['🔧','Create Repair Case','Submit a new repair request.','repairCreate','Create Case'],['📋','Repair Status','Track repair cases, reports and invoices.','repairStatus','View Status'],['🏢','Dealer Details','View and manage dealer information.','dealers','View Dealers'],['📄','Portal Notes','Important information and announcements.','portalNotes','View Notes']].map(c=>`<div class="card"><div class="ico">${c[0]}</div><h3>${c[1]}</h3><p>${c[2]}</p><a href="#" onclick="show('${c[3]}')">${c[4]} →</a></div>`).join('')}
 <div class="address-grid">
-  ${djiWarrantyBanner()}<div class="address-box">
+  <div class="address-box">
     <h2>UAE Address</h2>
     <p>
 AERONEX (UAE & Other Region )
@@ -655,7 +662,7 @@ Working Time :  SUN - THU ( 9AM - 6 PM ) FRI & SAT ( CLOSED )
 Email :         support.ksa@aeronex.ae
     </p>
   </div>
-</div></div>`}
+</div>${djiWarrantyBanner()}</div>`}
 function renderChangePassword(){$('changePassword').innerHTML=`<div class="panel" style="max-width:620px;margin:auto"><h2>Change Password</h2><label>Current Password</label><input id="currentPassword" type="password"><label>New Password</label><input id="newPassword" type="password"><label>Confirm New Password</label><input id="confirmPassword" type="password"><button onclick="changePassword()">Update Password</button><div id="cpMsg" class="msg"></div></div>`}
 
 async function changePassword(){
