@@ -627,7 +627,22 @@ Address :       OFFICE NO 403, Al JAWHARA TOWER ,
 Working Time :  SUN - THU ( 9AM - 6 PM ) FRI & SAT ( CLOSED )
 Email :         support.ksa@aeronex.ae
     </p>
-  </div>
+</div>
+
+<div style="
+  margin-top:20px;
+  text-align:center;
+  font-size:14px;
+  color:#666;
+">
+  For official DJI warranty verification,
+  <a href="https://repair.dji.com/device/Search?re=id&lang=en"
+     target="_blank"
+     rel="noopener">
+     Open DJI Warranty Check →
+  </a>
+</div>
+
 </div></div>`}
 function renderChangePassword(){$('changePassword').innerHTML=`<div class="panel" style="max-width:620px;margin:auto"><h2>Change Password</h2><label>Current Password</label><input id="currentPassword" type="password"><label>New Password</label><input id="newPassword" type="password"><label>Confirm New Password</label><input id="confirmPassword" type="password"><button onclick="changePassword()">Update Password</button><div id="cpMsg" class="msg"></div></div>`}
 
