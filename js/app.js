@@ -1,7 +1,6 @@
-
 (function(){
   const st=document.createElement('style');
-  st.textContent='\n.dji-warranty-row{width:100%;margin:28px 0 26px 0;display:block;clear:both}\n.dji-warranty-banner{display:flex;align-items:center;gap:22px;background:#fff;border:1px solid #b8cdfd;border-radius:16px;padding:22px 28px;box-shadow:0 8px 24px rgba(25,58,120,.06);width:100%;box-sizing:border-box}\n.dji-warranty-icon{width:56px;height:56px;border-radius:50%;background:#3152e8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;flex:0 0 auto}\n.dji-warranty-copy{border-left:1px solid #b8cdfd;padding-left:24px;font-size:18px;line-height:1.45;color:#07142f}\n.dji-warranty-copy span{display:block}\n.dji-warranty-copy a{display:inline-block;margin-top:4px;color:#3152e8;font-weight:700;text-decoration:none}\n.dji-warranty-copy a:hover{text-decoration:underline}\n';
+  st.textContent='\n.dji-warranty-full{width:100%;box-sizing:border-box;margin:28px 0 0 0;padding:22px 28px;background:#fff;border:1px solid #b8cdfd;border-radius:16px;box-shadow:0 8px 24px rgba(25,58,120,.06);display:flex;align-items:center;gap:22px;clear:both}\n.dji-warranty-left{width:56px;height:56px;border-radius:50%;background:#3152e8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;flex:0 0 auto}\n.dji-warranty-text{border-left:1px solid #b8cdfd;padding-left:24px;font-size:18px;line-height:1.45;color:#07142f}\n.dji-warranty-text a{display:inline-block;margin-top:4px;color:#3152e8;font-weight:700;text-decoration:none}\n.dji-warranty-text a:hover{text-decoration:underline}\n';
   document.head.appendChild(st);
 })();
 
@@ -625,13 +624,11 @@ function renderWarrantySoftwareStatus(){
 
 
 function djiWarrantyBanner(){
-  return `<div class="dji-warranty-row">
-    <div class="dji-warranty-banner">
-      <div class="dji-warranty-icon">🔗</div>
-      <div class="dji-warranty-copy">
-        <span>For official DJI warranty verification,</span>
-        <a href="https://repair.dji.com/device/Search?re=id&lang=en" target="_blank" rel="noopener">Open DJI Warranty Check →</a>
-      </div>
+  return `<div class="dji-warranty-full">
+    <div class="dji-warranty-left">🔗</div>
+    <div class="dji-warranty-text">
+      <div>For official DJI warranty verification,</div>
+      <a href="https://repair.dji.com/device/Search?re=id&lang=en" target="_blank" rel="noopener">Open DJI Warranty Check →</a>
     </div>
   </div>`;
 }
