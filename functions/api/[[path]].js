@@ -408,6 +408,28 @@ function formatDealerRepairMaterials(items){return(items||[]).map(i=>{const code
 function dealerRepairExcelBytes(caseNo,fields){const escHtml=v=>String(v??"").replace(/[&<>"]/g,s=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[s]));const materials=parseDealerRepairMaterialsText(fields["Material Replaced"]||"");const rows=materials.map((i,idx)=>`<tr><td>${idx+1}</td><td>${escHtml(i.materialCode||"CUSTOM")}</td><td>${escHtml(i.materialName||"")}</td><td>${escHtml(i.qty||1)}</td></tr>`).join("");const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif}h1{font-size:20px;color:#1f3b8a}table{border-collapse:collapse;width:100%}th{background:#1f3b8a;color:#fff}th,td{border:1px solid #777;padding:8px;text-align:left}.meta th{width:230px}</style></head><body><h1>AERO NEX Dealer Repair Case</h1><table class="meta"><tr><th>Case Register No</th><td>${escHtml(caseNo)}</td></tr><tr><th>Company Name</th><td>${escHtml(fields["Company Name"])}</td></tr><tr><th>Model No</th><td>${escHtml(fields["Model No"])}</td></tr><tr><th>Serial No</th><td>${escHtml(fields["Serial No"])}</td></tr><tr><th>Activation Date / Invoice Date</th><td>${escHtml(fields["Activation Date / Invoice Date"])}</td></tr><tr><th>Technician Name</th><td>${escHtml(fields["Technician Name"])}</td></tr><tr><th>Repair Type</th><td>${escHtml(fields["Repair Type"])}</td></tr><tr><th>Repair Status</th><td>${escHtml(fields["Repair Status"])}</td></tr><tr><th>Upload Repair Data</th><td>${escHtml(fields["Upload Repair Data"])}</td></tr></table><h2>Device Issue</h2><p>${escHtml(fields["Device Issue"])}</p><h2>Technician Note</h2><p>${escHtml(fields["Technicain Note"])}</p><h2>Material Replaced</h2><table><thead><tr><th>No</th><th>Material Code</th><th>Material Name</th><th>Qty</th></tr></thead><tbody>${rows||'<tr><td colspan="4">No materials</td></tr>'}</tbody></table></body></html>`;return new TextEncoder().encode(html)}
 async function resolveDealerRepairNo(env){const d=new Date();const ymd=d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");const prefix=`DRC${ymd}`;const rows=await listRecords(env,env.DEALER_REPAIR_CASE_TABLE_ID);let max=0;for(const r of rows||[]){const no=dealerRepairCaseNo(r.fields||{});if(String(no).startsWith(prefix)){const n=Number(String(no).slice(prefix.length));if(Number.isFinite(n)&&n>max)max=n}}return prefix+String(max+1).padStart(4,"0")}
 
+
+function currentRoleCanAccessWarrantySoftware(role) {
+  const r = lower(role);
+  return r.includes("admin") ||
+         r.includes("technician") ||
+         r.includes("technicain") ||
+         r.includes("techncian") ||
+         r.includes("tech");
+}
+function warrantySoftwareMatchValue(fields, q) {
+  const needle = lower(q);
+  if (!needle) return false;
+  const names = ["Serial Number","Serial No","Activation Code","Order No.","Order No","Order Number","Customer Name"];
+  return names.some(n => lower(fieldText((fields || {})[n])).includes(needle));
+}
+function pickWarrantySoftwareFields(fields) {
+  const out = {};
+  const wanted = ["Serial Number","Serial No","Activation Code","Order No.","Order No","Order Number","Customer Name","Product Material Code","Product Model","Product Name","Shipping Date","Warranty Years","Aerocare Warranty","Warranty Status","Software Status","Remarks","Notes"];
+  for (const k of wanted) if (fields && fields[k] !== undefined && fields[k] !== null && fieldText(fields[k]) !== "") out[k] = fields[k];
+  return out;
+}
+
 async function handle(req, env) {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: H });
 
@@ -471,6 +493,29 @@ async function handle(req, env) {
     });
 
     return json({ ok: true });
+  }
+
+
+  if (p === "/api/warranty-software-status") {
+    const role = norm(url.searchParams.get("role"));
+    if (!currentRoleCanAccessWarrantySoftware(role)) return json({ error: "Forbidden" }, 403);
+    const q = norm(url.searchParams.get("q"));
+    if (!q) return json({ warranty: [], software: [] });
+
+    const warrantyRows = env.WARRANTY_STATUS_TABLE_ID ? await listRecords(env, env.WARRANTY_STATUS_TABLE_ID) : [];
+    const softwareRows = env.SOFTWARE_STATUS_TABLE_ID ? await listRecords(env, env.SOFTWARE_STATUS_TABLE_ID) : [];
+
+    const warranty = (warrantyRows || [])
+      .filter(r => warrantySoftwareMatchValue(r.fields || {}, q))
+      .slice(0, 50)
+      .map(r => ({ record_id: r.record_id, fields: pickWarrantySoftwareFields(r.fields || {}) }));
+
+    const software = (softwareRows || [])
+      .filter(r => warrantySoftwareMatchValue(r.fields || {}, q))
+      .slice(0, 50)
+      .map(r => ({ record_id: r.record_id, fields: pickWarrantySoftwareFields(r.fields || {}) }));
+
+    return json({ warranty, software });
   }
 
   if (p === "/api/dealers") {
