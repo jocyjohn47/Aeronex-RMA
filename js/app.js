@@ -434,7 +434,7 @@ function dealerPoBox(){
 
 function country(){return normalizeCountryValue(S.user?.country||S.user?.fields?.Country||'UAE & Other Region')}function uf(k,d=''){return S.user?.fields?.[k]??d}
 function layout(){let n=S.user?.displayName||S.user?.username||'User';document.body.innerHTML=`<header class="topbar"><div class="brand"><div class="brand-title">AERO NEX</div><div class="brand-sub">RMA & Spare Order Portal</div></div><nav class="nav">
-<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${isAdmin()?`<a data-sec="admin" href="#" onclick="show('admin')">⚙ Admin</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','dealers','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
+<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}${warrantySoftwareStatusEnabled()?`<a data-sec="warrantySoftwareStatus" href="#" onclick="show('warrantySoftwareStatus')">🔎 Warranty & Software Status</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${isAdmin()?`<a data-sec="admin" href="#" onclick="show('admin')">⚙ Admin</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','dealers','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
 function show(sec){
   document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));
   $(sec)?.classList.add('active');
@@ -447,7 +447,7 @@ function show(sec){
         try{renderDealerRepairCase()}catch(err){console.error('renderDealerRepairCase failed',err)}
       });
   }
-  scrollTo(0,0)
+  if(sec==='warrantySoftwareStatus'){try{renderWarrantySoftwareStatus()}catch(e){console.error('renderWarrantySoftwareStatus failed',e)}}scrollTo(0,0)
 }
 
 function dealerRepairCaseEnabled(){
@@ -542,6 +542,43 @@ function renderDealerRepairCase(){
   <div class="row"><button id="drcSubmitBtn" onclick="submitDealerRepairCase()">Submit Dealer Repair Case</button><button id="drcCancelEdit" class="btn-light hidden" onclick="resetDealerRepairForm()">Cancel Edit</button></div><div id="dealerRepairMsg" class="msg"></div></div>
   <div class="panel"><h2>My Dealer Repair Case History</h2><div class="table-wrap"><table><thead><tr><th>Case Register No</th><th>Company Name</th><th>Model No</th><th>Serial No</th><th>Activation Date / Invoice Date</th><th>Repair Type</th><th>Repair Status</th><th>Upload Repair Data</th><th>Excel</th><th>Edit</th></tr></thead><tbody>${(S.dealerRepairCases||[]).map(r=>{let f=r.fields||{},locked=dealerRepairCaseLocked(f['Repair Status']);return `<tr><td>${esc(dealerRepairCaseNoValue(f))}</td><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Model No']||'')}</td><td>${esc(f['Serial No']||'')}</td><td>${esc(f['Activation Date / Invoice Date']||'')}</td><td>${esc(f['Repair Type']||'')}</td><td>${statusCell(r,'dealerRepair')}</td><td>${dealerRepairDataLink(f['Upload Repair Data'])}</td><td>${dealerRepairExcelLink(r)}</td><td>${locked?'<span class="muted">Locked</span>':`<button class="btn-light" onclick="editDealerRepairCase('${r.record_id}')">Edit</button>`}</td></tr>`}).join('')}</tbody></table></div></div>`;
   renderDealerRepairPartOptions();drawDealerRepairParts();
+}
+
+
+function warrantySoftwareStatusEnabled(){return currentUserIsAdminTech()}
+function fieldTextDisplay(v){
+  if(v===undefined||v===null)return '';
+  if(Array.isArray(v))return v.map(fieldTextDisplay).filter(Boolean).join(', ');
+  if(typeof v==='object')return v.text||v.name||v.value||v.link||v.url||'';
+  return String(v);
+}
+function wsCell(fields,names){
+  for(const n of names){const t=fieldTextDisplay(fields&&fields[n]);if(t)return t}
+  return '';
+}
+function renderWarrantySoftwareRows(rows,type){
+  if(!rows||!rows.length)return `<tr><td colspan="8" class="muted">No ${type} records found</td></tr>`;
+  return rows.map(r=>{const f=r.fields||{};return `<tr><td>${esc(wsCell(f,['Serial Number','Serial No']))}</td><td>${esc(wsCell(f,['Activation Code']))}</td><td>${esc(wsCell(f,['Order No.','Order No','Order Number']))}</td><td>${esc(wsCell(f,['Customer Name']))}</td><td>${esc(wsCell(f,['Product Model','Product Name']))}</td><td>${esc(wsCell(f,['Shipping Date']))}</td><td>${esc(wsCell(f,['Warranty Years','Aerocare Warranty','Warranty Status','Software Status']))}</td><td>${esc(wsCell(f,['Remarks','Notes']))}</td></tr>`}).join('');
+}
+async function searchWarrantySoftwareStatus(){
+  const q=($('wsSearchInput')?.value||'').trim();
+  S.wsLastQuery=q;
+  if(!q)return msg('wsMsg','Enter Serial Number / Activation Code / Order No. / Customer Name');
+  msg('wsMsg','Searching...',true);
+  try{
+    S.warrantySoftwareResult=await api('/api/warranty-software-status?q='+encodeURIComponent(q)+'&role='+encodeURIComponent(S.user.role||''));
+    renderWarrantySoftwareStatus();
+    msg('wsMsg','Search completed',true);
+  }catch(e){msg('wsMsg',e.message)}
+}
+function renderWarrantySoftwareStatus(){
+  if(!$('warrantySoftwareStatus'))return;
+  if(!warrantySoftwareStatusEnabled()){
+    $('warrantySoftwareStatus').innerHTML=`<div class="panel"><h2>Warranty & Software Status</h2><div class="notice">You do not have permission to access this page.</div></div>`;
+    return;
+  }
+  const result=S.warrantySoftwareResult||{warranty:[],software:[]};
+  $('warrantySoftwareStatus').innerHTML=`<div class="panel"><h2>Warranty & Software Status</h2><div class="notice">Admin/Technician search only. No create, edit, or delete.</div><div class="row"><div style="flex:1"><label>Search by Serial Number / Activation Code / Order No. / Customer Name</label><input id="wsSearchInput" placeholder="Enter search value" onkeydown="if(event.key==='Enter')searchWarrantySoftwareStatus()" value="${esc(S.wsLastQuery||'')}"></div><div class="act"><button onclick="searchWarrantySoftwareStatus()">Search</button></div></div><div id="wsMsg" class="msg"></div></div><div class="panel"><h2>Warranty Status</h2><div class="table-wrap"><table><thead><tr><th>Serial Number</th><th>Activation Code</th><th>Order No.</th><th>Customer Name</th><th>Product</th><th>Shipping Date</th><th>Status / Years</th><th>Remarks</th></tr></thead><tbody>${renderWarrantySoftwareRows(result.warranty,'warranty')}</tbody></table></div></div><div class="panel"><h2>Software Status</h2><div class="table-wrap"><table><thead><tr><th>Serial Number</th><th>Activation Code</th><th>Order No.</th><th>Customer Name</th><th>Product</th><th>Shipping Date</th><th>Status / Warranty</th><th>Remarks</th></tr></thead><tbody>${renderWarrantySoftwareRows(result.software,'software')}</tbody></table></div></div>`;
 }
 
 function renderDashboard(){$('dashboard').classList.add('active');$('dashboard').innerHTML=`<div class="hero"><h2>Welcome back, ${esc(S.user.displayName||S.user.username)}</h2><div class="muted">Here's what you can do today</div>${isAdmin()?`<div class="notice"><b>Country:</b> <select style="max-width:260px;display:inline-block;margin-left:10px" onchange="setAdminCountry(this.value)"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select></div>`:''}</div><div class="cards">${[['🛒','Spare Order','Order spare parts from inventory.','spare','Go to Spare Order'],['🔧','Create Repair Case','Submit a new repair request.','repairCreate','Create Case'],['📋','Repair Status','Track repair cases, reports and invoices.','repairStatus','View Status'],['🏢','Dealer Details','View and manage dealer information.','dealers','View Dealers'],['📄','Portal Notes','Important information and announcements.','portalNotes','View Notes']].map(c=>`<div class="card"><div class="ico">${c[0]}</div><h3>${c[1]}</h3><p>${c[2]}</p><a href="#" onclick="show('${c[3]}')">${c[4]} →</a></div>`).join('')}
