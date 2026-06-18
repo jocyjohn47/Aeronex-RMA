@@ -434,7 +434,7 @@ function dealerPoBox(){
 
 function country(){return normalizeCountryValue(S.user?.country||S.user?.fields?.Country||'UAE & Other Region')}function uf(k,d=''){return S.user?.fields?.[k]??d}
 function layout(){let n=S.user?.displayName||S.user?.username||'User';document.body.innerHTML=`<header class="topbar"><div class="brand"><div class="brand-title">AERO NEX</div><div class="brand-sub">RMA & Spare Order Portal</div></div><nav class="nav">
-<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}${warrantySoftwareStatusEnabled()?`<a data-sec="warrantySoftwareStatus" href="#" onclick="show('warrantySoftwareStatus')">🔎 Warranty & Software Status</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${isAdmin()?`<a data-sec="admin" href="#" onclick="show('admin')">⚙ Admin</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','dealers','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
+<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}${warrantySoftwareStatusEnabled()?`<a data-sec="warrantySoftwareStatus" href="#" onclick="show('warrantySoftwareStatus')">🔎 Warranty & Software Status</a>`:''}${logsPageEnabled()?`<a data-sec="logsDiagnostics" href="#" onclick="show('logsDiagnostics')">🧾 Logs</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${isAdmin()?`<a data-sec="admin" href="#" onclick="show('admin')">⚙ Admin</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','dealers','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
 function show(sec){
   document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));
   $(sec)?.classList.add('active');
@@ -447,7 +447,7 @@ function show(sec){
         try{renderDealerRepairCase()}catch(err){console.error('renderDealerRepairCase failed',err)}
       });
   }
-  if(sec==='warrantySoftwareStatus'){try{renderWarrantySoftwareStatus()}catch(e){console.error('renderWarrantySoftwareStatus failed',e)}}scrollTo(0,0)
+  if(sec==='warrantySoftwareStatus'){try{renderWarrantySoftwareStatus()}catch(e){console.error('renderWarrantySoftwareStatus failed',e)}}if(sec==='logsDiagnostics'){try{renderLogsDiagnostics()}catch(e){console.error('renderLogsDiagnostics failed',e)}}scrollTo(0,0)
 }
 
 function dealerRepairCaseEnabled(){
@@ -600,6 +600,115 @@ function renderWarrantySoftwareStatus(){
   }
   const result=S.warrantySoftwareResult||{warranty:[],software:[]};
   $('warrantySoftwareStatus').innerHTML=`<div class="panel"><h2>Warranty & Software Status</h2><div class="notice">Admin/Technician search only. No create, edit, or delete.</div><div class="row"><div style="flex:1"><label>Search by Serial Number / Activation Code / Order No. / Customer Name</label><input id="wsSearchInput" placeholder="Enter search value" onkeydown="if(event.key==='Enter')searchWarrantySoftwareStatus()" value="${esc(S.wsLastQuery||'')}"></div><div class="act"><button onclick="searchWarrantySoftwareStatus()">Search</button></div></div><div id="wsMsg" class="msg"></div></div><div class="panel"><h2>Warranty Status</h2><div class="table-wrap"><table><thead><tr><th>Serial Number</th><th>Activation Code</th><th>Order No.</th><th>Customer Name</th><th>Product</th><th>Shipping Date</th><th>Status / Years</th><th>Remarks</th></tr></thead><tbody>${renderWarrantySoftwareRows(result.warranty,'warranty')}</tbody></table></div></div><div class="panel"><h2>Software Status</h2><div class="table-wrap"><table><thead><tr><th>Serial Number</th><th>Activation Code</th><th>Order No.</th><th>Customer Name</th><th>Product</th><th>Shipping Date</th><th>Status / Warranty</th><th>Remarks</th></tr></thead><tbody>${renderWarrantySoftwareRows(result.software,'software')}</tbody></table></div></div>`;
+}
+
+
+function logsPageEnabled(){ return currentUserIsAdminTech(); }
+
+function renderLogsDiagnosticsTableOptions(){
+  const list = [
+    ['ALL','All Tables'],
+    ['USER_TABLE_ID','User & Company Details'],
+    ['SPARE_TABLE_ID','Spare Part List'],
+    ['ORDER_UAE_TABLE_ID','Spare Order UAE'],
+    ['ORDER_KSA_TABLE_ID','Spare Order KSA'],
+    ['REPAIR_UAE_TABLE_ID','Repair Case UAE'],
+    ['REPAIR_KSA_TABLE_ID','Repair Case KSA'],
+    ['DEALER_REPAIR_CASE_TABLE_ID','Dealer Repair Case'],
+    ['WARRANTY_STATUS_TABLE_ID','Warranty Status'],
+    ['SOFTWARE_STATUS_TABLE_ID','Software Status'],
+    ['FLYCART_CREDIT_USE_TABLE_ID','Flycart Credit Use'],
+    ['PORTAL_NOTES_TABLE_ID','Portal Notes']
+  ];
+  return list.map(x=>`<option value="${esc(x[0])}">${esc(x[1])}</option>`).join('');
+}
+
+function renderLogsDiagnostics(){
+  if(!$('logsDiagnostics')) return;
+  if(!logsPageEnabled()){
+    $('logsDiagnostics').innerHTML=`<div class="panel"><h2>Logs</h2><div class="notice">You do not have permission to access Logs.</div></div>`;
+    return;
+  }
+  $('logsDiagnostics').innerHTML=`<div class="panel"><h2>Logs & Diagnostics</h2>
+    <div class="notice">Admin/Technician only. Error logs are stored in Cloudflare R2 under /logs/. Keep max 3 days using R2 lifecycle policy.</div>
+    <div class="grid3">
+      <div><label>Lark Table</label><select id="diagTableSelect">${renderLogsDiagnosticsTableOptions()}</select></div>
+      <div class="act"><button onclick="generateLarkDiagnostics()">Generate Lark Table Diagnostics</button></div>
+      <div class="act"><button class="btn-light" onclick="generateEnvironmentDiagnostics()">Environment Check</button></div>
+    </div>
+    <div class="row">
+      <button class="btn-light" onclick="loadErrorLogs()">Load Error Logs</button>
+      <button class="btn-light" onclick="createTestErrorLog()">Create Test Error Log</button>
+      <button class="btn-light" onclick="copyDiagnosticsJson()">Copy JSON</button>
+      <button class="btn-light" onclick="downloadDiagnosticsJson()">Download JSON</button>
+    </div>
+    <div id="logsMsg" class="msg"></div>
+    <pre id="logsOutput" style="white-space:pre-wrap;background:#f6f8fb;border:1px solid #dbe3ef;border-radius:10px;padding:12px;max-height:520px;overflow:auto"></pre>
+  </div>`;
+}
+
+function setLogsOutput(data){
+  S.logsDiagnosticsData=data;
+  const el=$('logsOutput');
+  if(el) el.textContent=typeof data==='string'?data:JSON.stringify(data,null,2);
+}
+
+async function generateLarkDiagnostics(){
+  try{
+    msg('logsMsg','Generating Lark diagnostics...');
+    const table=($('diagTableSelect')?.value||'ALL');
+    const d=await api('/api/logs-diagnostics/tables?role='+encodeURIComponent(S.user.role||'')+'&table='+encodeURIComponent(table));
+    setLogsOutput(d);
+    msg('logsMsg','Diagnostics generated');
+  }catch(e){ msg('logsMsg',e.message); }
+}
+
+async function generateEnvironmentDiagnostics(){
+  try{
+    msg('logsMsg','Checking environment...');
+    const d=await api('/api/logs-diagnostics/environment?role='+encodeURIComponent(S.user.role||''));
+    setLogsOutput(d);
+    msg('logsMsg','Environment check complete');
+  }catch(e){ msg('logsMsg',e.message); }
+}
+
+async function loadErrorLogs(){
+  try{
+    msg('logsMsg','Loading error logs...');
+    const d=await api('/api/logs-diagnostics/error-logs?role='+encodeURIComponent(S.user.role||'')+'&limit=50');
+    setLogsOutput(d);
+    msg('logsMsg','Error logs loaded');
+  }catch(e){ msg('logsMsg',e.message); }
+}
+
+async function createTestErrorLog(){
+  try{
+    msg('logsMsg','Creating test error log...');
+    const d=await api('/api/logs-diagnostics/test-error-log?role='+encodeURIComponent(S.user.role||'')+'&email='+encodeURIComponent(userEmail()));
+    setLogsOutput(d);
+    msg('logsMsg','Test error log created');
+  }catch(e){ msg('logsMsg',e.message); }
+}
+
+async function copyDiagnosticsJson(){
+  const text=$('logsOutput')?.textContent||'';
+  if(!text) return msg('logsMsg','Nothing to copy');
+  try{
+    await navigator.clipboard.writeText(text);
+    msg('logsMsg','Copied');
+  }catch(e){ msg('logsMsg','Copy failed'); }
+}
+
+function downloadDiagnosticsJson(){
+  const text=$('logsOutput')?.textContent||'';
+  if(!text) return msg('logsMsg','Nothing to download');
+  const blob=new Blob([text],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='aeronex-diagnostics-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 function renderDashboard(){$('dashboard').classList.add('active');$('dashboard').innerHTML=`<div class="hero"><h2>Welcome back, ${esc(S.user.displayName||S.user.username)}</h2><div class="muted">Here's what you can do today</div>${isAdmin()?`<div class="notice"><b>Country:</b> <select style="max-width:260px;display:inline-block;margin-left:10px" onchange="setAdminCountry(this.value)"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select></div>`:''}</div><div class="cards">${[['🛒','Spare Order','Order spare parts from inventory.','spare','Go to Spare Order'],['🔧','Create Repair Case','Submit a new repair request.','repairCreate','Create Case'],['📋','Repair Status','Track repair cases, reports and invoices.','repairStatus','View Status'],['🏢','Dealer Details','View and manage dealer information.','dealers','View Dealers'],['📄','Portal Notes','Important information and announcements.','portalNotes','View Notes']].map(c=>`<div class="card"><div class="ico">${c[0]}</div><h3>${c[1]}</h3><p>${c[2]}</p><a href="#" onclick="show('${c[3]}')">${c[4]} →</a></div>`).join('')}
