@@ -69,7 +69,10 @@ async function larkFetch(env, path, init = {}) {
     }
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok || data.code) throw new Error("Lark API error: " + JSON.stringify(data));
+  if (!res.ok || data.code) {
+    await writeErrorLog(env, { source:"larkFetch", method:init.method || "GET", path, status:res.status, response:data });
+    throw new Error("Lark API error: " + JSON.stringify(data));
+  }
   return data;
 }
 
@@ -430,6 +433,130 @@ function pickWarrantySoftwareFields(fields) {
   return out;
 }
 
+
+function logAccessAllowed(role) {
+  const r = lower(role);
+  return r.includes("admin") ||
+         r.includes("technician") ||
+         r.includes("technicain") ||
+         r.includes("techncian") ||
+         r.includes("tech");
+}
+
+function logTableConfigs(env) {
+  return [
+    { key:"USER_TABLE_ID", name:"User & Company Details", tableId:env.USER_TABLE_ID || "" },
+    { key:"SPARE_TABLE_ID", name:"Spare Part List", tableId:env.SPARE_TABLE_ID || env.SPARE_PART_TABLE_ID || "" },
+    { key:"ORDER_UAE_TABLE_ID", name:"Spare Order UAE", tableId:env.ORDER_UAE_TABLE_ID || env.SPARE_ORDER_UAE_TABLE_ID || "" },
+    { key:"ORDER_KSA_TABLE_ID", name:"Spare Order KSA", tableId:env.ORDER_KSA_TABLE_ID || env.SPARE_ORDER_KSA_TABLE_ID || "" },
+    { key:"REPAIR_UAE_TABLE_ID", name:"Repair Case UAE", tableId:env.REPAIR_UAE_TABLE_ID || env.REPAIR_CASE_UAE_TABLE_ID || "" },
+    { key:"REPAIR_KSA_TABLE_ID", name:"Repair Case KSA", tableId:env.REPAIR_KSA_TABLE_ID || env.REPAIR_CASE_KSA_TABLE_ID || "" },
+    { key:"DEALER_REPAIR_CASE_TABLE_ID", name:"Dealer Repair Case", tableId:env.DEALER_REPAIR_CASE_TABLE_ID || "" },
+    { key:"WARRANTY_STATUS_TABLE_ID", name:"Warranty Status", tableId:env.WARRANTY_STATUS_TABLE_ID || "" },
+    { key:"SOFTWARE_STATUS_TABLE_ID", name:"Software Status", tableId:env.SOFTWARE_STATUS_TABLE_ID || "" },
+    { key:"FLYCART_CREDIT_USE_TABLE_ID", name:"Flycart Credit Use", tableId:env.FLYCART_CREDIT_USE_TABLE_ID || "" },
+    { key:"PORTAL_NOTES_TABLE_ID", name:"Portal Notes", tableId:env.PORTAL_NOTES_TABLE_ID || "" }
+  ];
+}
+
+async function getTableFieldsForDiagnostics(env, tableId) {
+  const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields`);
+  return (data.data?.items || []).map(f => ({
+    field_name: f.field_name,
+    type: f.type
+  }));
+}
+
+async function countRecordsForDiagnostics(env, tableId) {
+  const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/records?page_size=1`);
+  return data.data?.total ?? data.data?.items?.length ?? 0;
+}
+
+function expectedFieldsForDiagnostics(tableName) {
+  const n = lower(tableName);
+  if (n.includes("spare order")) return [
+    "Spare Order No","Company Name","Country","Invoice Currency","Status",
+    "Spare PI Amount","Dealer CN","Shipment Destination","Shipment Tracking No"
+  ];
+  if (n.includes("dealer repair")) return [
+    "Case Register No","Company Name","Model No","Serial No","Activation Date / Invoice Date",
+    "Technician Name","Material Replaced","Device Issue","Technicain Note","Repair Type",
+    "Upload Repair Data","Repair Status"
+  ];
+  if (n.includes("repair case")) return ["Repair Case","Company Name","Model No","Serial No","Status"];
+  if (n.includes("user")) return ["Company Name","Username ( Email )","User Role","Country"];
+  if (n.includes("spare part")) return ["Material Code","Material Name"];
+  if (n.includes("warranty")) return ["Serial Number","Order No.","Customer Name","Shipping Date"];
+  if (n.includes("software")) return ["Activation Code","Order No.","Customer Name","Shipping Date"];
+  return [];
+}
+
+function missingExpectedFields(expected, fields) {
+  const existing = new Set((fields || []).map(f => lower(f.field_name)));
+  return (expected || []).filter(x => !existing.has(lower(x)));
+}
+
+async function buildLarkTableDiagnostic(env, tableCfg) {
+  const out = {
+    tableName: tableCfg.name,
+    envKey: tableCfg.key,
+    tableId: tableCfg.tableId || "",
+    configured: !!tableCfg.tableId,
+    permission: "NOT_CONFIGURED",
+    fieldCount: 0,
+    recordCount: null,
+    fields: [],
+    missingExpectedFields: [],
+    error: ""
+  };
+  if (!tableCfg.tableId) return out;
+  try {
+    const fields = await getTableFieldsForDiagnostics(env, tableCfg.tableId);
+    out.fields = fields;
+    out.fieldCount = fields.length;
+    out.missingExpectedFields = missingExpectedFields(expectedFieldsForDiagnostics(tableCfg.name), fields);
+    out.recordCount = await countRecordsForDiagnostics(env, tableCfg.tableId);
+    out.permission = "OK";
+  } catch (e) {
+    out.permission = "ERROR";
+    out.error = e.message || String(e);
+  }
+  return out;
+}
+
+async function writeErrorLog(env, entry) {
+  try {
+    if (!env.LOGS_BUCKET) return { ok:false, skipped:"LOGS_BUCKET not bound" };
+    const now = new Date();
+    const key = `logs/${now.toISOString().slice(0,10)}/${now.getTime()}-${Math.random().toString(36).slice(2)}.json`;
+    await env.LOGS_BUCKET.put(key, JSON.stringify({
+      ts: now.toISOString(),
+      level: "ERROR",
+      ...entry
+    }, null, 2), { httpMetadata: { contentType: "application/json" } });
+    return { ok:true, key };
+  } catch (e) {
+    return { ok:false, error:e.message || String(e) };
+  }
+}
+
+async function listRecentErrorLogs(env, limit=50) {
+  if (!env.LOGS_BUCKET) return { logs: [], warning: "LOGS_BUCKET not bound" };
+  const listed = await env.LOGS_BUCKET.list({ prefix:"logs/", limit: Math.min(Math.max(Number(limit)||50, 1), 100) });
+  const objs = (listed.objects || []).sort((a,b)=>String(b.uploaded||"").localeCompare(String(a.uploaded||""))).slice(0, limit);
+  const logs = [];
+  for (const obj of objs) {
+    try {
+      const r = await env.LOGS_BUCKET.get(obj.key);
+      const text = await r.text();
+      logs.push({ key: obj.key, uploaded: obj.uploaded, data: JSON.parse(text) });
+    } catch (e) {
+      logs.push({ key: obj.key, uploaded: obj.uploaded, error: e.message || String(e) });
+    }
+  }
+  return { logs };
+}
+
 async function handle(req, env) {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: H });
 
@@ -516,6 +643,65 @@ async function handle(req, env) {
       .map(r => ({ record_id: r.record_id, fields: pickWarrantySoftwareFields(r.fields || {}) }));
 
     return json({ warranty, software });
+  }
+
+
+  if (p === "/api/logs-diagnostics/tables") {
+    const role = norm(url.searchParams.get("role"));
+    if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+
+    const selected = norm(url.searchParams.get("table"));
+    const configs = logTableConfigs(env);
+    const chosen = !selected || selected === "ALL"
+      ? configs
+      : configs.filter(x => x.key === selected || x.name === selected);
+
+    const tables = [];
+    for (const cfg of chosen) tables.push(await buildLarkTableDiagnostic(env, cfg));
+
+    return json({
+      ok: tables.every(t => t.permission === "OK" || t.permission === "NOT_CONFIGURED"),
+      generatedAt: new Date().toISOString(),
+      tables
+    });
+  }
+
+  if (p === "/api/logs-diagnostics/table-options") {
+    const role = norm(url.searchParams.get("role"));
+    if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    return json({ tables: logTableConfigs(env).map(x => ({ key:x.key, name:x.name, configured:!!x.tableId })) });
+  }
+
+  if (p === "/api/logs-diagnostics/environment") {
+    const role = norm(url.searchParams.get("role"));
+    if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+
+    const configs = logTableConfigs(env);
+    return json({
+      ok: true,
+      generatedAt: new Date().toISOString(),
+      larkBaseTokenPresent: !!env.LARK_BASE_TOKEN,
+      logsBucketBound: !!env.LOGS_BUCKET,
+      configuredTables: configs.map(x => ({ key:x.key, name:x.name, configured:!!x.tableId }))
+    });
+  }
+
+  if (p === "/api/logs-diagnostics/error-logs") {
+    const role = norm(url.searchParams.get("role"));
+    if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    return json(await listRecentErrorLogs(env, Number(url.searchParams.get("limit") || 50)));
+  }
+
+  if (p === "/api/logs-diagnostics/test-error-log") {
+    const role = norm(url.searchParams.get("role"));
+    if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    const result = await writeErrorLog(env, {
+      source:"manual-test",
+      message:"Manual test error log from Logs page",
+      userEmail:norm(url.searchParams.get("email")),
+      path:p
+    });
+    return json(result);
   }
 
   if (p === "/api/dealers") {
