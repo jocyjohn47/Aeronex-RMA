@@ -557,6 +557,85 @@ async function listRecentErrorLogs(env, limit=50) {
   return { logs };
 }
 
+
+function spareReportEsc(v) {
+  return String(v ?? "").replace(/[&<>"]/g, s => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[s]));
+}
+function fieldFirst(fields, names) {
+  for (const n of names) if (fields && fields[n] !== undefined && fields[n] !== null && fields[n] !== "") return fields[n];
+  return "";
+}
+function fieldText(v) {
+  if (v === undefined || v === null || v === "") return "";
+  if (Array.isArray(v)) return v.map(fieldText).filter(Boolean).join(", ");
+  if (typeof v === "object") return v.text || v.name || v.file_name || v.link || v.url || v.value || "";
+  return String(v);
+}
+function spareOrderReportBytes(orderNo, fields) {
+  const rows = [
+    ["Spare Order No", orderNo],
+    ["Status", fields["Status"] || ""],
+    ["Company Name", fields["Company Name"] || ""],
+    ["Contact Name", fields["Contact Name"] || ""],
+    ["Billing Address", fields["Billing Address"] || fields["Invoice Address"] || ""],
+    ["Country", fields["Country"] || ""],
+    ["Invoice Currency", fields["Invoice Currency"] || ""],
+    ["Remarks", fields["Remarks"] || ""],
+    ["Final Notes", fields["Final Notes"] || ""],
+    ["Dealer CN", fieldText(fieldFirst(fields, ["Dealer Credit Note","Dealer CN"]))],
+    ["Shipment Destination", fieldText(fieldFirst(fields, ["Shipment Destination","Order Location","Spare Order Location"]))],
+    ["Shipment Tracking No", fieldText(fieldFirst(fields, ["Shipment Tracking No","Tracking No","Shipment Tracking Number"]))],
+    ["Specialized", fieldText(fields["Specialized"])],
+    ["DJI Cost", fields["DJI Cost"] || ""],
+    ["Dealer Credit", fields["Dealer Credit"] || ""],
+    ["DJI Case No", fieldText(fieldFirst(fields, ["DJI Case NO","DJI case NO","DJI Case No","DJI case No"]))],
+    ["Invoice Download", fieldText(fields["Invoice Download"])],
+    ["Payment Receipt", fieldText(fields["Payment Receipt"])],
+    ["Order File", fieldText(fields["Order File"])]
+  ];
+  const body = rows.map(r => `<tr><th>${spareReportEsc(r[0])}</th><td>${spareReportEsc(r[1])}</td></tr>`).join("");
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body{font-family:Arial,sans-serif}h1{font-size:20px;color:#1f3b8a}
+  table{border-collapse:collapse;width:100%}th{background:#1f3b8a;color:#fff;width:240px}
+  th,td{border:1px solid #777;padding:8px;text-align:left;vertical-align:top}
+  </style></head><body><h1>AERO NEX Spare Order Report</h1><table>${body}</table></body></html>`;
+  return new TextEncoder().encode(html);
+}
+function spareOrdersReportBytes(rows) {
+  const headers = ["Spare Order No","Status","Company Name","Contact Name","Billing Address","Country","Invoice Currency","Remarks","Final Notes","Dealer CN","Shipment Destination","Shipment Tracking No","Specialized","DJI Cost","Dealer Credit","DJI Case No","Invoice Download","Payment Receipt","Order File"];
+  const tr = (cells, head=false) => `<tr>${cells.map(c => head ? `<th>${spareReportEsc(c)}</th>` : `<td>${spareReportEsc(c)}</td>`).join("")}</tr>`;
+  const body = (rows || []).map(r => {
+    const f = r.fields || {};
+    return tr([
+      spareOrderNo(f),
+      f["Status"] || "",
+      f["Company Name"] || "",
+      f["Contact Name"] || "",
+      f["Billing Address"] || f["Invoice Address"] || "",
+      f["Country"] || "",
+      f["Invoice Currency"] || "",
+      f["Remarks"] || "",
+      f["Final Notes"] || "",
+      fieldText(fieldFirst(f, ["Dealer Credit Note","Dealer CN"])),
+      fieldText(fieldFirst(f, ["Shipment Destination","Order Location","Spare Order Location"])),
+      fieldText(fieldFirst(f, ["Shipment Tracking No","Tracking No","Shipment Tracking Number"])),
+      fieldText(f["Specialized"]),
+      f["DJI Cost"] || "",
+      f["Dealer Credit"] || "",
+      fieldText(fieldFirst(f, ["DJI Case NO","DJI case NO","DJI Case No","DJI case No"])),
+      fieldText(f["Invoice Download"]),
+      fieldText(f["Payment Receipt"]),
+      fieldText(f["Order File"])
+    ]);
+  }).join("");
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body{font-family:Arial,sans-serif}h1{font-size:20px;color:#1f3b8a}
+  table{border-collapse:collapse;width:100%}th{background:#1f3b8a;color:#fff}
+  th,td{border:1px solid #777;padding:8px;text-align:left;vertical-align:top}
+  </style></head><body><h1>AERO NEX Spare Orders Report</h1><table>${tr(headers,true)}${body}</table></body></html>`;
+  return new TextEncoder().encode(html);
+}
+
 async function handle(req, env) {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: H });
 
@@ -1064,6 +1143,64 @@ async function handle(req, env) {
       await updateRecord(env, b.tableId, b.record_id, { "Payment Receipt": fieldTypes["Payment Receipt"] === 15 ? larkUrl(fileUrl, "Payment Receipt") : fileUrl });
     }
     return json({ ok: true, url: fileUrl });
+  }
+
+
+  if (p === "/api/update-spare-order-internal" && req.method === "POST") {
+    const b = await readBody(req);
+    if (!canSeeAll(b.role)) return json({ error:"Forbidden" }, 403);
+    if (!b.tableId || !b.record_id) return json({ error:"Missing tableId/record_id" }, 400);
+    const fieldTypes = await getFieldTypes(env, b.tableId);
+    const fields = {};
+    if (fieldTypes["Shipment Destination"]) fields["Shipment Destination"] = b.shipmentDestination || "";
+    else if (fieldTypes["Order Location"]) fields["Order Location"] = b.shipmentDestination || "";
+    else if (fieldTypes["Spare Order Location"]) fields["Spare Order Location"] = b.shipmentDestination || "";
+    if (fieldTypes["Shipment Tracking No"]) fields["Shipment Tracking No"] = b.shipmentTrackingNo || "";
+    if (fieldTypes["Specialized"]) fields["Specialized"] = b.specialized || "";
+    if (fieldTypes["Final Notes"]) fields["Final Notes"] = b.finalNotes || "";
+    if (fieldTypes["DJI Cost"]) fields["DJI Cost"] = b.djiCost || "";
+    if (fieldTypes["DJI Case NO"]) fields["DJI Case NO"] = b.djiCaseNo || "";
+    else if (fieldTypes["DJI case NO"]) fields["DJI case NO"] = b.djiCaseNo || "";
+    await updateRecord(env, b.tableId, b.record_id, fields);
+    return json({ ok:true, updated:Object.keys(fields) });
+  }
+
+  if (p === "/api/upload-dealer-cn" && req.method === "POST") {
+    const b = await readBody(req);
+    if (!canSeeAll(b.role)) return json({ error:"Forbidden" }, 403);
+    if (!b.tableId || !b.record_id) return json({ error:"Missing tableId/record_id" }, 400);
+    const no = await resolveOrderNoForUpload(env, b);
+    const name = b.file?.name || "dealer-cn.pdf";
+    const ext = name.includes(".") ? name.split(".").pop() : "pdf";
+    const fileUrl = await putR2(env, getOrderFolderKey(no, `dealer-cn.${ext}`), bytesFromDataUrl(b.file?.data), b.file?.type || "application/pdf");
+    const fieldTypes = await getFieldTypes(env, b.tableId);
+    const update = {};
+    if (fieldTypes["Dealer Credit Note"]) update["Dealer Credit Note"] = fieldTypes["Dealer Credit Note"] === 15 ? larkUrl(fileUrl, "Dealer CN") : fileUrl;
+    else if (fieldTypes["Dealer CN"]) update["Dealer CN"] = fieldTypes["Dealer CN"] === 15 ? larkUrl(fileUrl, "Dealer CN") : fileUrl;
+    await updateRecord(env, b.tableId, b.record_id, update);
+    return json({ ok:true, url:fileUrl });
+  }
+
+  if (p === "/api/download-spare-order-report") {
+    const role = norm(url.searchParams.get("role"));
+    if (!lower(role).includes("admin")) return json({ error:"Forbidden" }, 403);
+    const tableId = norm(url.searchParams.get("tableId"));
+    const recordId = norm(url.searchParams.get("record_id"));
+    const rec = await getRecord(env, tableId, recordId);
+    const fields = rec.fields || {};
+    const no = spareOrderNo(fields) || "spare-order";
+    return new Response(spareOrderReportBytes(no, fields), { headers: { "content-type":"application/vnd.ms-excel; charset=utf-8", "content-disposition":`attachment; filename="${no}-report.xls"` } });
+  }
+
+  if (p === "/api/download-spare-orders-report") {
+    const role = norm(url.searchParams.get("role"));
+    if (!lower(role).includes("admin")) return json({ error:"Forbidden" }, 403);
+    const country = norm(url.searchParams.get("country"));
+    const rows = [];
+    const q = lower(country);
+    if (!q || q.includes("uae")) rows.push(...(await listRecords(env, env.SPARE_ORDER_UAE_TABLE_ID)).map(r => withSpareMeta(env, env.SPARE_ORDER_UAE_TABLE_ID, r)));
+    if (!q || q.includes("ksa")) rows.push(...(await listRecords(env, env.SPARE_ORDER_KSA_TABLE_ID)).map(r => withSpareMeta(env, env.SPARE_ORDER_KSA_TABLE_ID, r)));
+    return new Response(spareOrdersReportBytes(rows), { headers: { "content-type":"application/vnd.ms-excel; charset=utf-8", "content-disposition":`attachment; filename="spare-orders-report.xls"` } });
   }
 
   if (p === "/api/update-status" && req.method === "POST") {
