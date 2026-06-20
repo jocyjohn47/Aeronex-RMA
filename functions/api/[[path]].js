@@ -587,6 +587,7 @@ function spareOrderReportBytes(orderNo, fields) {
     ["Shipment Tracking No", spareReportFieldText(fieldFirst(fields, ["Shipment Tracking No","Tracking No","Shipment Tracking Number"]))],
     ["Specialized", spareReportFieldText(fields["Specialized"])],
     ["DJI Cost", fields["DJI Cost"] || ""],
+    ["Shipment Cost ( AED )", fields["Shipment Cost ( AED )"] || ""],
     ["Dealer Credit", fields["Dealer Credit"] || ""],
     ["DJI Case No", spareReportFieldText(fieldFirst(fields, ["DJI Case NO","DJI case NO","DJI Case No","DJI case No"]))],
     ["Invoice Download", spareReportFieldText(fields["Invoice Download"])],
@@ -602,7 +603,7 @@ function spareOrderReportBytes(orderNo, fields) {
   return new TextEncoder().encode(html);
 }
 function spareOrdersReportBytes(rows) {
-  const headers = ["Spare Order No","Status","Company Name","Contact Name","Billing Address","Country","Invoice Currency","Remarks","Final Notes","Dealer CN","Shipment Destination","Shipment Tracking No","Specialized","DJI Cost","Dealer Credit","DJI Case No","Invoice Download","Payment Receipt","Order File"];
+  const headers = ["Spare Order No","Status","Company Name","Contact Name","Billing Address","Country","Invoice Currency","Remarks","Final Notes","Dealer CN","Shipment Destination","Shipment Tracking No","Specialized","DJI Cost","Shipment Cost ( AED )","Dealer Credit","DJI Case No","Invoice Download","Payment Receipt","Order File"];
   const tr = (cells, head=false) => `<tr>${cells.map(c => head ? `<th>${spareReportEsc(c)}</th>` : `<td>${spareReportEsc(c)}</td>`).join("")}</tr>`;
   const body = (rows || []).map(r => {
     const f = r.fields || {};
@@ -621,6 +622,7 @@ function spareOrdersReportBytes(rows) {
       spareReportFieldText(fieldFirst(f, ["Shipment Tracking No","Tracking No","Shipment Tracking Number"])),
       spareReportFieldText(f["Specialized"]),
       f["DJI Cost"] || "",
+      f["Shipment Cost ( AED )"] || "",
       f["Dealer Credit"] || "",
       spareReportFieldText(fieldFirst(f, ["DJI Case NO","DJI case NO","DJI Case No","DJI case No"])),
       spareReportFieldText(f["Invoice Download"]),
@@ -1159,6 +1161,7 @@ async function handle(req, env) {
     if (fieldTypes["Specialized"]) fields["Specialized"] = b.specialized || "";
     if (fieldTypes["Final Notes"]) fields["Final Notes"] = b.finalNotes || "";
     if (fieldTypes["DJI Cost"]) fields["DJI Cost"] = b.djiCost || "";
+    if (fieldTypes["Shipment Cost ( AED )"]) fields["Shipment Cost ( AED )"] = b.shipmentCostAed || "";
     if (fieldTypes["DJI Case NO"]) fields["DJI Case NO"] = b.djiCaseNo || "";
     else if (fieldTypes["DJI case NO"]) fields["DJI case NO"] = b.djiCaseNo || "";
     await updateRecord(env, b.tableId, b.record_id, fields);
