@@ -981,7 +981,7 @@ function shipmentDestinationOptions(cur){
   return opts.map(x=>`<option value="${esc(x)}" ${String(cur||'')===x?'selected':''}>${esc(x||'Select')}</option>`).join('');
 }
 function specializedOptions(cur){
-  const opts=['','Enterprise','Consumer','Agriculture','FLYCART','DJI','Other'];
+  const opts=['','Enterprise','Consumer','Agriculture','FLYCART'];
   return opts.map(x=>`<option value="${esc(x)}" ${String(cur||'')===x?'selected':''}>${esc(x||'Select')}</option>`).join('');
 }
 function openSpareOrderDetails(i){
