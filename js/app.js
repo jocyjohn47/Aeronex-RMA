@@ -980,8 +980,8 @@ function shipmentDestinationOptions(cur){
   const opts=['','HONG KONG WH','DXB FZCO (JAFZA)','DXB DSO (Mainland)','KSA Office','SHIP TO DEALER'];
   return opts.map(x=>`<option value="${esc(x)}" ${String(cur||'')===x?'selected':''}>${esc(x||'Select')}</option>`).join('');
 }
-function yesNoOptions(cur){
-  const opts=['','Yes','No'];
+function specializedOptions(cur){
+  const opts=['','Enterprise','Consumer','Agriculture','FLYCART','DJI','Other'];
   return opts.map(x=>`<option value="${esc(x)}" ${String(cur||'')===x?'selected':''}>${esc(x||'Select')}</option>`).join('');
 }
 function openSpareOrderDetails(i){
@@ -999,7 +999,7 @@ function openSpareOrderDetails(i){
       <div class="grid3">
         <div><label>Shipment Destination</label><select id="soShipDestination">${shipmentDestinationOptions(spareOrderDestinationValue(f))}</select></div>
         <div><label>Shipment Tracking No</label><input id="soShipTracking" value="${esc(spareOrderTrackingValue(f)||'')}"></div>
-        <div><label>Specialized</label><select id="soSpecialized">${yesNoOptions(spareOrderSpecializedValue(f))}</select></div>
+        <div><label>Specialized</label><select id="soSpecialized">${specializedOptions(spareOrderSpecializedValue(f))}</select></div>
       </div>
       <div class="grid3">
         <div><label>DJI Cost</label><input id="soDjiCost" value="${esc(f['DJI Cost']||'')}"></div>
