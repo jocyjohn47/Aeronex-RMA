@@ -985,6 +985,7 @@ function specializedOptions(cur){
   return opts.map(x=>`<option value="${esc(x)}" ${String(cur||'')===x?'selected':''}>${esc(x||'Select')}</option>`).join('');
 }
 function openSpareOrderDetails(i){
+  currentSpareOrderDetailIndex=i;
   const r = (Array.isArray(S.orders) ? S.orders : [])[i];
   if(!r) return;
   const f = r.fields || {};
@@ -1004,12 +1005,11 @@ function openSpareOrderDetails(i){
       <div class="grid3">
         <div><label>DJI Cost</label><input id="soDjiCost" value="${esc(f['DJI Cost']||'')}"></div>
         <div><label>DJI Case No</label><input id="soDjiCaseNo" value="${esc(spareOrderDjiCaseValue(f)||'')}"></div>
-        <div><label>Dealer CN Upload</label><input id="soDealerCnFile" type="file"></div>
+        <div><label>Dealer CN Upload</label><input id="soDealerCnFile" type="file" onchange="uploadSpareOrderDealerCn(currentSpareOrderDetailIndex)"></div>
       </div>
       <label>Final Notes</label><textarea id="soFinalNotes" style="min-height:90px">${esc(spareOrderFinalNotesValue(f)||'')}</textarea>
       <div class="row">
         <button onclick="saveSpareOrderInternal(${i})">Save Details</button>
-        <button class="btn-light" onclick="uploadSpareOrderDealerCn(${i})">Upload Dealer CN</button>
       </div>
       <div id="soDetailMsg" class="msg"></div>
     </div>` : '';
@@ -1065,6 +1065,7 @@ async function saveSpareOrderInternal(i){
   }catch(e){msg('soDetailMsg',e.message)}
 }
 async function uploadSpareOrderDealerCn(i){
+  if(i===undefined || i===null || i<0) i=currentSpareOrderDetailIndex;
   const r = (Array.isArray(S.orders) ? S.orders : [])[i];
   const inp=$('soDealerCnFile');
   const file=inp&&inp.files&&inp.files[0];
