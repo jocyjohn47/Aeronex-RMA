@@ -981,7 +981,7 @@ function shipmentDestinationOptions(cur){
   return opts.map(x=>`<option value="${esc(x)}" ${String(cur||'')===x?'selected':''}>${esc(x||'Select')}</option>`).join('');
 }
 function specializedOptions(cur){
-  const opts=['','Enterprise','Consumer','Agriculture','FLYCART'];
+  const opts=['','Enterprise','Delivery','Consumer','Agriculture'];
   return opts.map(x=>`<option value="${esc(x)}" ${String(cur||'')===x?'selected':''}>${esc(x||'Select')}</option>`).join('');
 }
 function openSpareOrderDetails(i){
@@ -1004,6 +1004,7 @@ function openSpareOrderDetails(i){
       </div>
       <div class="grid3">
         <div><label>DJI Cost</label><input id="soDjiCost" value="${esc(f['DJI Cost']||'')}"></div>
+        <div><label>Shipment Cost ( AED )</label><input id="soShipmentCostAed" value="${esc(f['Shipment Cost ( AED )']||'')}"></div>
         <div><label>DJI Case No</label><input id="soDjiCaseNo" value="${esc(spareOrderDjiCaseValue(f)||'')}"></div>
         <div><label>Dealer CN Upload</label><input id="soDealerCnFile" type="file" onchange="uploadSpareOrderDealerCn(currentSpareOrderDetailIndex)"></div>
       </div>
@@ -1056,6 +1057,7 @@ async function saveSpareOrderInternal(i){
       specialized:($('soSpecialized')?.value||'').trim(),
       finalNotes:($('soFinalNotes')?.value||'').trim(),
       djiCost:($('soDjiCost')?.value||'').trim(),
+      shipmentCostAed:($('soShipmentCostAed')?.value||'').trim(),
       djiCaseNo:($('soDjiCaseNo')?.value||'').trim()
     };
     await api('/api/update-spare-order-internal',{method:'POST',body:JSON.stringify(payload)});
