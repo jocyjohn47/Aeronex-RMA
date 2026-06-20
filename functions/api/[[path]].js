@@ -188,6 +188,34 @@ function filterOwn(rows, email, role) {
   return rows.filter(r => lower(r.fields?.["Contact Email"] || r.fields?.["Username ( Email )"] || r.fields?.Email) === e);
 }
 
+function filterOwnSpareOrders(rows, email, role, companyName, contactName) {
+  const r = lower(role);
+
+  // Admin and Technician see all spare orders for the selected country.
+  // Country restriction is already applied before this function by /api/my-orders.
+  if (r.includes("admin") || r.includes("technician") || r.includes("technicain") || r.includes("techncian") || r.includes("tech")) {
+    return rows;
+  }
+
+  const e = lower(email);
+  const c = lower(companyName);
+  const n = lower(contactName);
+
+  return rows.filter(row => {
+    const f = row.fields || {};
+    const rowEmail = lower(f["Contact Email"] || f["Username ( Email )"] || f.Email || f["Dealer email"] || "");
+    const rowCompany = lower(f["Company Name"] || "");
+    const rowContact = lower(f["Contact Name"] || f["Contact Person"] || "");
+
+    if (e && rowEmail && rowEmail === e) return true;
+    if (c && rowCompany && rowCompany === c) return true;
+    if (n && rowContact && rowContact === n) return true;
+
+    return false;
+  });
+}
+
+
 
 function backendCleanPrice(v) {
   if (v === null || v === undefined || v === "") return 0;
@@ -890,11 +918,13 @@ async function handle(req, env) {
     const country = norm(url.searchParams.get("country"));
     const email = norm(url.searchParams.get("email"));
     const role = norm(url.searchParams.get("role"));
+    const companyName = norm(url.searchParams.get("companyName"));
+    const contactName = norm(url.searchParams.get("contactName"));
     const rows = [];
     const q = lower(country);
     if (!q || q.includes("uae")) rows.push(...(await listRecords(env, env.SPARE_ORDER_UAE_TABLE_ID)).map(r => withSpareMeta(env, env.SPARE_ORDER_UAE_TABLE_ID, r)));
     if (!q || q.includes("ksa")) rows.push(...(await listRecords(env, env.SPARE_ORDER_KSA_TABLE_ID)).map(r => withSpareMeta(env, env.SPARE_ORDER_KSA_TABLE_ID, r)));
-    return json(filterOwn(rows, email, role));
+    return json(filterOwnSpareOrders(rows, email, role, companyName, contactName));
   }
 
   if (p === "/api/my-repairs" || p === "/api/repair-status") {
