@@ -434,7 +434,7 @@ function dealerPoBox(){
 
 function country(){return normalizeCountryValue(S.user?.country||S.user?.fields?.Country||'UAE & Other Region')}function uf(k,d=''){return S.user?.fields?.[k]??d}
 function layout(){let n=S.user?.displayName||S.user?.username||'User';document.body.innerHTML=`<header class="topbar"><div class="brand"><div class="brand-title">AERO NEX</div><div class="brand-sub">RMA & Spare Order Portal</div></div><nav class="nav">
-<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}${warrantySoftwareStatusEnabled()?`<a data-sec="warrantySoftwareStatus" href="#" onclick="show('warrantySoftwareStatus')">🔎 Warranty & Software Status</a>`:''}${logsPageEnabled()?`<a data-sec="logsDiagnostics" href="#" onclick="show('logsDiagnostics')">🧾 Logs</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${isAdmin()?`<a data-sec="admin" href="#" onclick="show('admin')">⚙ Admin</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','dealers','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
+<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}${warrantySoftwareStatusEnabled()?`<a data-sec="warrantySoftwareStatus" href="#" onclick="show('warrantySoftwareStatus')">🔎 Warranty & Software Status</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${isAdmin()?`<a data-sec="admin" href="#" onclick="show('admin')">⚙ Admin</a>`:''}${logsPageEnabled()?`<a data-sec="logsDiagnostics" href="#" onclick="show('logsDiagnostics')">🧾 Logs</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','dealers','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
 function show(sec){
   document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));
   $(sec)?.classList.add('active');
@@ -831,7 +831,7 @@ function fmtPrice(v){
   return cleanPrice(v).toFixed(2);
 }
 
-function renderSpare(){$('spare').innerHTML=`<div class="panel"><h2>Spare Order</h2><div class="notice">Select material by name or material code. Review before submit. No edit after apply; cancel request only.${isAdmin()?`<br><b>Country:</b> <select style="max-width:260px;display:inline-block;margin-left:10px" onchange="setAdminCountry(this.value)"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select>`:''}</div><div class="grid4"><div><label>Company Name</label><input value="${esc(uf('Company Name','AERO NEX'))}" disabled></div><div><label>Contact Name</label><input value="${esc(uf('Contact Person',''))}" disabled></div><div><label>Billing Address</label><input value="${esc(dealerAddress())}" disabled></div><div><label>Country</label><input value="${esc(selectedCountry())}" disabled></div></div><div style="max-width:260px"><label>Invoice Currency</label><select id="invoiceCurrency" onchange="drawCart()">${currencyOptions()}</select></div><label>Add from Spare Part List</label><div class="row"><input id="spareSearch" placeholder="Search by Material Code or Material Name..." oninput="renderSpareOptions()"><input id="spareQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addListed()">Add Item</button></div><select id="spareSelect"></select><h3>Custom Spare (if not in list)</h3><div class="row"><input id="customCode" placeholder="Material Code (if known)"><input id="customName" placeholder="Material Name"><input id="customQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addCustom()">Add Custom</button></div><label>Notes</label><textarea id="spareNotes" placeholder="Optional notes for this spare order" style="min-height:80px"></textarea><h3>Review Items</h3><div class="table-wrap"><table><thead><tr><th>Material Code</th><th>Material Name</th><th>Compatible Model</th><th>Qty</th><th id="cartUnitPriceHead">Unit Price</th><th id="cartTotalHead">Total</th><th>Action</th></tr></thead><tbody id="cartRows"></tbody></table></div><button onclick="submitOrder()">Submit Order</button> <button class="btn-light" onclick="S.cart=[];drawCart()">Clear All</button><div id="orderMsg" class="msg"></div><h3>My Order History <button class="btn-light" onclick="loadOrders().then(renderOrders)">Refresh</button></h3><div class="table-wrap"><table><thead><tr><th>Spare Order No</th><th>Company Name</th><th>Billing Address</th><th>Country</th><th>Invoice Currency</th><th>Status</th><th>Order File (Admin/Technician)</th><th>Invoice Download</th><th>Payment Receipt</th>${canManageOrders()?'<th>Action</th>':''}</tr></thead><tbody id="orderRows"></tbody></table>${renderPageNote(window.AERONEX_SPARE_ORDER_NOTE)}</div></div>`;renderSpareOptions();drawCart();renderOrders()}
+function renderSpare(){$('spare').innerHTML=`<div class="panel"><h2>Spare Order</h2><div class="notice">Select material by name or material code. Review before submit. No edit after apply; cancel request only.${isAdmin()?`<br><b>Country:</b> <select style="max-width:260px;display:inline-block;margin-left:10px" onchange="setAdminCountry(this.value)"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select>`:''}</div><div class="grid4"><div><label>Company Name</label><input value="${esc(uf('Company Name','AERO NEX'))}" disabled></div><div><label>Contact Name</label><input value="${esc(uf('Contact Person',''))}" disabled></div><div><label>Billing Address</label><input value="${esc(dealerAddress())}" disabled></div><div><label>Country</label><input value="${esc(selectedCountry())}" disabled></div></div><div style="max-width:260px"><label>Invoice Currency</label><select id="invoiceCurrency" onchange="drawCart()">${currencyOptions()}</select></div><label>Add from Spare Part List</label><div class="row"><input id="spareSearch" placeholder="Search by Material Code or Material Name..." oninput="renderSpareOptions()"><input id="spareQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addListed()">Add Item</button></div><select id="spareSelect"></select><h3>Custom Spare (if not in list)</h3><div class="row"><input id="customCode" placeholder="Material Code (if known)"><input id="customName" placeholder="Material Name"><input id="customQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addCustom()">Add Custom</button></div><label>Notes</label><textarea id="spareNotes" placeholder="Optional notes for this spare order" style="min-height:80px"></textarea><h3>Review Items</h3><div class="table-wrap"><table><thead><tr><th>Material Code</th><th>Material Name</th><th>Compatible Model</th><th>Qty</th><th id="cartUnitPriceHead">Unit Price</th><th id="cartTotalHead">Total</th><th>Action</th></tr></thead><tbody id="cartRows"></tbody></table></div><button onclick="submitOrder()">Submit Order</button> <button class="btn-light" onclick="S.cart=[];drawCart()">Clear All</button><div id="orderMsg" class="msg"></div><h3>My Order History <button class="btn-light" onclick="loadOrders().then(renderOrders)">Refresh</button></h3><div class="table-wrap"><table><thead><tr><th>Spare Order No</th><th>Status</th><th>Invoice Download</th><th>Payment Receipt</th><th>Dealer CN</th><th>Shipment Destination</th><th>Shipment Tracking No</th><th>Specialized</th><th>Final Notes</th><th>Remarks</th></tr></thead><tbody id="orderRows"></tbody></table>${renderPageNote(window.AERONEX_SPARE_ORDER_NOTE)}</div></div>`;renderSpareOptions();drawCart();renderOrders()}
 function renderSpareOptions(){let q=($('spareSearch')?.value||'').toLowerCase(),s=$('spareSelect');if(!s)return;s.innerHTML=S.spares.filter(x=>{let f=x.fields||{};return `${f['Material Code']||''} ${f['Material Name']||''} ${f['Compatible Model']||''}`.toLowerCase().includes(q)}).map(x=>{let f=x.fields||{},o={materialCode:f['Material Code']||'',materialName:f['Material Name']||'',compatibleModel:f['Compatible Model']||'',priceUSD:f['Price (USD ) Without Tax & Duty']||'',priceAED:f['AED (Without Tax & Duty)']||'',priceSAR:f['SAR (Without Tax & Duty)']||'',price:f['Price (USD ) Without Tax & Duty']||'',stock:f['Local Stock']||''};return `<option value="${encodeURIComponent(JSON.stringify(o))}">${esc(o.materialCode)} - ${esc(o.materialName)} ${o.compatibleModel?'('+esc(o.compatibleModel)+')':''}</option>`}).join('')}
 function addListed(){let v=$('spareSelect').value;if(!v)return msg('orderMsg','Select material first');let o=JSON.parse(decodeURIComponent(v));o.qty=$('spareQty').value||'1';S.cart.push(o);drawCart()}
 function addCustom(){let n=$('customName').value.trim();if(!n)return msg('orderMsg','Enter custom material name');S.cart.push({materialCode:$('customCode').value.trim(),materialName:n,compatibleModel:'Custom',priceUSD:0,priceAED:0,priceSAR:0,price:0,stock:'-',qty:$('customQty').value||'1'});$('customCode').value='';$('customName').value='';drawCart()}
@@ -943,8 +943,91 @@ function localOrderDownloadLink(orderNo, fileVal, row){
   return backendOrderDownloadLink(row);
 }
 
-function renderOrders(){let e=$('orderRows');if(!e)return;e.innerHTML=(Array.isArray(S.orders)?S.orders:[]).map(r=>{let f=r.fields||{};return `<tr><td>${esc(orderNoValue(f))}</td><td>${esc(f['Company Name'])}</td><td>${esc(f['Billing Address']||'')}</td><td>${esc(f['Country']||'')}</td><td>${esc(f['Invoice Currency']||'')}</td><td>${statusCell(r,'spare')}</td><td>${backendOrderDownloadLink(r)}</td><td>${invoiceDownloadCell(r)}</td><td>${paymentReceiptCell(r)}</td><td>${Array.isArray(f['Invoice Upload'])?'Download':'-'}</td></tr>`}).join('')}
 
+function spareOrderDisplayCell(v){
+  if(v===undefined || v===null || v==='') return '-';
+  if(Array.isArray(v)){
+    if(!v.length) return '-';
+    const f=v[0]||{};
+    const url=f.url||f.link||f.tmp_url||'';
+    const name=f.name||f.file_name||f.filename||'Open';
+    return url ? `<a class="btn-light" target="_blank" rel="noopener" href="${esc(url)}">${esc(name)}</a>` : esc(name||'Available');
+  }
+  if(typeof v==='object'){
+    const url=v.link||v.url||v.tmp_url||'';
+    const text=v.text||v.name||v.file_name||v.value||'Open';
+    return url ? `<a class="btn-light" target="_blank" rel="noopener" href="${esc(url)}">${esc(text)}</a>` : esc(text);
+  }
+  const s=String(v);
+  if(s.startsWith('http://') || s.startsWith('https://')) return `<a class="btn-light" target="_blank" rel="noopener" href="${esc(s)}">Open</a>`;
+  return esc(s);
+}
+function spareOrderField(f, names){
+  for(const n of names){
+    if(f && f[n] !== undefined && f[n] !== null && f[n] !== '') return f[n];
+  }
+  return '';
+}
+function spareOrderDealerCnCell(f){ return spareOrderDisplayCell(spareOrderField(f, ['Dealer Credit Note','Dealer CN'])); }
+function spareOrderDestinationValue(f){ return spareOrderField(f, ['Shipment Destination','Order Location','Spare Order Location']); }
+function spareOrderTrackingValue(f){ return spareOrderField(f, ['Shipment Tracking No','Tracking No','Shipment Tracking Number']); }
+function spareOrderSpecializedValue(f){ return spareOrderField(f, ['Specialized']); }
+function spareOrderFinalNotesValue(f){ return spareOrderField(f, ['Final Notes','Notes']); }
+function openSpareOrderDetails(i){
+  const r = (Array.isArray(S.orders) ? S.orders : [])[i];
+  if(!r) return;
+  const f = r.fields || {};
+  const orderNo = orderNoValue(f);
+  const sec = $('spare');
+  if(!sec) return;
+  sec.innerHTML = `<div class="panel">
+    <h2>Spare Order Details - ${esc(orderNo || '-')}</h2>
+    <div class="grid3">
+      <div><label>Spare Order No</label><input disabled value="${esc(orderNo || '-')}"></div>
+      <div><label>Status</label><input disabled value="${esc(f['Status'] || '-')}"></div>
+      <div><label>Invoice Currency</label><input disabled value="${esc(f['Invoice Currency'] || '-')}"></div>
+    </div>
+    <div class="grid3">
+      <div><label>Company Name</label><input disabled value="${esc(f['Company Name'] || '-')}"></div>
+      <div><label>Contact Name</label><input disabled value="${esc(f['Contact Name'] || '-')}"></div>
+      <div><label>Billing Address</label><input disabled value="${esc(f['Billing Address'] || f['Invoice Address'] || '-')}"></div>
+    </div>
+    <div class="grid3">
+      <div><label>Dealer CN</label><div>${spareOrderDealerCnCell(f)}</div></div>
+      <div><label>Shipment Destination</label><input disabled value="${esc(spareOrderDestinationValue(f) || '-')}"></div>
+      <div><label>Shipment Tracking No</label><input disabled value="${esc(spareOrderTrackingValue(f) || '-')}"></div>
+    </div>
+    <div class="grid3">
+      <div><label>Specialized</label><input disabled value="${esc(spareOrderSpecializedValue(f) || '-')}"></div>
+      <div><label>Invoice Download</label><div>${invoiceDownloadCell(r)}</div></div>
+      <div><label>Payment Receipt</label><div>${paymentReceiptCell(r)}</div></div>
+    </div>
+    <label>Remarks</label><textarea disabled>${esc(f['Remarks'] || '')}</textarea>
+    <label>Final Notes</label><textarea disabled>${esc(spareOrderFinalNotesValue(f) || '')}</textarea>
+    <div class="row"><button class="btn-light" onclick="renderSpare()">Back to Spare Order</button></div>
+  </div>`;
+}
+
+function renderOrders(){
+  let e=$('orderRows');
+  if(!e)return;
+  e.innerHTML=(Array.isArray(S.orders)?S.orders:[]).map((r,i)=>{
+    let f=r.fields||{};
+    let no=orderNoValue(f);
+    return `<tr>
+      <td><a href="#" onclick="openSpareOrderDetails(${i});return false;">${esc(no||'-')}</a></td>
+      <td>${statusCell(r,'spare')}</td>
+      <td>${invoiceDownloadCell(r)}</td>
+      <td>${paymentReceiptCell(r)}</td>
+      <td>${spareOrderDealerCnCell(f)}</td>
+      <td>${esc(spareOrderDestinationValue(f)||'-')}</td>
+      <td>${esc(spareOrderTrackingValue(f)||'-')}</td>
+      <td>${esc(spareOrderSpecializedValue(f)||'-')}</td>
+      <td>${esc(spareOrderFinalNotesValue(f)||'-')}</td>
+      <td>${esc(f['Remarks']||'-')}</td>
+    </tr>`;
+  }).join('');
+}
 function readFileBase64(inputId){
   return new Promise(resolve=>{
     const input=$(inputId);
