@@ -188,30 +188,37 @@ function filterOwn(rows, email, role) {
   return rows.filter(r => lower(r.fields?.["Contact Email"] || r.fields?.["Username ( Email )"] || r.fields?.Email) === e);
 }
 
+function spareCompanyKey(v) {
+  return lower(v)
+    .replace(/(llc|l\.l\.c|fze|fzco|ltd|limited|company|co|trading|drone|drones)/g, "")
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+}
+
 function filterOwnSpareOrders(rows, email, role, companyName, contactName) {
   const r = lower(role);
 
   // Admin and Technician see all spare orders for the selected country.
-  // Country restriction is already applied before this function by /api/my-orders.
+  // Country/table restriction is already applied before this function.
   if (r.includes("admin") || r.includes("technician") || r.includes("technicain") || r.includes("techncian") || r.includes("tech")) {
     return rows;
   }
 
-  const e = lower(email);
-  const c = lower(companyName);
-  const n = lower(contactName);
+  const userCompanyRaw = companyName || "";
+  const userCompany = spareCompanyKey(userCompanyRaw);
+
+  if (!userCompany) return [];
 
   return rows.filter(row => {
     const f = row.fields || {};
-    const rowEmail = lower(f["Contact Email"] || f["Username ( Email )"] || f.Email || f["Dealer email"] || "");
-    const rowCompany = lower(f["Company Name"] || "");
-    const rowContact = lower(f["Contact Name"] || f["Contact Person"] || "");
+    const rowCompanyRaw = f["Company Name"] || "";
+    const rowCompany = spareCompanyKey(rowCompanyRaw);
 
-    if (e && rowEmail && rowEmail === e) return true;
-    if (c && rowCompany && rowCompany === c) return true;
-    if (n && rowContact && rowContact === n) return true;
+    if (!rowCompany) return false;
 
-    return false;
+    return rowCompany === userCompany ||
+           rowCompany.includes(userCompany) ||
+           userCompany.includes(rowCompany);
   });
 }
 
