@@ -986,6 +986,7 @@ function fmtPrice(v){
 }
 
 
+function uiLower(v){return String(v||'').toLowerCase();}
 function canCreateOnBehalfOfDealer(){
   return isAdmin() || currentUserIsAdminTech();
 }
@@ -993,10 +994,10 @@ function canCreateOnBehalfOfDealer(){
 function dealerRowsForOnBehalf(){
   if(!canCreateOnBehalfOfDealer()) return [];
   const rows = Array.isArray(S.dealers) ? S.dealers : [];
-  const q = lower(selectedCountry());
+  const q = uiLower(selectedCountry());
   return rows.filter(r=>{
     const f = r.fields || {};
-    const c = lower(f.Country || '');
+    const c = uiLower(f.Country || '');
     if(!q) return true;
     if(q.includes('ksa')) return c.includes('ksa');
     if(q.includes('uae')) return !c.includes('ksa');
