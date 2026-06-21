@@ -665,6 +665,57 @@ function spareOrdersReportBytes(rows) {
   return new TextEncoder().encode(html);
 }
 
+
+const FLYCART_CREDIT_FIELDS = [
+  "Spare Order Case",
+  "Total Credit Available",
+  "Credit Used",
+  "Credit Balance",
+  "Total Device Purchased",
+  "Dealer email",
+  "Spare PI amount",
+  "DJI Order Cost",
+  "Dealer Name",
+  "DJI Case No"
+];
+
+function flycartAdminOnly(role) {
+  return lower(role).includes("admin");
+}
+
+function flycartText(v) {
+  if (v === undefined || v === null || v === "") return "";
+  if (Array.isArray(v)) return v.map(flycartText).filter(Boolean).join(", ");
+  if (typeof v === "object") return v.text || v.name || v.file_name || v.link || v.url || v.value || "";
+  return String(v);
+}
+
+function flycartNumber(v) {
+  const n = Number(String(v || "").replace(/[^0-9.\-]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function flycartValueByType(fieldType, value) {
+  if (value === undefined || value === null) return "";
+  if (fieldType === 2) return flycartNumber(value);
+  return String(value);
+}
+
+function flycartReportBytes(rows) {
+  const escHtml = v => String(v ?? "").replace(/[&<>"]/g, s => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[s]));
+  const tr = (cells, head=false) => `<tr>${cells.map(c => head ? `<th>${escHtml(c)}</th>` : `<td>${escHtml(c)}</td>`).join("")}</tr>`;
+  const body = (rows || []).map(r => {
+    const f = r.fields || {};
+    return tr(FLYCART_CREDIT_FIELDS.map(k => flycartText(f[k])));
+  }).join("");
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body{font-family:Arial,sans-serif}h1{font-size:20px;color:#1f3b8a}
+  table{border-collapse:collapse;width:100%}th{background:#1f3b8a;color:#fff}
+  th,td{border:1px solid #777;padding:8px;text-align:left;vertical-align:top}
+  </style></head><body><h1>AERO NEX - Flycart Credit Use</h1><table>${tr(FLYCART_CREDIT_FIELDS,true)}${body}</table></body></html>`;
+  return new TextEncoder().encode(html);
+}
+
 async function handle(req, env) {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: H });
 
@@ -911,6 +962,58 @@ async function handle(req, env) {
 
   if (p === "/api/portal-notes") {
     return json(await listRecords(env, env.PORTAL_NOTES_TABLE_ID));
+  }
+
+
+  if (p === "/api/flycart-credit-use") {
+    const role = norm(url.searchParams.get("role"));
+    if (!flycartAdminOnly(role)) return json({ error:"Forbidden" }, 403);
+    if (!env.FLYCART_CREDIT_USE_TABLE_ID) return json({ rows:[], warning:"FLYCART_CREDIT_USE_TABLE_ID not configured" });
+    return json({ ok:true, rows:await listRecords(env, env.FLYCART_CREDIT_USE_TABLE_ID) });
+  }
+
+  if (p === "/api/flycart-credit-use/save" && req.method === "POST") {
+    const b = await readBody(req);
+    if (!flycartAdminOnly(b.role)) return json({ error:"Forbidden" }, 403);
+    if (!env.FLYCART_CREDIT_USE_TABLE_ID) return json({ error:"FLYCART_CREDIT_USE_TABLE_ID not configured" }, 400);
+
+    const fieldTypes = await getFieldTypes(env, env.FLYCART_CREDIT_USE_TABLE_ID);
+    const fields = {};
+    const skipped = [];
+
+    for (const k of FLYCART_CREDIT_FIELDS) {
+      if (!fieldTypes[k]) {
+        skipped.push(k);
+        continue;
+      }
+      // Skip formula/autonumber/readonly fields if Lark marks them as non-editable types.
+      if (fieldTypes[k] === 20 || fieldTypes[k] === 1005) {
+        skipped.push(k);
+        continue;
+      }
+      fields[k] = flycartValueByType(fieldTypes[k], b.fields?.[k] ?? "");
+    }
+
+    let result;
+    if (b.record_id) {
+      result = await updateRecord(env, env.FLYCART_CREDIT_USE_TABLE_ID, b.record_id, fields);
+    } else {
+      result = await createRecord(env, env.FLYCART_CREDIT_USE_TABLE_ID, fields);
+    }
+    return json({ ok:true, result:result.data || result, updated:Object.keys(fields), skipped });
+  }
+
+  if (p === "/api/flycart-credit-use-report") {
+    const role = norm(url.searchParams.get("role"));
+    if (!flycartAdminOnly(role)) return json({ error:"Forbidden" }, 403);
+    if (!env.FLYCART_CREDIT_USE_TABLE_ID) return json({ error:"FLYCART_CREDIT_USE_TABLE_ID not configured" }, 400);
+    const rows = await listRecords(env, env.FLYCART_CREDIT_USE_TABLE_ID);
+    return new Response(flycartReportBytes(rows), {
+      headers: {
+        "content-type":"application/vnd.ms-excel; charset=utf-8",
+        "content-disposition":`attachment; filename="flycart-credit-use-report.xls"`
+      }
+    });
   }
 
   if (p === "/api/my-orders") {
