@@ -985,7 +985,90 @@ function fmtPrice(v){
   return cleanPrice(v).toFixed(2);
 }
 
-function renderSpare(){$('spare').innerHTML=`<div class="panel"><h2>Spare Order</h2><div class="notice">Select material by name or material code. Review before submit. No edit after apply; cancel request only.${isAdmin()?`<br><b>Country:</b> <select style="max-width:260px;display:inline-block;margin-left:10px" onchange="setAdminCountry(this.value)"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select>`:''}</div><div class="grid4"><div><label>Company Name</label><input value="${esc(uf('Company Name','AERO NEX'))}" disabled></div><div><label>Contact Name</label><input value="${esc(uf('Contact Person',''))}" disabled></div><div><label>Billing Address</label><input value="${esc(dealerAddress())}" disabled></div><div><label>Country</label><input value="${esc(selectedCountry())}" disabled></div></div><div style="max-width:260px"><label>Invoice Currency</label><select id="invoiceCurrency" onchange="drawCart()">${currencyOptions()}</select></div><label>Add from Spare Part List</label><div class="row"><input id="spareSearch" placeholder="Search by Material Code or Material Name..." oninput="renderSpareOptions()"><input id="spareQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addListed()">Add Item</button></div><select id="spareSelect"></select><h3>Custom Spare (if not in list)</h3><div class="row"><input id="customCode" placeholder="Material Code (if known)"><input id="customName" placeholder="Material Name"><input id="customQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addCustom()">Add Custom</button></div><label>Remarks</label><textarea id="spareNotes" placeholder="Optional remarks for this spare order" style="min-height:80px"></textarea><h3>Review Items</h3><div class="table-wrap"><table><thead><tr><th>Material Code</th><th>Material Name</th><th>Compatible Model</th><th>Qty</th><th id="cartUnitPriceHead">Unit Price</th><th id="cartTotalHead">Total</th><th>Action</th></tr></thead><tbody id="cartRows"></tbody></table></div><button onclick="submitOrder()">Submit Order</button> <button class="btn-light" onclick="S.cart=[];drawCart()">Clear All</button><div id="orderMsg" class="msg"></div><h3>My Order History <button class="btn-light" onclick="loadOrders().then(renderOrders)">Refresh</button> ${isAdmin()?`<a class="btn-light" target="_blank" rel="noopener" href="/api/download-spare-orders-report?country=${encodeURIComponent(selectedCountry())}&role=${encodeURIComponent(S.user.role||'')}">Download All Reports</a>`:''}</h3><div class="table-wrap"><table><thead><tr><th>Spare Order No</th><th>Status</th><th>Invoice Download</th><th>Payment Receipt</th><th>Dealer CN</th><th>Shipment Destination</th><th>Shipment Tracking No</th><th>Specialized</th><th>Final Notes</th><th>Remarks</th></tr></thead><tbody id="orderRows"></tbody></table>${renderPageNote(window.AERONEX_SPARE_ORDER_NOTE)}</div></div>`;renderSpareOptions();drawCart();renderOrders()}
+
+function canCreateOnBehalfOfDealer(){
+  return isAdmin() || currentUserIsAdminTech();
+}
+
+function dealerRowsForOnBehalf(){
+  if(!canCreateOnBehalfOfDealer()) return [];
+  const rows = Array.isArray(S.dealers) ? S.dealers : [];
+  const q = lower(selectedCountry());
+  return rows.filter(r=>{
+    const f = r.fields || {};
+    const c = lower(f.Country || '');
+    if(!q) return true;
+    if(q.includes('ksa')) return c.includes('ksa');
+    if(q.includes('uae')) return !c.includes('ksa');
+    return true;
+  });
+}
+
+function dealerOptionLabel(row){
+  const f = row.fields || {};
+  return [f['Company Name']||'', f['Contact Person']||'', f['Username ( Email )']||''].filter(Boolean).join(' - ');
+}
+
+function dealerAddressFromFields(f){
+  return f.Address || parseRemark(f.Remarks||'', 'Address') || '';
+}
+
+function selectedOnBehalfDealer(prefix){
+  if(!canCreateOnBehalfOfDealer()) return null;
+  const idx = Number($(prefix+'DealerSelect')?.value || -1);
+  const rows = dealerRowsForOnBehalf();
+  return Number.isFinite(idx) && idx >= 0 ? rows[idx] : null;
+}
+
+function selectedOnBehalfDealerFields(prefix){
+  const row = selectedOnBehalfDealer(prefix);
+  return row ? (row.fields || {}) : null;
+}
+
+function dealerSelectHtml(prefix){
+  if(!canCreateOnBehalfOfDealer()) return '';
+  const rows = dealerRowsForOnBehalf();
+  return `<div class="notice"><b>Create on behalf of dealer:</b>
+    <select id="${prefix}DealerSelect" style="max-width:460px;display:inline-block;margin-left:10px" onchange="applyDealerTo${prefix==='spare'?'Spare':'Repair'}Form()">
+      <option value="-1">Use my details</option>
+      ${rows.map((r,i)=>`<option value="${i}">${esc(dealerOptionLabel(r))}</option>`).join('')}
+    </select>
+  </div>`;
+}
+
+function applyDealerToSpareForm(){
+  const f = selectedOnBehalfDealerFields('spare');
+  if(!f) {
+    if($('spareCompany')) $('spareCompany').value = uf('Company Name','AERO NEX');
+    if($('spareContact')) $('spareContact').value = uf('Contact Person','');
+    if($('spareAddress')) $('spareAddress').value = dealerAddress();
+    if($('spareCountry')) $('spareCountry').value = selectedCountry();
+    return;
+  }
+  if($('spareCompany')) $('spareCompany').value = f['Company Name'] || '';
+  if($('spareContact')) $('spareContact').value = f['Contact Person'] || '';
+  if($('spareAddress')) $('spareAddress').value = dealerAddressFromFields(f);
+  if($('spareCountry')) $('spareCountry').value = normalizeCountryValue(f.Country || selectedCountry());
+}
+
+function applyDealerToRepairForm(){
+  const f = selectedOnBehalfDealerFields('repair');
+  if(!f) {
+    if($('rcCompany')) $('rcCompany').value = uf('Company Name','AERO NEX');
+    if($('rcContact')) $('rcContact').value = uf('Contact Person','');
+    if($('rcEmail')) $('rcEmail').value = uf('Username ( Email )',S.user.username);
+    if($('rcAddress')) $('rcAddress').value = dealerAddress();
+    if($('rcCountry')) $('rcCountry').value = selectedCountry();
+    return;
+  }
+  if($('rcCompany')) $('rcCompany').value = f['Company Name'] || '';
+  if($('rcContact')) $('rcContact').value = f['Contact Person'] || '';
+  if($('rcEmail')) $('rcEmail').value = f['Username ( Email )'] || '';
+  if($('rcAddress')) $('rcAddress').value = dealerAddressFromFields(f);
+  if($('rcCountry')) $('rcCountry').value = normalizeCountryValue(f.Country || selectedCountry());
+}
+
+function renderSpare(){$('spare').innerHTML=`<div class="panel"><h2>Spare Order</h2><div class="notice">Select material by name or material code. Review before submit. No edit after apply; cancel request only.${isAdmin()?`<br><b>Country:</b> <select style="max-width:260px;display:inline-block;margin-left:10px" onchange="setAdminCountry(this.value);renderSpare()"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select>`:''}</div>${dealerSelectHtml('spare')}<div class="grid4"><div><label>Company Name</label><input id="spareCompany" value="${esc(uf('Company Name','AERO NEX'))}" disabled></div><div><label>Contact Name</label><input id="spareContact" value="${esc(uf('Contact Person',''))}" disabled></div><div><label>Billing Address</label><input id="spareAddress" value="${esc(dealerAddress())}" disabled></div><div><label>Country</label><input id="spareCountry" value="${esc(selectedCountry())}" disabled></div></div><div style="max-width:260px"><label>Invoice Currency</label><select id="invoiceCurrency" onchange="drawCart()">${currencyOptions()}</select></div><label>Add from Spare Part List</label><div class="row"><input id="spareSearch" placeholder="Search by Material Code or Material Name..." oninput="renderSpareOptions()"><input id="spareQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addListed()">Add Item</button></div><select id="spareSelect"></select><h3>Custom Spare (if not in list)</h3><div class="row"><input id="customCode" placeholder="Material Code (if known)"><input id="customName" placeholder="Material Name"><input id="customQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addCustom()">Add Custom</button></div><label>Remarks</label><textarea id="spareNotes" placeholder="Optional remarks for this spare order" style="min-height:80px"></textarea><h3>Review Items</h3><div class="table-wrap"><table><thead><tr><th>Material Code</th><th>Material Name</th><th>Compatible Model</th><th>Qty</th><th id="cartUnitPriceHead">Unit Price</th><th id="cartTotalHead">Total</th><th>Action</th></tr></thead><tbody id="cartRows"></tbody></table></div><button onclick="submitOrder()">Submit Order</button> <button class="btn-light" onclick="S.cart=[];drawCart()">Clear All</button><div id="orderMsg" class="msg"></div><h3>My Order History <button class="btn-light" onclick="loadOrders().then(renderOrders)">Refresh</button> ${isAdmin()?`<a class="btn-light" target="_blank" rel="noopener" href="/api/download-spare-orders-report?country=${encodeURIComponent(selectedCountry())}&role=${encodeURIComponent(S.user.role||'')}">Download All Reports</a>`:''}</h3><div class="table-wrap"><table><thead><tr><th>Spare Order No</th><th>Status</th><th>Invoice Download</th><th>Payment Receipt</th><th>Dealer CN</th><th>Shipment Destination</th><th>Shipment Tracking No</th><th>Specialized</th><th>Final Notes</th><th>Remarks</th></tr></thead><tbody id="orderRows"></tbody></table>${renderPageNote(window.AERONEX_SPARE_ORDER_NOTE)}</div></div>`;renderSpareOptions();drawCart();renderOrders()}
 function renderSpareOptions(){let q=($('spareSearch')?.value||'').toLowerCase(),s=$('spareSelect');if(!s)return;s.innerHTML=S.spares.filter(x=>{let f=x.fields||{};return `${f['Material Code']||''} ${f['Material Name']||''} ${f['Compatible Model']||''}`.toLowerCase().includes(q)}).map(x=>{let f=x.fields||{},o={materialCode:f['Material Code']||'',materialName:f['Material Name']||'',compatibleModel:f['Compatible Model']||'',priceUSD:f['Price (USD ) Without Tax & Duty']||'',priceAED:f['AED (Without Tax & Duty)']||'',priceSAR:f['SAR (Without Tax & Duty)']||'',price:f['Price (USD ) Without Tax & Duty']||'',stock:f['Local Stock']||''};return `<option value="${encodeURIComponent(JSON.stringify(o))}">${esc(o.materialCode)} - ${esc(o.materialName)} ${o.compatibleModel?'('+esc(o.compatibleModel)+')':''}</option>`}).join('')}
 function addListed(){let v=$('spareSelect').value;if(!v)return msg('orderMsg','Select material first');let o=JSON.parse(decodeURIComponent(v));o.qty=$('spareQty').value||'1';S.cart.push(o);drawCart()}
 function addCustom(){let n=$('customName').value.trim();if(!n)return msg('orderMsg','Enter custom material name');S.cart.push({materialCode:$('customCode').value.trim(),materialName:n,compatibleModel:'Custom',priceUSD:0,priceAED:0,priceSAR:0,price:0,stock:'-',qty:$('customQty').value||'1'});$('customCode').value='';$('customName').value='';drawCart()}
@@ -1018,7 +1101,7 @@ async function submitOrder(){
       const unit = itemUnitPrice(x, currency);
       return {...x, selectedCurrency:currency, unitPrice:unit, totalPrice:unit*qty, price:unit};
     });
-    let p={companyName:uf('Company Name','AERO NEX'),contactName:uf('Contact Person',''),billingAddress:dealerAddress(),invoiceCurrency:currency,country:selectedCountry(),items:pricedItems,remarks:(($('spareNotes')&&$('spareNotes').value)||'').trim()};
+    let p={companyName:($('spareCompany')?.value||uf('Company Name','AERO NEX')),contactName:($('spareContact')?.value||uf('Contact Person','')),billingAddress:($('spareAddress')?.value||dealerAddress()),invoiceCurrency:currency,country:($('spareCountry')?.value||selectedCountry()),items:pricedItems,remarks:(($('spareNotes')&&$('spareNotes').value)||'').trim()};
     let d=await api('/api/submit-spare',{method:'POST',body:JSON.stringify(p)});
     msg('orderMsg','Order submitted with Excel file: '+d.orderNo,true);
     S.cart=[];
@@ -1281,6 +1364,7 @@ function readFileBase64(inputId){
 function renderRepairCreate(){
   const isKsaForm = selectedCountry().includes('KSA');
   $('repairCreate').innerHTML=`<div class="panel"><h2>Create Repair Case <button class="btn-light" onclick="refreshAfterCreateRepair()">Refresh</button></h2>
+    ${dealerSelectHtml('repair')}
     <div class="grid3"><div><label>${isKsaForm?'Dealer Name':'Company Name'}</label><input id="rcCompany" value="${esc(uf('Company Name','AERO NEX'))}"></div><div><label>${isKsaForm?'Dealer Contact':'Contact Name'}</label><input id="rcContact" value="${esc(uf('Contact Person',''))}"></div><div><label>Contact Email</label><input id="rcEmail" value="${esc(uf('Username ( Email )',S.user.username))}"></div></div>
     <label>${isKsaForm?'Dealer Address':'Receiver Address'} *</label><input id="rcAddress" value="${esc(dealerAddress())}">
     <div class="grid4"><div><label>Country *</label><select id="rcCountry"><option>UAE & Other Region</option><option>KSA - SAUDI ARABIA</option></select></div><div><label>Model No *</label><input id="rcModel"></div><div><label>Serial No *</label><input id="rcSerial"></div><div><label>${isKsaForm?'Date Of Activation':'Date of Purchase / Activation'} *</label><input id="rcDate" type="date"></div></div>
