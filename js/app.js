@@ -434,7 +434,7 @@ function dealerPoBox(){
 
 function country(){return normalizeCountryValue(S.user?.country||S.user?.fields?.Country||'UAE & Other Region')}function uf(k,d=''){return S.user?.fields?.[k]??d}
 function layout(){let n=S.user?.displayName||S.user?.username||'User';document.body.innerHTML=`<header class="topbar"><div class="brand"><div class="brand-title">AERO NEX</div><div class="brand-sub">RMA & Spare Order Portal</div></div><nav class="nav">
-<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}${warrantySoftwareStatusEnabled()?`<a data-sec="warrantySoftwareStatus" href="#" onclick="show('warrantySoftwareStatus')">🔎 Warranty & Software Status</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${isAdmin()?`<a data-sec="admin" href="#" onclick="show('admin')">⚙ Admin</a>`:''}${logsPageEnabled()?`<a data-sec="logsDiagnostics" href="#" onclick="show('logsDiagnostics')">🧾 Logs</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','dealers','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
+<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}${warrantySoftwareStatusEnabled()?`<a data-sec="warrantySoftwareStatus" href="#" onclick="show('warrantySoftwareStatus')">🔎 Warranty & Software Status</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${isAdmin()?`<a data-sec="admin" href="#" onclick="show('admin')">⚙ Admin</a>`:''}${flycartCreditEnabled()?`<a data-sec="flycartCredit" href="#" onclick="show('flycartCredit')">💳 Flycart Credit Use</a>`:''}${logsPageEnabled()?`<a data-sec="logsDiagnostics" href="#" onclick="show('logsDiagnostics')">🧾 Logs</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','flycartCredit','dealers','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
 function show(sec){
   document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));
   $(sec)?.classList.add('active');
@@ -447,7 +447,7 @@ function show(sec){
         try{renderDealerRepairCase()}catch(err){console.error('renderDealerRepairCase failed',err)}
       });
   }
-  if(sec==='warrantySoftwareStatus'){try{renderWarrantySoftwareStatus()}catch(e){console.error('renderWarrantySoftwareStatus failed',e)}}if(sec==='logsDiagnostics'){try{renderLogsDiagnostics()}catch(e){console.error('renderLogsDiagnostics failed',e)}}scrollTo(0,0)
+  if(sec==='warrantySoftwareStatus'){try{renderWarrantySoftwareStatus()}catch(e){console.error('renderWarrantySoftwareStatus failed',e)}}if(sec==='flycartCredit'){loadFlycartCredit().then(renderFlycartCredit).catch(e=>{console.error('flycartCredit failed',e);try{renderFlycartCredit()}catch(err){}})}if(sec==='logsDiagnostics'){try{renderLogsDiagnostics()}catch(e){console.error('renderLogsDiagnostics failed',e)}}scrollTo(0,0)
 }
 
 function dealerRepairCaseEnabled(){
@@ -709,6 +709,125 @@ function downloadDiagnosticsJson(){
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+
+
+function flycartCreditEnabled(){ return isAdmin(); }
+
+function flycartFields(){
+  return [
+    'Spare Order Case',
+    'Total Credit Available',
+    'Credit Used',
+    'Credit Balance',
+    'Total Device Purchased',
+    'Dealer email',
+    'Spare PI amount',
+    'DJI Order Cost',
+    'Dealer Name',
+    'DJI Case No'
+  ];
+}
+
+async function loadFlycartCredit(){
+  if(!flycartCreditEnabled()) return;
+  const d = await api('/api/flycart-credit-use?role='+encodeURIComponent(S.user.role||''));
+  S.flycartCreditRows = d.rows || [];
+}
+
+function flycartValue(v){
+  if(v===undefined || v===null || v==='') return '';
+  if(Array.isArray(v)) return v.map(flycartValue).filter(Boolean).join(', ');
+  if(typeof v==='object') return v.text || v.name || v.file_name || v.link || v.url || v.value || '';
+  return String(v);
+}
+
+function renderFlycartCredit(){
+  const sec = $('flycartCredit');
+  if(!sec) return;
+
+  if(!flycartCreditEnabled()){
+    sec.innerHTML = `<div class="panel"><h2>Flycart Credit Use</h2><div class="notice">Admin only.</div></div>`;
+    return;
+  }
+
+  const rows = Array.isArray(S.flycartCreditRows) ? S.flycartCreditRows : [];
+  const fields = flycartFields();
+
+  sec.innerHTML = `<div class="panel">
+    <h2>Flycart Credit Use</h2>
+    <div class="notice">Admin only. This page reads and updates only the Lark table Flycart Credit Use. It is not linked to Spare Order or any other module.</div>
+    <div class="row">
+      <button onclick="loadFlycartCredit().then(renderFlycartCredit)">Refresh</button>
+      <button class="btn-light" onclick="newFlycartCredit()">Add Record</button>
+      <a class="btn-light" target="_blank" rel="noopener" href="/api/flycart-credit-use-report?role=${encodeURIComponent(S.user.role||'')}">Export Excel</a>
+    </div>
+    <div id="flycartMsg" class="msg"></div>
+    <div class="table-wrap"><table>
+      <thead><tr>${fields.map(x=>`<th>${esc(x)}</th>`).join('')}<th>Action</th></tr></thead>
+      <tbody>
+        ${rows.map((r,i)=>{
+          const f=r.fields||{};
+          return `<tr>${fields.map(k=>`<td>${esc(flycartValue(f[k]))}</td>`).join('')}<td><button class="btn-light" onclick="editFlycartCredit(${i})">Edit</button></td></tr>`;
+        }).join('') || `<tr><td colspan="${fields.length+1}">No records found. Check FLYCART_CREDIT_USE_TABLE_ID binding.</td></tr>`}
+      </tbody>
+    </table></div>
+    <div id="flycartEditor"></div>
+  </div>`;
+}
+
+function flycartInputId(field){
+  return 'flycart_'+field.replace(/[^a-zA-Z0-9]/g,'_');
+}
+
+function flycartEditorHtml(row){
+  const f = row?.fields || {};
+  const fields = flycartFields();
+  return `<div class="panel" style="margin-top:18px">
+    <h3>${row?.record_id ? 'Edit Flycart Credit Record' : 'Add Flycart Credit Record'}</h3>
+    <input id="flycartRecordId" type="hidden" value="${esc(row?.record_id||'')}">
+    <div class="grid3">
+      ${fields.map(k=>`<div><label>${esc(k)}</label><input id="${flycartInputId(k)}" value="${esc(flycartValue(f[k]))}"></div>`).join('')}
+    </div>
+    <div class="row">
+      <button onclick="saveFlycartCredit()">Save to Lark</button>
+      <button class="btn-light" onclick="$('flycartEditor').innerHTML=''">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function editFlycartCredit(i){
+  const row = (S.flycartCreditRows||[])[i];
+  $('flycartEditor').innerHTML = flycartEditorHtml(row);
+  $('flycartEditor').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function newFlycartCredit(){
+  $('flycartEditor').innerHTML = flycartEditorHtml(null);
+  $('flycartEditor').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+async function saveFlycartCredit(){
+  try{
+    const fields = {};
+    for(const k of flycartFields()){
+      fields[k] = ($(flycartInputId(k))?.value || '').trim();
+    }
+    const record_id = $('flycartRecordId')?.value || '';
+    const d = await api('/api/flycart-credit-use/save',{
+      method:'POST',
+      body:JSON.stringify({
+        role:S.user.role||'',
+        record_id,
+        fields
+      })
+    });
+    msg('flycartMsg', d.skipped?.length ? 'Saved. Skipped non-editable fields: '+d.skipped.join(', ') : 'Saved');
+    await loadFlycartCredit();
+    renderFlycartCredit();
+  }catch(e){
+    msg('flycartMsg', e.message || String(e));
+  }
 }
 
 function renderDashboard(){$('dashboard').classList.add('active');$('dashboard').innerHTML=`<div class="hero"><h2>Welcome back, ${esc(S.user.displayName||S.user.username)}</h2><div class="muted">Here's what you can do today</div>${isAdmin()?`<div class="notice"><b>Country:</b> <select style="max-width:260px;display:inline-block;margin-left:10px" onchange="setAdminCountry(this.value)"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select></div>`:''}</div><div class="cards">${[['🛒','Spare Order','Order spare parts from inventory.','spare','Go to Spare Order'],['🔧','Create Repair Case','Submit a new repair request.','repairCreate','Create Case'],['📋','Repair Status','Track repair cases, reports and invoices.','repairStatus','View Status'],['🏢','Dealer Details','View and manage dealer information.','dealers','View Dealers'],['📄','Portal Notes','Important information and announcements.','portalNotes','View Notes']].map(c=>`<div class="card"><div class="ico">${c[0]}</div><h3>${c[1]}</h3><p>${c[2]}</p><a href="#" onclick="show('${c[3]}')">${c[4]} →</a></div>`).join('')}
@@ -1218,5 +1337,5 @@ function renderAdmin(){
 }
 async function loadOrders(){S.orders=await api('/api/my-orders?country='+encodeURIComponent(selectedCountry())+'&role='+encodeURIComponent(S.user.role||'')+'&email='+encodeURIComponent(userEmail())+'&companyName='+encodeURIComponent(uf('Company Name',''))+'&contactName='+encodeURIComponent(uf('Contact Person','')))}
 async function loadRepairs(){S.repairs=await api('/api/my-repairs?country='+encodeURIComponent(selectedCountry())+'&role='+encodeURIComponent(S.user.role||'')+'&email='+encodeURIComponent(userEmail()))}
-async function initApp(){if(!requireLogin())return;layout();renderDashboard();try{S.spares=await api('/api/spares')}catch{}try{await loadOrders()}catch{}try{await loadRepairs()}catch{}try{S.dealers=await api('/api/dealers')}catch{}try{S.notes=await api('/api/portal-notes')}catch{}renderSpare();renderRepairCreate();renderRepairStatus();renderDealers();renderNotes();renderChangePassword();renderAdmin()}
+async function initApp(){if(!requireLogin())return;layout();renderDashboard();try{S.spares=await api('/api/spares')}catch{}try{await loadOrders()}catch{}try{await loadRepairs()}catch{}try{S.dealers=await api('/api/dealers')}catch{}try{S.notes=await api('/api/portal-notes')}catch{}renderSpare();renderRepairCreate();renderRepairStatus();renderDealers();renderNotes();renderChangePassword();renderAdmin();renderFlycartCredit()}
 
