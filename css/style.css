@@ -138,7 +138,7 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}th,td{b
 }
 
 /* =========================
-   GLOBAL TABLE FIT - NO HORIZONTAL SCROLL
+   GLOBAL TABLE FIT - NO HORIZONTAL SCROLLBARS
 ========================= */
 
 .page{
@@ -149,9 +149,20 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}th,td{b
 }
 
 .table-wrap{
-  width:100%;
-  overflow-x:visible !important;
+  width:100% !important;
+  max-width:100% !important;
+  overflow-x:hidden !important;
   overflow-y:visible !important;
+  padding-bottom:0 !important;
+}
+
+/* Hide any browser scrollbar if one is still generated */
+.table-wrap::-webkit-scrollbar{
+  display:none !important;
+}
+.table-wrap{
+  scrollbar-width:none !important;
+  -ms-overflow-style:none !important;
 }
 
 .table-wrap table,
@@ -159,7 +170,7 @@ table{
   width:100% !important;
   min-width:0 !important;
   max-width:100% !important;
-  table-layout:fixed !important;
+  table-layout:auto !important;
 }
 
 .table-wrap th,
@@ -169,57 +180,32 @@ td{
   white-space:normal !important;
   word-break:break-word !important;
   overflow-wrap:anywhere !important;
-  font-size:12px;
-  padding:8px 6px;
+  font-size:12px !important;
+  padding:7px 5px !important;
+  max-width:1px;
 }
 
-/* Common wide table column balancing */
-.table-wrap th:nth-child(1),
-.table-wrap td:nth-child(1){
-  width:150px;
+/* Keep buttons compact inside tables */
+.table-wrap button,
+.table-wrap .btn,
+.table-wrap .btn-light{
+  padding:6px 8px !important;
+  font-size:12px !important;
+  line-height:1.2 !important;
+  white-space:normal !important;
 }
 
-.table-wrap th:nth-child(2),
-.table-wrap td:nth-child(2){
-  width:125px;
+/* Prevent selects from forcing wide columns */
+.table-wrap select{
+  min-width:0 !important;
+  max-width:100% !important;
+  padding:7px 8px !important;
+  font-size:12px !important;
 }
 
-.table-wrap th:nth-child(3),
-.table-wrap td:nth-child(3){
-  width:110px;
-}
-
-.table-wrap th:nth-child(4),
-.table-wrap td:nth-child(4){
-  width:110px;
-}
-
-.table-wrap th:nth-child(5),
-.table-wrap td:nth-child(5){
-  width:90px;
-}
-
-.table-wrap th:nth-child(6),
-.table-wrap td:nth-child(6){
-  width:145px;
-}
-
-.table-wrap th:nth-child(7),
-.table-wrap td:nth-child(7){
-  width:140px;
-}
-
-.table-wrap th:nth-child(8),
-.table-wrap td:nth-child(8){
-  width:105px;
-}
-
-.table-wrap th:nth-child(9),
-.table-wrap td:nth-child(9){
-  width:260px;
-}
-
-.table-wrap th:nth-child(10),
-.table-wrap td:nth-child(10){
-  width:190px;
+/* Make link text wrap instead of widening the table */
+.table-wrap a{
+  white-space:normal !important;
+  word-break:break-word !important;
+  overflow-wrap:anywhere !important;
 }
