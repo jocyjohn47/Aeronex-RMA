@@ -238,7 +238,7 @@ function orderFileCellR2(row){
 function renderPageNote(text){
   const t = String(text || '').trim();
   if(!t) return '';
-  return `<div class="page-note">${esc(t)}</div>`;
+  return `<div class="page-note" style="color:#d10000;font-weight:bold;">${esc(t)}</div>`;
 }
 
 
