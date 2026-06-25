@@ -188,6 +188,51 @@ function filterOwn(rows, email, role) {
   return rows.filter(r => lower(r.fields?.["Contact Email"] || r.fields?.["Username ( Email )"] || r.fields?.Email) === e);
 }
 
+function repairCompanyKey(v) {
+  return lower(v || "")
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function filterOwnRepairs(rows, email, role, companyName, contactName) {
+  if (canSeeAll(role)) return rows;
+
+  const userCompany = repairCompanyKey(companyName);
+  const e = lower(email || "");
+
+  return rows.filter(r => {
+    const f = r.fields || {};
+
+    // Primary dealer matching: Company Name / Dealer Name
+    const rowCompany = repairCompanyKey(
+      f["Company Name"] ||
+      f["Dealer Name"] ||
+      f["Customer Name"] ||
+      ""
+    );
+
+    if (userCompany && rowCompany) {
+      return rowCompany === userCompany ||
+             rowCompany.includes(userCompany) ||
+             userCompany.includes(rowCompany);
+    }
+
+    // Fallback only for older rows where company is missing.
+    if (e) {
+      return lower(
+        f["Contact Email"] ||
+        f["Username ( Email )"] ||
+        f.Email ||
+        f["Dealer email"] ||
+        ""
+      ) === e;
+    }
+
+    return false;
+  });
+}
+
+
 function spareCompanyKey(v) {
   return lower(v || "")
     .replace(/&/g, "and")
@@ -1033,11 +1078,13 @@ async function handle(req, env) {
     const country = norm(url.searchParams.get("country"));
     const email = norm(url.searchParams.get("email"));
     const role = norm(url.searchParams.get("role"));
+    const companyName = norm(url.searchParams.get("companyName"));
+    const contactName = norm(url.searchParams.get("contactName"));
     const rows = [];
     const q = lower(country);
     if (!q || q.includes("uae")) rows.push(...(await listRecords(env, env.REPAIR_UAE_TABLE_ID)).map(r => withRepairMeta(env, env.REPAIR_UAE_TABLE_ID, r)));
     if (!q || q.includes("ksa")) rows.push(...(await listRecords(env, env.REPAIR_KSA_TABLE_ID)).map(r => withRepairMeta(env, env.REPAIR_KSA_TABLE_ID, r)));
-    return json(filterOwn(rows, email, role));
+    return json(filterOwnRepairs(rows, email, role, companyName, contactName));
   }
 
 
