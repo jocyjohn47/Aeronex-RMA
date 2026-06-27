@@ -547,8 +547,9 @@ async function countRecordsForDiagnostics(env, tableId) {
 function expectedFieldsForDiagnostics(tableName) {
   const n = lower(tableName);
   if (n.includes("spare order")) return [
-    "Spare Order No","Company Name","Country","Invoice Currency","Status",
-    "Spare PI Amount","Dealer CN","Shipment Destination","Shipment Tracking No"
+    "Spare Order Case","Company Name","Contact Name","Billing Address","Invoice Currency","Status",
+    "Dealer Credit No","Dealer Credit Note","Shipment Destination","Shipment Tracking No",
+    "Shipment Cost ( AED )","Specialized","Final Notes","Remarks"
   ];
   if (n.includes("dealer repair")) return [
     "Case Register No","Company Name","Model No","Serial No","Activation Date / Invoice Date",
@@ -654,13 +655,12 @@ function spareOrderReportBytes(orderNo, fields) {
     ["Invoice Currency", fields["Invoice Currency"] || ""],
     ["Remarks", fields["Remarks"] || ""],
     ["Final Notes", fields["Final Notes"] || ""],
-    ["Dealer CN", spareReportFieldText(fieldFirst(fields, ["Dealer Credit Note","Dealer CN"]))],
+    ["Dealer Credit No", fields["Dealer Credit No"] || ""],
+    ["Dealer Credit Note", spareReportFieldText(fields["Dealer Credit Note"])],
     ["Shipment Destination", spareReportFieldText(fieldFirst(fields, ["Shipment Destination","Order Location","Spare Order Location"]))],
     ["Shipment Tracking No", spareReportFieldText(fieldFirst(fields, ["Shipment Tracking No","Tracking No","Shipment Tracking Number"]))],
     ["Specialized", spareReportFieldText(fields["Specialized"])],
-    ["DJI Cost", fields["DJI Cost"] || ""],
     ["Shipment Cost ( AED )", fields["Shipment Cost ( AED )"] || ""],
-    ["Dealer Credit", fields["Dealer Credit"] || ""],
     ["DJI Case No", spareReportFieldText(fieldFirst(fields, ["DJI Case NO","DJI case NO","DJI Case No","DJI case No"]))],
     ["Invoice Download", spareReportFieldText(fields["Invoice Download"])],
     ["Payment Receipt", spareReportFieldText(fields["Payment Receipt"])],
@@ -675,7 +675,7 @@ function spareOrderReportBytes(orderNo, fields) {
   return new TextEncoder().encode(html);
 }
 function spareOrdersReportBytes(rows) {
-  const headers = ["Spare Order No","Status","Company Name","Contact Name","Billing Address","Country","Invoice Currency","Remarks","Final Notes","Dealer CN","Shipment Destination","Shipment Tracking No","Specialized","DJI Cost","Shipment Cost ( AED )","Dealer Credit","DJI Case No","Invoice Download","Payment Receipt","Order File"];
+  const headers = ["Spare Order Case","Status","Company Name","Contact Name","Billing Address","Invoice Currency","Remarks","Final Notes","Dealer Credit No","Dealer Credit Note","Shipment Destination","Shipment Tracking No","Specialized","Shipment Cost ( AED )","DJI Case No","Invoice Download","Payment Receipt","Order File"];
   const tr = (cells, head=false) => `<tr>${cells.map(c => head ? `<th>${spareReportEsc(c)}</th>` : `<td>${spareReportEsc(c)}</td>`).join("")}</tr>`;
   const body = (rows || []).map(r => {
     const f = r.fields || {};
@@ -685,17 +685,15 @@ function spareOrdersReportBytes(rows) {
       f["Company Name"] || "",
       f["Contact Name"] || "",
       f["Billing Address"] || f["Invoice Address"] || "",
-      f["Country"] || "",
       f["Invoice Currency"] || "",
       f["Remarks"] || "",
       f["Final Notes"] || "",
-      spareReportFieldText(fieldFirst(f, ["Dealer Credit Note","Dealer CN"])),
+      f["Dealer Credit No"] || "",
+      spareReportFieldText(f["Dealer Credit Note"]),
       spareReportFieldText(fieldFirst(f, ["Shipment Destination","Order Location","Spare Order Location"])),
       spareReportFieldText(fieldFirst(f, ["Shipment Tracking No","Tracking No","Shipment Tracking Number"])),
       spareReportFieldText(f["Specialized"]),
-      f["DJI Cost"] || "",
       f["Shipment Cost ( AED )"] || "",
-      f["Dealer Credit"] || "",
       spareReportFieldText(fieldFirst(f, ["DJI Case NO","DJI case NO","DJI Case No","DJI case No"])),
       spareReportFieldText(f["Invoice Download"]),
       spareReportFieldText(f["Payment Receipt"]),
@@ -1339,7 +1337,7 @@ async function handle(req, env) {
     if (fieldTypes["Shipment Tracking No"]) fields["Shipment Tracking No"] = b.shipmentTrackingNo || "";
     if (fieldTypes["Specialized"]) fields["Specialized"] = b.specialized || "";
     if (fieldTypes["Final Notes"]) fields["Final Notes"] = b.finalNotes || "";
-    if (fieldTypes["DJI Cost"]) fields["DJI Cost"] = b.djiCost || "";
+    if (fieldTypes["Dealer Credit No"]) fields["Dealer Credit No"] = b.dealerCreditNo || "";
     if (fieldTypes["Shipment Cost ( AED )"]) fields["Shipment Cost ( AED )"] = b.shipmentCostAed || "";
     if (fieldTypes["DJI Case NO"]) fields["DJI Case NO"] = b.djiCaseNo || "";
     else if (fieldTypes["DJI case NO"]) fields["DJI case NO"] = b.djiCaseNo || "";
@@ -1352,13 +1350,13 @@ async function handle(req, env) {
     if (!canSeeAll(b.role)) return json({ error:"Forbidden" }, 403);
     if (!b.tableId || !b.record_id) return json({ error:"Missing tableId/record_id" }, 400);
     const no = await resolveOrderNoForUpload(env, b);
-    const name = b.file?.name || "dealer-cn.pdf";
+    const name = b.file?.name || "dealer-credit-note.pdf";
     const ext = name.includes(".") ? name.split(".").pop() : "pdf";
-    const fileUrl = await putR2(env, getOrderFolderKey(no, `dealer-cn.${ext}`), bytesFromDataUrl(b.file?.data), b.file?.type || "application/pdf");
+    const fileUrl = await putR2(env, getOrderFolderKey(no, `dealer-credit-note.${ext}`), bytesFromDataUrl(b.file?.data), b.file?.type || "application/pdf");
     const fieldTypes = await getFieldTypes(env, b.tableId);
     const update = {};
-    if (fieldTypes["Dealer Credit Note"]) update["Dealer Credit Note"] = fieldTypes["Dealer Credit Note"] === 15 ? larkUrl(fileUrl, "Dealer CN") : fileUrl;
-    else if (fieldTypes["Dealer CN"]) update["Dealer CN"] = fieldTypes["Dealer CN"] === 15 ? larkUrl(fileUrl, "Dealer CN") : fileUrl;
+    if (fieldTypes["Dealer Credit Note"]) update["Dealer Credit Note"] = fieldTypes["Dealer Credit Note"] === 15 ? larkUrl(fileUrl, "Dealer Credit Note") : fileUrl;
+    else if (fieldTypes["Dealer CN"]) update["Dealer CN"] = fieldTypes["Dealer CN"] === 15 ? larkUrl(fileUrl, "Dealer Credit Note") : fileUrl;
     await updateRecord(env, b.tableId, b.record_id, update);
     return json({ ok:true, url:fileUrl });
   }
