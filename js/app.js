@@ -1118,8 +1118,49 @@ function drawCart(){
 }
 
 function submitSuccessPopup(kind, caseNo){
-  const label = caseNo ? `\n\nCase / Order No: ${caseNo}` : '';
-  alert(`${kind} submitted successfully. Please send an email with the case number for follow-up.${label}`);
+  const no = String(caseNo || '').trim();
+  if(kind === 'Spare Order'){
+    alert(
+      `Spare Order Submitted Successfully
+
+` +
+      `Your spare order has been submitted successfully.` +
+      (no ? `
+
+Spare Order No: ${no}` : '') +
+      `
+
+Please send us an email with the Spare Order Number for follow-up.`
+    );
+    return;
+  }
+  if(kind === 'Repair Case'){
+    alert(
+      `Repair Case Submitted Successfully
+
+` +
+      `Your repair case has been submitted successfully.` +
+      (no ? `
+
+Case No: ${no}` : '') +
+      `
+
+Please send us an email with the Case Number for follow-up.`
+    );
+    return;
+  }
+  alert(
+    `Submitted Successfully
+
+` +
+    `Your case has been submitted successfully.` +
+    (no ? `
+
+Case No: ${no}` : '') +
+    `
+
+Please send us an email with the Case Number for follow-up.`
+  );
 }
 
 async function submitOrder(){
@@ -1136,7 +1177,7 @@ async function submitOrder(){
     let p={companyName:($('spareCompany')?.value||uf('Company Name','AERO NEX')),contactName:($('spareContact')?.value||uf('Contact Person','')),billingAddress:($('spareAddress')?.value||dealerAddress()),invoiceCurrency:currency,country:($('spareCountry')?.value||selectedCountry()),items:pricedItems,remarks:(($('spareNotes')&&$('spareNotes').value)||'').trim()};
     let d=await api('/api/submit-spare',{method:'POST',body:JSON.stringify(p)});
     msg('orderMsg','Order submitted with Excel file: '+d.orderNo,true);
-    submitSuccessPopup('Case', d.orderNo);
+    submitSuccessPopup('Spare Order', d.orderNo);
     S.cart=[];
     drawCart();
     await loadOrders();
@@ -1463,7 +1504,7 @@ async function submitRepair(){
 
     let d=await api('/api/repair-case',{method:'POST',body:JSON.stringify(p)});
     msg('repairMsg','Repair case created',true);
-    submitSuccessPopup('Case', d.caseNo || d.repairCase || d.orderNo || d.id || '');
+    submitSuccessPopup('Repair Case', d.caseNo || d.repairCase || d.orderNo || d.id || '');
     await loadRepairs();
     renderRepairStatus();
   }catch(e){
