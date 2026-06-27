@@ -439,7 +439,7 @@ function ensureAeronexLogoStyles(){
   const s=document.createElement('style');
   s.id='aeronexLogoStyles';
   s.textContent=`
-    .brand-logo-img{height:44px;max-width:220px;object-fit:contain;display:block}
+    .brand-logo-img{height:44px;max-width:220px;object-fit:contain;display:block;transform:scale(1.55);transform-origin:left center}
     .login-logo-img{width:260px;max-width:88%;height:auto;display:block;margin:0 auto 16px auto}
   `;
   document.head.appendChild(s);
