@@ -1253,7 +1253,10 @@ function shipmentDestinationOptions(cur){
   return opts.map(x=>`<option value="${esc(x)}" ${String(cur||'')===x?'selected':''}>${esc(x||'Select')}</option>`).join('');
 }
 function spareSourceOptions(cur){
-  const opts=['','DJI Order','UAE Local Stock','KSA Local Stock'];
+  const isKsa = String(selectedCountry() || '').toLowerCase().includes('ksa');
+  const opts = isKsa
+    ? ['', 'KSA Local Stock', 'From DJI']
+    : ['', 'UAE Local Stock', 'From DJI'];
   return opts.map(x=>`<option value="${esc(x)}" ${String(cur||'')===x?'selected':''}>${esc(x||'Select')}</option>`).join('');
 }
 function specializedOptions(cur){
