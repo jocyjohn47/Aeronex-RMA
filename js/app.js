@@ -238,7 +238,7 @@ function orderFileCellR2(row){
 function renderPageNote(text){
   const t = String(text || '').trim();
   if(!t) return '';
-  return `<div class="page-note" style="color:#d10000;font-weight:bold;">${esc(t)}</div>`;
+  return `<div class="page-note">${esc(t)}</div>`;
 }
 
 
@@ -433,7 +433,19 @@ function dealerPoBox(){
 }
 
 function country(){return normalizeCountryValue(S.user?.country||S.user?.fields?.Country||'UAE & Other Region')}function uf(k,d=''){return S.user?.fields?.[k]??d}
-function layout(){let n=S.user?.displayName||S.user?.username||'User';document.body.innerHTML=`<header class="topbar"><div class="brand"><div class="brand-title">AERO NEX</div><div class="brand-sub">RMA & Spare Order Portal</div></div><nav class="nav">
+
+function ensureAeronexLogoStyles(){
+  if(document.getElementById('aeronexLogoStyles')) return;
+  const s=document.createElement('style');
+  s.id='aeronexLogoStyles';
+  s.textContent=`
+    .brand-logo-img{height:44px;max-width:220px;object-fit:contain;display:block}
+    .login-logo-img{width:260px;max-width:88%;height:auto;display:block;margin:0 auto 16px auto}
+  `;
+  document.head.appendChild(s);
+}
+
+function layout(){ensureAeronexLogoStyles();let n=S.user?.displayName||S.user?.username||'User';document.body.innerHTML=`<header class="topbar"><div class="brand"><img class="brand-logo-img" src="img/aeronex_rma_logo_transparent.png" alt="AERONEX RMA Portal" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div class=&quot;brand-title&quot;>AERO NEX</div><div class=&quot;brand-sub&quot;>RMA & Spare Order Portal</div>')"></div><nav class="nav">
 <a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${adminCenterEnabled()?`<a data-sec="adminCenter" href="#" onclick="show('adminCenter')">🧰 Admin Center</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','flycartCredit','dealers','adminCenter','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
 function show(sec){
   document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));
@@ -995,12 +1007,25 @@ function dealerRowsForOnBehalf(){
   if(!canCreateOnBehalfOfDealer()) return [];
   const rows = Array.isArray(S.dealers) ? S.dealers : [];
   const q = uiLower(selectedCountry());
+  const me = currentUserEmailLower();
+
   return rows.filter(r=>{
     const f = r.fields || {};
     const c = uiLower(f.Country || '');
-    if(!q) return true;
+    const role = uiLower(f['User Role'] || f.Role || '');
+    const email = dealerContactEmail(r);
+
+    // Do not show Admin users in the on-behalf dealer dropdown.
+    if(role.includes('admin')) return false;
+
+    // Technician users should only see their own row plus dealers/end users.
+    // This prevents one technician selecting another technician unless it is self.
+    if((role.includes('technician') || role.includes('tech')) && email !== me) return false;
+
+    // Country restriction.
     if(q.includes('ksa')) return c.includes('ksa');
     if(q.includes('uae')) return !c.includes('ksa');
+
     return true;
   });
 }
@@ -1091,6 +1116,12 @@ function drawCart(){
     return `<tr><td>${esc(x.materialCode||'CUSTOM')}</td><td>${esc(x.materialName)}</td><td>${esc(x.compatibleModel)}</td><td>${esc(x.qty)}</td><td>${fmtPrice(unit)}</td><td>${fmtPrice(total)}</td><td><button class="btn-danger" onclick="S.cart.splice(${i},1);drawCart()">Remove</button></td></tr>`;
   }).join('');
 }
+
+function submitSuccessPopup(kind, caseNo){
+  const label = caseNo ? `\n\nCase / Order No: ${caseNo}` : '';
+  alert(`${kind} submitted successfully. Please send an email with the case number for follow-up.${label}`);
+}
+
 async function submitOrder(){
   if(SPARE_SUBMITTING) return;
   SPARE_SUBMITTING = true;
@@ -1105,6 +1136,7 @@ async function submitOrder(){
     let p={companyName:($('spareCompany')?.value||uf('Company Name','AERO NEX')),contactName:($('spareContact')?.value||uf('Contact Person','')),billingAddress:($('spareAddress')?.value||dealerAddress()),invoiceCurrency:currency,country:($('spareCountry')?.value||selectedCountry()),items:pricedItems,remarks:(($('spareNotes')&&$('spareNotes').value)||'').trim()};
     let d=await api('/api/submit-spare',{method:'POST',body:JSON.stringify(p)});
     msg('orderMsg','Order submitted with Excel file: '+d.orderNo,true);
+    submitSuccessPopup('Case', d.orderNo);
     S.cart=[];
     drawCart();
     await loadOrders();
@@ -1417,6 +1449,7 @@ async function submitRepair(){
 
     let d=await api('/api/repair-case',{method:'POST',body:JSON.stringify(p)});
     msg('repairMsg','Repair case created',true);
+    submitSuccessPopup('Case', d.caseNo || d.repairCase || d.orderNo || d.id || '');
     await loadRepairs();
     renderRepairStatus();
   }catch(e){
@@ -1456,6 +1489,6 @@ function renderAdmin(){
   <div class="cards"><div class="card"><h3>Mandatory Field Settings</h3><p>Coming next: configurable required fields.</p></div><div class="card"><h3>Spare List Excel Sync</h3><p>Coming next: upload/merge spare list.</p></div><div class="card"><h3>Portal Notes</h3><p>Use Lark Portal Note table with external document links.</p></div></div></div>`;
 }
 async function loadOrders(){S.orders=await api('/api/my-orders?country='+encodeURIComponent(selectedCountry())+'&role='+encodeURIComponent(S.user.role||'')+'&email='+encodeURIComponent(userEmail())+'&companyName='+encodeURIComponent(uf('Company Name',''))+'&contactName='+encodeURIComponent(uf('Contact Person','')))}
-async function loadRepairs(){S.repairs=await api('/api/my-repairs?country='+encodeURIComponent(selectedCountry())+'&role='+encodeURIComponent(S.user.role||'')+'&email='+encodeURIComponent(userEmail())+'&companyName='+encodeURIComponent(uf('Company Name',''))+'&contactName='+encodeURIComponent(uf('Contact Person','')))}
+async function loadRepairs(){S.repairs=await api('/api/my-repairs?country='+encodeURIComponent(selectedCountry())+'&role='+encodeURIComponent(S.user.role||'')+'&email='+encodeURIComponent(userEmail()))}
 async function initApp(){if(!requireLogin())return;layout();renderDashboard();try{S.spares=await api('/api/spares')}catch{}try{await loadOrders()}catch{}try{await loadRepairs()}catch{}try{S.dealers=await api('/api/dealers')}catch{}try{S.notes=await api('/api/portal-notes')}catch{}renderSpare();renderRepairCreate();renderRepairStatus();renderDealers();renderNotes();renderChangePassword();renderAdmin();renderFlycartCredit();renderAdminCenter()}
 
