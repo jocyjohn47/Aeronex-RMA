@@ -252,7 +252,13 @@ function filterOwnSpareOrders(rows, email, role, companyName, contactName) {
 
   return rows.filter(row => {
     const f = row.fields || {};
-    const rowCompany = spareCompanyKey(f["Company Name"] || "");
+    const rowCompany = spareCompanyKey(
+      f["Company Name"] ||
+      f["Dealer Name"] ||
+      f["Customer Name"] ||
+      ""
+    );
+
     if (!rowCompany) return false;
 
     return rowCompany === userCompany ||
@@ -1005,7 +1011,7 @@ async function handle(req, env) {
   }
 
   if (p === "/api/spares" || p === "/api/spare-list") {
-    return json(await listRecords(env, env.SPARE_LIST_TABLE_ID));
+    return json(await listRecords(env, env.SPARE_LIST_TABLE_ID || env.SPARE_TABLE_ID));
   }
 
 
