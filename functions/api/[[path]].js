@@ -1,6 +1,6 @@
 const H = {
   "content-type": "application/json; charset=utf-8",
-  "access-control-allow-origin": "*",
+  "access-control-allow-origin": "https://rma-spare.aeronex.ae",
   "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS",
   "access-control-allow-headers": "content-type,x-user-role,x-user-email"
 };
