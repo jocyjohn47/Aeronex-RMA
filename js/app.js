@@ -439,7 +439,7 @@ function ensureAeronexLogoStyles(){
   const s=document.createElement('style');
   s.id='aeronexLogoStyles';
   s.textContent=`
-    .brand-logo-img{height:44px;max-width:220px;object-fit:contain;display:block;transform:scale(1.55);transform-origin:left center}
+    .brand-logo-img{height:44px;max-width:220px;object-fit:contain;display:block}
     .login-logo-img{width:260px;max-width:88%;height:auto;display:block;margin:0 auto 16px auto}
   `;
   document.head.appendChild(s);
@@ -1094,7 +1094,7 @@ function applyDealerToRepairForm(){
   if($('rcCountry')) $('rcCountry').value = normalizeCountryValue(f.Country || selectedCountry());
 }
 
-function renderSpare(){$('spare').innerHTML=`<div class="panel"><h2>Spare Order</h2><div class="notice">Select material by name or material code. Review before submit. No edit after apply; cancel request only.${isAdmin()?`<br><b>Country:</b> <select style="max-width:260px;display:inline-block;margin-left:10px" onchange="setAdminCountry(this.value);renderSpare()"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select>`:''}</div>${dealerSelectHtml('spare')}<div class="grid4"><div><label>Company Name</label><input id="spareCompany" value="${esc(uf('Company Name','AERO NEX'))}" disabled></div><div><label>Contact Name</label><input id="spareContact" value="${esc(uf('Contact Person',''))}" disabled></div><div><label>Billing Address</label><input id="spareAddress" value="${esc(dealerAddress())}" disabled></div><div><label>Country</label><input id="spareCountry" value="${esc(selectedCountry())}" disabled></div></div><div style="max-width:260px"><label>Invoice Currency</label><select id="invoiceCurrency" onchange="drawCart()">${currencyOptions()}</select></div><label>Add from Spare Part List</label><div class="row"><input id="spareSearch" placeholder="Search by Material Code or Material Name..." oninput="renderSpareOptions()"><input id="spareQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addListed()">Add Item</button></div><select id="spareSelect"></select><h3>Custom Spare (if not in list)</h3><div class="row"><input id="customCode" placeholder="Material Code (if known)"><input id="customName" placeholder="Material Name"><input id="customQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addCustom()">Add Custom</button></div><label>Remarks</label><textarea id="spareNotes" placeholder="Optional remarks for this spare order" style="min-height:80px"></textarea><h3>Review Items</h3><div class="table-wrap"><table><thead><tr><th>Material Code</th><th>Material Name</th><th>Compatible Model</th><th>Qty</th><th id="cartUnitPriceHead">Unit Price</th><th id="cartTotalHead">Total</th><th>Action</th></tr></thead><tbody id="cartRows"></tbody></table></div><button onclick="submitOrder()">Submit Order</button> <button class="btn-light" onclick="S.cart=[];drawCart()">Clear All</button><div id="orderMsg" class="msg"></div><h3>My Order History <button class="btn-light" onclick="loadOrders().then(renderOrders)">Refresh</button> ${isAdmin()?`<a class="btn-light" target="_blank" rel="noopener" href="/api/download-spare-orders-report?country=${encodeURIComponent(selectedCountry())}&role=${encodeURIComponent(S.user.role||'')}">Download All Reports</a>`:''}</h3><div class="table-wrap"><table><thead><tr><th>Spare Order No</th><th>Status</th><th>Invoice Download</th><th>Payment Receipt</th><th>Dealer CN</th><th>Shipment Destination</th><th>Shipment Tracking No</th><th>Specialized</th><th>Final Notes</th><th>Remarks</th></tr></thead><tbody id="orderRows"></tbody></table>${renderPageNote(window.AERONEX_SPARE_ORDER_NOTE)}</div></div>`;renderSpareOptions();drawCart();renderOrders()}
+function renderSpare(){$('spare').innerHTML=`<div class="panel"><h2>Spare Order</h2><div class="notice">Select material by name or material code. Review before submit. No edit after apply; cancel request only.${isAdmin()?`<br><b>Country:</b> <select style="max-width:260px;display:inline-block;margin-left:10px" onchange="setAdminCountry(this.value);renderSpare()"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select>`:''}</div>${dealerSelectHtml('spare')}<div class="grid4"><div><label>Company Name</label><input id="spareCompany" value="${esc(uf('Company Name','AERO NEX'))}" disabled></div><div><label>Contact Name</label><input id="spareContact" value="${esc(uf('Contact Person',''))}" disabled></div><div><label>Billing Address</label><input id="spareAddress" value="${esc(dealerAddress())}" disabled></div><div><label>Country</label><input id="spareCountry" value="${esc(selectedCountry())}" disabled></div></div><div style="max-width:260px"><label>Invoice Currency</label><select id="invoiceCurrency" onchange="drawCart()">${currencyOptions()}</select></div><label>Add from Spare Part List</label><div class="row"><input id="spareSearch" placeholder="Search by Material Code or Material Name..." oninput="renderSpareOptions()"><input id="spareQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addListed()">Add Item</button></div><select id="spareSelect"></select><h3>Custom Spare (if not in list)</h3><div class="row"><input id="customCode" placeholder="Material Code (if known)"><input id="customName" placeholder="Material Name"><input id="customQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addCustom()">Add Custom</button></div><label>Remarks</label><textarea id="spareNotes" placeholder="Optional remarks for this spare order" style="min-height:80px"></textarea><h3>Review Items</h3><div class="table-wrap"><table><thead><tr><th>Material Code</th><th>Material Name</th><th>Compatible Model</th><th>Qty</th><th id="cartUnitPriceHead">Unit Price</th><th id="cartTotalHead">Total</th><th>Action</th></tr></thead><tbody id="cartRows"></tbody></table></div><button onclick="submitOrder()">Submit Order</button> <button class="btn-light" onclick="S.cart=[];drawCart()">Clear All</button><div id="orderMsg" class="msg"></div><h3>My Order History <button class="btn-light" onclick="loadOrders().then(renderOrders)">Refresh</button> ${isAdmin()?`<a class="btn-light" target="_blank" rel="noopener" href="/api/download-spare-orders-report?country=${encodeURIComponent(selectedCountry())}&role=${encodeURIComponent(S.user.role||'')}">Download All Reports</a>`:''}</h3><div class="table-wrap"><table><thead><tr><th>Spare Order No</th><th>Status</th><th>Invoice Download</th><th>Payment Receipt</th><th>Dealer Credit No</th><th>Dealer Credit Note</th><th>Shipment Destination</th><th>Shipment Tracking No</th><th>Specialized</th><th>Final Notes</th><th>Remarks</th></tr></thead><tbody id="orderRows"></tbody></table>${renderPageNote(window.AERONEX_SPARE_ORDER_NOTE)}</div></div>`;renderSpareOptions();drawCart();renderOrders()}
 function renderSpareOptions(){let q=($('spareSearch')?.value||'').toLowerCase(),s=$('spareSelect');if(!s)return;s.innerHTML=S.spares.filter(x=>{let f=x.fields||{};return `${f['Material Code']||''} ${f['Material Name']||''} ${f['Compatible Model']||''}`.toLowerCase().includes(q)}).map(x=>{let f=x.fields||{},o={materialCode:f['Material Code']||'',materialName:f['Material Name']||'',compatibleModel:f['Compatible Model']||'',priceUSD:f['Price (USD ) Without Tax & Duty']||'',priceAED:f['AED (Without Tax & Duty)']||'',priceSAR:f['SAR (Without Tax & Duty)']||'',price:f['Price (USD ) Without Tax & Duty']||'',stock:f['Local Stock']||''};return `<option value="${encodeURIComponent(JSON.stringify(o))}">${esc(o.materialCode)} - ${esc(o.materialName)} ${o.compatibleModel?'('+esc(o.compatibleModel)+')':''}</option>`}).join('')}
 function addListed(){let v=$('spareSelect').value;if(!v)return msg('orderMsg','Select material first');let o=JSON.parse(decodeURIComponent(v));o.qty=$('spareQty').value||'1';S.cart.push(o);drawCart()}
 function addCustom(){let n=$('customName').value.trim();if(!n)return msg('orderMsg','Enter custom material name');S.cart.push({materialCode:$('customCode').value.trim(),materialName:n,compatibleModel:'Custom',priceUSD:0,priceAED:0,priceSAR:0,price:0,stock:'-',qty:$('customQty').value||'1'});$('customCode').value='';$('customName').value='';drawCart()}
@@ -1238,7 +1238,8 @@ function spareOrderField(f, names){
   }
   return '';
 }
-function spareOrderDealerCnCell(f){ return spareOrderDisplayCell(spareOrderField(f, ['Dealer Credit Note','Dealer CN'])); }
+function spareOrderDealerCreditNoteCell(f){ return spareOrderDisplayCell(spareOrderField(f, ['Dealer Credit Note'])); }
+function spareOrderDealerCreditNoValue(f){ return spareOrderField(f, ['Dealer Credit No']); }
 function spareOrderDestinationValue(f){ return spareOrderField(f, ['Shipment Destination','Order Location','Spare Order Location']); }
 function spareOrderTrackingValue(f){ return spareOrderField(f, ['Shipment Tracking No','Tracking No','Shipment Tracking Number']); }
 function spareOrderSpecializedValue(f){ return spareOrderField(f, ['Specialized']); }
@@ -1273,10 +1274,10 @@ function openSpareOrderDetails(i){
         <div><label>Specialized</label><select id="soSpecialized">${specializedOptions(spareOrderSpecializedValue(f))}</select></div>
       </div>
       <div class="grid3">
-        <div><label>DJI Cost</label><input id="soDjiCost" value="${esc(f['DJI Cost']||'')}"></div>
+        <div><label>Dealer Credit No</label><input id="soDealerCreditNo" value="${esc(spareOrderDealerCreditNoValue(f)||'')}"></div>
         <div><label>Shipment Cost ( AED )</label><input id="soShipmentCostAed" value="${esc(f['Shipment Cost ( AED )']||'')}"></div>
         <div><label>DJI Case No</label><input id="soDjiCaseNo" value="${esc(spareOrderDjiCaseValue(f)||'')}"></div>
-        <div><label>Dealer CN Upload</label><input id="soDealerCnFile" type="file" onchange="uploadSpareOrderDealerCn(currentSpareOrderDetailIndex)"></div>
+        <div><label>Dealer Credit Note Upload</label><input id="soDealerCnFile" type="file" onchange="uploadSpareOrderDealerCn(currentSpareOrderDetailIndex)"></div>
       </div>
       <label>Final Notes</label><textarea id="soFinalNotes" style="min-height:90px">${esc(spareOrderFinalNotesValue(f)||'')}</textarea>
       <div class="row">
@@ -1297,7 +1298,8 @@ function openSpareOrderDetails(i){
       <div><label>Billing Address</label><input disabled value="${esc(f['Billing Address'] || f['Invoice Address'] || '-')}"></div>
     </div>
     <div class="grid3">
-      <div><label>Dealer CN</label><div>${spareOrderDealerCnCell(f)}</div></div>
+      <div><label>Dealer Credit No</label><input disabled value="${esc(spareOrderDealerCreditNoValue(f) || '-')}"></div>
+      <div><label>Dealer Credit Note</label><div>${spareOrderDealerCreditNoteCell(f)}</div></div>
       <div><label>Shipment Destination</label><input disabled value="${esc(spareOrderDestinationValue(f) || '-')}"></div>
       <div><label>Shipment Tracking No</label><input disabled value="${esc(spareOrderTrackingValue(f) || '-')}"></div>
     </div>
@@ -1326,7 +1328,7 @@ async function saveSpareOrderInternal(i){
       shipmentTrackingNo:($('soShipTracking')?.value||'').trim(),
       specialized:($('soSpecialized')?.value||'').trim(),
       finalNotes:($('soFinalNotes')?.value||'').trim(),
-      djiCost:($('soDjiCost')?.value||'').trim(),
+      dealerCreditNo:($('soDealerCreditNo')?.value||'').trim(),
       shipmentCostAed:($('soShipmentCostAed')?.value||'').trim(),
       djiCaseNo:($('soDjiCaseNo')?.value||'').trim()
     };
@@ -1341,7 +1343,7 @@ async function uploadSpareOrderDealerCn(i){
   const r = (Array.isArray(S.orders) ? S.orders : [])[i];
   const inp=$('soDealerCnFile');
   const file=inp&&inp.files&&inp.files[0];
-  if(!r || !file) return msg('soDetailMsg','Select Dealer CN file');
+  if(!r || !file) return msg('soDetailMsg','Select Dealer Credit Note file');
   try{
     const data=await new Promise(resolve=>{
       const reader=new FileReader();
@@ -1356,7 +1358,7 @@ async function uploadSpareOrderDealerCn(i){
       role:S.user.role||'',
       file:{name:file.name,type:file.type||'application/octet-stream',data}
     })});
-    msg('soDetailMsg','Dealer CN uploaded');
+    msg('soDetailMsg','Dealer Credit Note uploaded');
     await loadOrders();
     openSpareOrderDetails(i);
   }catch(e){msg('soDetailMsg',e.message)}
@@ -1373,7 +1375,8 @@ function renderOrders(){
       <td>${statusCell(r,'spare')}</td>
       <td>${invoiceDownloadCell(r)}</td>
       <td>${paymentReceiptCell(r)}</td>
-      <td>${spareOrderDealerCnCell(f)}</td>
+      <td>${esc(spareOrderDealerCreditNoValue(f)||'-')}</td>
+      <td>${spareOrderDealerCreditNoteCell(f)}</td>
       <td>${esc(spareOrderDestinationValue(f)||'-')}</td>
       <td>${esc(spareOrderTrackingValue(f)||'-')}</td>
       <td>${esc(spareOrderSpecializedValue(f)||'-')}</td>
