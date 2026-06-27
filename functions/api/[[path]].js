@@ -638,9 +638,10 @@ function numberValue(v) {
 }
 
 function stockSourceFieldName(source) {
-  const s = lower(source);
-  if (s.includes("uae")) return "UAE Local Stock";
-  if (s.includes("ksa") || s.includes("saudi")) return "KSA Local Stock";
+  const s = lower(source).trim();
+  if (s === "uae local stock") return "UAE Local Stock";
+  if (s === "ksa local stock") return "KSA Local Stock";
+  if (s === "from dji") return "";
   return "";
 }
 
