@@ -547,9 +547,9 @@ async function countRecordsForDiagnostics(env, tableId) {
 function expectedFieldsForDiagnostics(tableName) {
   const n = lower(tableName);
   if (n.includes("spare order")) return [
-    "Spare Order Case","Company Name","Contact Name","Billing Address","Invoice Currency","Status",
-    "Dealer Credit No","Dealer Credit Note","Shipment Destination","Shipment Tracking No",
-    "Shipment Cost ( AED )","Specialized","Final Notes","Remarks"
+    "Spare Order Case","Company Name","Contact Name","Invoice Currency","Status",
+    "Order File","Payment Receipt","Final Notes","Remarks","Shipment Tracking No",
+    "Specialized","Spare Source"
   ];
   if (n.includes("dealer repair")) return [
     "Case Register No","Company Name","Model No","Serial No","Activation Date / Invoice Date",
@@ -631,6 +631,92 @@ async function listRecentErrorLogs(env, limit=50) {
 }
 
 
+
+function numberValue(v) {
+  const n = Number(String(fieldText(v) || "0").replace(/[^0-9.\-]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function stockSourceFieldName(source) {
+  const s = lower(source);
+  if (s.includes("uae")) return "UAE Local Stock";
+  if (s.includes("ksa") || s.includes("saudi")) return "KSA Local Stock";
+  return "";
+}
+
+function stockUpdatedIsYes(v) {
+  const s = lower(fieldText(v));
+  return s === "yes" || s === "true" || s === "updated" || s === "done";
+}
+
+function parseSpareItemsFromOrderFields(fields) {
+  const codes = String(fields["Material Code"] || "").split(",").map(x => x.trim()).filter(Boolean);
+  const names = String(fields["Material Name"] || "").split(",").map(x => x.trim()).filter(Boolean);
+  const qtys = String(fields["Qty"] || "").split(",").map(x => x.trim()).filter(Boolean);
+  return codes.map((code, i) => ({
+    materialCode: code,
+    materialName: names[i] || "",
+    qty: numberValue(qtys[i] || 1) || 1
+  })).filter(x => x.materialCode);
+}
+
+function materialCodeKey(v) {
+  return lower(v).replace(/\s+/g, "");
+}
+
+async function deductSpareLocalStock(env, orderTableId, orderRecordId, orderFields) {
+  const source = fieldText(orderFields["Spare Source"]);
+  const stockField = stockSourceFieldName(source);
+  if (!stockField) return { skipped: true, reason: "Spare Source is not local stock" };
+
+  if (stockUpdatedIsYes(orderFields["Stock Updated"])) {
+    return { skipped: true, reason: "Stock already updated" };
+  }
+
+  const spareTableId = env.SPARE_LIST_TABLE_ID || env.SPARE_TABLE_ID;
+  if (!spareTableId) {
+    return { skipped: true, reason: "Spare Part List table id not configured" };
+  }
+
+  const items = parseSpareItemsFromOrderFields(orderFields);
+  if (!items.length) return { skipped: true, reason: "No material code/qty found in order" };
+
+  const spareRows = await listRecords(env, spareTableId);
+  const byCode = new Map();
+  for (const row of spareRows) {
+    const f = row.fields || {};
+    const code = materialCodeKey(f["Material Code"] || f["Material code"] || f["material code"] || "");
+    if (code) byCode.set(code, row);
+  }
+
+  const results = [];
+  for (const item of items) {
+    const row = byCode.get(materialCodeKey(item.materialCode));
+    if (!row) {
+      results.push({ materialCode: item.materialCode, qty: item.qty, updated: false, error: "Material Code not found" });
+      continue;
+    }
+
+    const f = row.fields || {};
+    const current = numberValue(f[stockField]);
+    const next = current - item.qty; // allow minus stock
+    await updateRecord(env, spareTableId, row.record_id, { [stockField]: next });
+    results.push({ materialCode: item.materialCode, qty: item.qty, stockField, before: current, after: next, updated: true });
+  }
+
+  const orderFieldTypes = await getFieldTypes(env, orderTableId);
+  const update = {};
+  if (orderFieldTypes["Stock Updated"]) update["Stock Updated"] = "Yes";
+  if (orderFieldTypes["Final Notes"]) {
+    const oldNotes = fieldText(orderFields["Final Notes"]);
+    const added = `Stock updated from ${source} on ${new Date().toISOString().slice(0,10)}`;
+    update["Final Notes"] = oldNotes ? `${oldNotes}\n${added}` : added;
+  }
+  if (Object.keys(update).length) await updateRecord(env, orderTableId, orderRecordId, update);
+
+  return { ok: true, source, stockField, items: results };
+}
+
 function spareReportEsc(v) {
   return String(v ?? "").replace(/[&<>"]/g, s => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[s]));
 }
@@ -655,12 +741,15 @@ function spareOrderReportBytes(orderNo, fields) {
     ["Invoice Currency", fields["Invoice Currency"] || ""],
     ["Remarks", fields["Remarks"] || ""],
     ["Final Notes", fields["Final Notes"] || ""],
-    ["Dealer Credit No", fields["Dealer Credit No"] || ""],
-    ["Dealer Credit Note", spareReportFieldText(fields["Dealer Credit Note"])],
+    ["Dealer CN", spareReportFieldText(fieldFirst(fields, ["Dealer Credit Note","Dealer CN"]))],
     ["Shipment Destination", spareReportFieldText(fieldFirst(fields, ["Shipment Destination","Order Location","Spare Order Location"]))],
     ["Shipment Tracking No", spareReportFieldText(fieldFirst(fields, ["Shipment Tracking No","Tracking No","Shipment Tracking Number"]))],
     ["Specialized", spareReportFieldText(fields["Specialized"])],
+    ["Spare Source", spareReportFieldText(fields["Spare Source"])],
+    ["Stock Updated", spareReportFieldText(fields["Stock Updated"])],
+    ["DJI Cost", fields["DJI Cost"] || ""],
     ["Shipment Cost ( AED )", fields["Shipment Cost ( AED )"] || ""],
+    ["Dealer Credit", fields["Dealer Credit"] || ""],
     ["DJI Case No", spareReportFieldText(fieldFirst(fields, ["DJI Case NO","DJI case NO","DJI Case No","DJI case No"]))],
     ["Invoice Download", spareReportFieldText(fields["Invoice Download"])],
     ["Payment Receipt", spareReportFieldText(fields["Payment Receipt"])],
@@ -675,7 +764,7 @@ function spareOrderReportBytes(orderNo, fields) {
   return new TextEncoder().encode(html);
 }
 function spareOrdersReportBytes(rows) {
-  const headers = ["Spare Order Case","Status","Company Name","Contact Name","Billing Address","Invoice Currency","Remarks","Final Notes","Dealer Credit No","Dealer Credit Note","Shipment Destination","Shipment Tracking No","Specialized","Shipment Cost ( AED )","DJI Case No","Invoice Download","Payment Receipt","Order File"];
+  const headers = ["Spare Order No","Status","Company Name","Contact Name","Billing Address","Country","Invoice Currency","Remarks","Final Notes","Dealer CN","Shipment Destination","Shipment Tracking No","Specialized","Spare Source","Stock Updated","DJI Cost","Shipment Cost ( AED )","Dealer Credit","DJI Case No","Invoice Download","Payment Receipt","Order File"];
   const tr = (cells, head=false) => `<tr>${cells.map(c => head ? `<th>${spareReportEsc(c)}</th>` : `<td>${spareReportEsc(c)}</td>`).join("")}</tr>`;
   const body = (rows || []).map(r => {
     const f = r.fields || {};
@@ -685,15 +774,19 @@ function spareOrdersReportBytes(rows) {
       f["Company Name"] || "",
       f["Contact Name"] || "",
       f["Billing Address"] || f["Invoice Address"] || "",
+      f["Country"] || "",
       f["Invoice Currency"] || "",
       f["Remarks"] || "",
       f["Final Notes"] || "",
-      f["Dealer Credit No"] || "",
-      spareReportFieldText(f["Dealer Credit Note"]),
+      spareReportFieldText(fieldFirst(f, ["Dealer Credit Note","Dealer CN"])),
       spareReportFieldText(fieldFirst(f, ["Shipment Destination","Order Location","Spare Order Location"])),
       spareReportFieldText(fieldFirst(f, ["Shipment Tracking No","Tracking No","Shipment Tracking Number"])),
       spareReportFieldText(f["Specialized"]),
+      spareReportFieldText(f["Spare Source"]),
+      spareReportFieldText(f["Stock Updated"]),
+      f["DJI Cost"] || "",
       f["Shipment Cost ( AED )"] || "",
+      f["Dealer Credit"] || "",
       spareReportFieldText(fieldFirst(f, ["DJI Case NO","DJI case NO","DJI Case No","DJI case No"])),
       spareReportFieldText(f["Invoice Download"]),
       spareReportFieldText(f["Payment Receipt"]),
@@ -1170,7 +1263,9 @@ async function handle(req, env) {
       "Material Code": items.map(i => i.materialCode || i["Material Code"] || "").filter(Boolean).join(", "),
       "Qty": items.map(i => i.qty || i.Qty || 1).join(", "),
       "Notes": b.notes || "",
-      "Remarks": b.remarks || ""
+      "Remarks": b.remarks || "",
+      "Stock Updated": "No",
+      "Spare Source": b.spareSource || ""
     };
 
     const fieldTypes = await getFieldTypes(env, tableId);
@@ -1336,8 +1431,9 @@ async function handle(req, env) {
     else if (fieldTypes["Spare Order Location"]) fields["Spare Order Location"] = b.shipmentDestination || "";
     if (fieldTypes["Shipment Tracking No"]) fields["Shipment Tracking No"] = b.shipmentTrackingNo || "";
     if (fieldTypes["Specialized"]) fields["Specialized"] = b.specialized || "";
+    if (fieldTypes["Spare Source"]) fields["Spare Source"] = b.spareSource || "";
     if (fieldTypes["Final Notes"]) fields["Final Notes"] = b.finalNotes || "";
-    if (fieldTypes["Dealer Credit No"]) fields["Dealer Credit No"] = b.dealerCreditNo || "";
+    if (fieldTypes["DJI Cost"]) fields["DJI Cost"] = b.djiCost || "";
     if (fieldTypes["Shipment Cost ( AED )"]) fields["Shipment Cost ( AED )"] = b.shipmentCostAed || "";
     if (fieldTypes["DJI Case NO"]) fields["DJI Case NO"] = b.djiCaseNo || "";
     else if (fieldTypes["DJI case NO"]) fields["DJI case NO"] = b.djiCaseNo || "";
@@ -1350,13 +1446,13 @@ async function handle(req, env) {
     if (!canSeeAll(b.role)) return json({ error:"Forbidden" }, 403);
     if (!b.tableId || !b.record_id) return json({ error:"Missing tableId/record_id" }, 400);
     const no = await resolveOrderNoForUpload(env, b);
-    const name = b.file?.name || "dealer-credit-note.pdf";
+    const name = b.file?.name || "dealer-cn.pdf";
     const ext = name.includes(".") ? name.split(".").pop() : "pdf";
-    const fileUrl = await putR2(env, getOrderFolderKey(no, `dealer-credit-note.${ext}`), bytesFromDataUrl(b.file?.data), b.file?.type || "application/pdf");
+    const fileUrl = await putR2(env, getOrderFolderKey(no, `dealer-cn.${ext}`), bytesFromDataUrl(b.file?.data), b.file?.type || "application/pdf");
     const fieldTypes = await getFieldTypes(env, b.tableId);
     const update = {};
-    if (fieldTypes["Dealer Credit Note"]) update["Dealer Credit Note"] = fieldTypes["Dealer Credit Note"] === 15 ? larkUrl(fileUrl, "Dealer Credit Note") : fileUrl;
-    else if (fieldTypes["Dealer CN"]) update["Dealer CN"] = fieldTypes["Dealer CN"] === 15 ? larkUrl(fileUrl, "Dealer Credit Note") : fileUrl;
+    if (fieldTypes["Dealer Credit Note"]) update["Dealer Credit Note"] = fieldTypes["Dealer Credit Note"] === 15 ? larkUrl(fileUrl, "Dealer CN") : fileUrl;
+    else if (fieldTypes["Dealer CN"]) update["Dealer CN"] = fieldTypes["Dealer CN"] === 15 ? larkUrl(fileUrl, "Dealer CN") : fileUrl;
     await updateRecord(env, b.tableId, b.record_id, update);
     return json({ ok:true, url:fileUrl });
   }
@@ -1386,8 +1482,16 @@ async function handle(req, env) {
   if (p === "/api/update-status" && req.method === "POST") {
     const b = await readBody(req);
     if (!b.tableId || !b.record_id) return json({ error: "Missing tableId/record_id" }, 400);
+
     await updateRecord(env, b.tableId, b.record_id, { Status: b.status });
-    return json({ ok: true });
+
+    let stockResult = null;
+    if (lower(b.type) === "spare" && lower(b.status) === "closed") {
+      const rec = await getRecord(env, b.tableId, b.record_id);
+      stockResult = await deductSpareLocalStock(env, b.tableId, b.record_id, rec.fields || {});
+    }
+
+    return json({ ok: true, stockResult });
   }
 
   if (p === "/api/delete-order" && req.method === "POST") {
