@@ -155,6 +155,18 @@ function internalRepairTable(env, country) {
   return lower(country).includes("ksa") ? env.INTERNAL_REPAIR_KSA_TABLE_ID : env.INTERNAL_REPAIR_UAE_TABLE_ID;
 }
 
+function normalizePortalCountry(v) {
+  const s = lower(v || "");
+  if (s.includes("ksa") || s.includes("saudi")) return "KSA - SAUDI ARABIA";
+  return "UAE & Other Region";
+}
+function scopedModuleCountry(role, requestedCountry, userCountry) {
+  const r = lower(role);
+  if (r.includes("admin")) return norm(requestedCountry || "UAE & Other Region");
+  return normalizePortalCountry(userCountry || requestedCountry || "UAE & Other Region");
+}
+
+
 function internalRepairCountryKey(country) {
   return lower(country).includes("ksa") ? "KSA" : "UAE";
 }
@@ -1254,7 +1266,9 @@ async function handle(req, env) {
     const role = norm(url.searchParams.get("role"));
     if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
     const module = lower(url.searchParams.get("module"));
-    const country = norm(url.searchParams.get("country") || "UAE & Other Region");
+    const requestedCountry = norm(url.searchParams.get("country") || "UAE & Other Region");
+    const userCountry = norm(url.searchParams.get("userCountry") || "");
+    const country = scopedModuleCountry(role, requestedCountry, userCountry);
 
     let tableId = "";
     let tableName = "";
@@ -1264,8 +1278,9 @@ async function handle(req, env) {
       tableName = lower(country).includes("ksa") ? "Internal Repair Register - KSA" : "Internal Repair Register - UAE & Other Region";
       rows = await listInternalRepairRows(env, country);
     } else if (module === "spareorderdetails" || module === "spare-order-details") {
+      if (!flycartAdminOnly(role)) return json({ error:"Forbidden" }, 403);
       tableId = env.SPARE_ORDER_DETAILS_TABLE_ID;
-      tableName = "Spare Order Details";
+      tableName = "Internal Spare Order details";
       rows = await listSpareOrderDetailsRows(env);
     } else {
       return json({ error:"Unknown module" }, 400);
@@ -1285,7 +1300,7 @@ async function handle(req, env) {
     const b = await readBody(req);
     const role = norm(b.role);
     if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
-    const country = norm(b.country || "UAE & Other Region");
+    const country = scopedModuleCountry(role, b.country || "UAE & Other Region", b.userCountry || "");
     const tableId = internalRepairTable(env, country);
     if (!tableId) return json({ error:"Internal Repair table id not configured" }, 400);
     const fieldTypes = await getFieldTypes(env, tableId);
