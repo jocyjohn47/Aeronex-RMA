@@ -529,6 +529,9 @@ function logTableConfigs(env) {
     { key:"ORDER_KSA_TABLE_ID", name:"Spare Order KSA", tableId:env.ORDER_KSA_TABLE_ID || env.SPARE_ORDER_KSA_TABLE_ID || "" },
     { key:"REPAIR_UAE_TABLE_ID", name:"Repair Case UAE", tableId:env.REPAIR_UAE_TABLE_ID || env.REPAIR_CASE_UAE_TABLE_ID || "" },
     { key:"REPAIR_KSA_TABLE_ID", name:"Repair Case KSA", tableId:env.REPAIR_KSA_TABLE_ID || env.REPAIR_CASE_KSA_TABLE_ID || "" },
+    { key:"INTERNAL_CASE_UAE_TABLE_ID", name:"Internal Case Register UAE", tableId:env.INTERNAL_CASE_UAE_TABLE_ID || "" },
+    { key:"INTERNAL_CASE_KSA_TABLE_ID", name:"Internal Case Register KSA", tableId:env.INTERNAL_CASE_KSA_TABLE_ID || "" },
+    { key:"SPARE_ORDER_DETAILS_TABLE_ID", name:"Spare Order Details", tableId:env.SPARE_ORDER_DETAILS_TABLE_ID || "" },
     { key:"DEALER_REPAIR_CASE_TABLE_ID", name:"Dealer Repair Case", tableId:env.DEALER_REPAIR_CASE_TABLE_ID || "" },
     { key:"WARRANTY_STATUS_TABLE_ID", name:"Warranty Status", tableId:env.WARRANTY_STATUS_TABLE_ID || "" },
     { key:"SOFTWARE_STATUS_TABLE_ID", name:"Software Status", tableId:env.SOFTWARE_STATUS_TABLE_ID || "" },
@@ -557,6 +560,8 @@ function expectedFieldsForDiagnostics(tableName) {
     "Order File","Payment Receipt","Final Notes","Remarks","Shipment Tracking No",
     "Specialized","Spare Source"
   ];
+  if (n.includes("internal case register")) return [];
+  if (n.includes("spare order details")) return [];
   if (n.includes("dealer repair")) return [
     "Case Register No","Company Name","Model No","Serial No","Activation Date / Invoice Date",
     "Technician Name","Material Replaced","Device Issue","Technicain Note","Repair Type",
