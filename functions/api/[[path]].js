@@ -524,7 +524,7 @@ function logAccessAllowed(role) {
 function logTableConfigs(env) {
   return [
     { key:"USER_TABLE_ID", name:"User & Company Details", tableId:env.USER_TABLE_ID || "" },
-    { key:"SPARE_TABLE_ID", name:"Spare Part List", tableId:env.SPARE_TABLE_ID || "" },
+    { key:"SPARE_LIST_TABLE_ID", name:"Spare Part List", tableId:env.SPARE_LIST_TABLE_ID || "" },
     { key:"ORDER_UAE_TABLE_ID", name:"Spare Order UAE", tableId:env.ORDER_UAE_TABLE_ID || env.SPARE_ORDER_UAE_TABLE_ID || "" },
     { key:"ORDER_KSA_TABLE_ID", name:"Spare Order KSA", tableId:env.ORDER_KSA_TABLE_ID || env.SPARE_ORDER_KSA_TABLE_ID || "" },
     { key:"REPAIR_UAE_TABLE_ID", name:"Repair Case UAE", tableId:env.REPAIR_UAE_TABLE_ID || env.REPAIR_CASE_UAE_TABLE_ID || "" },
@@ -680,9 +680,9 @@ async function deductSpareLocalStock(env, orderTableId, orderRecordId, orderFiel
     return { skipped: true, reason: "Stock already updated" };
   }
 
-  const spareTableId = env.SPARE_TABLE_ID;
+  const spareTableId = env.SPARE_LIST_TABLE_ID;
   if (!spareTableId) {
-    return { skipped: true, reason: "SPARE_TABLE_ID not configured" };
+    return { skipped: true, reason: "Spare Part List table id not configured" };
   }
 
   const items = parseSpareItemsFromOrderFields(orderFields);
@@ -873,7 +873,7 @@ async function handle(req, env) {
       LARK_APP_SECRET: !!env.LARK_APP_SECRET,
       LARK_BASE_TOKEN: !!env.LARK_BASE_TOKEN,
       USER_TABLE_ID: !!env.USER_TABLE_ID,
-      SPARE_TABLE_ID: !!env.SPARE_TABLE_ID,
+      SPARE_LIST_TABLE_ID: !!env.SPARE_LIST_TABLE_ID,
       SPARE_ORDER_UAE_TABLE_ID: !!env.SPARE_ORDER_UAE_TABLE_ID,
       SPARE_ORDER_KSA_TABLE_ID: !!env.SPARE_ORDER_KSA_TABLE_ID,
       REPAIR_UAE_TABLE_ID: !!env.REPAIR_UAE_TABLE_ID,
@@ -1011,8 +1011,8 @@ async function handle(req, env) {
   }
 
   if (p === "/api/spares" || p === "/api/spare-list") {
-    if (!env.SPARE_TABLE_ID) return json({ error:"SPARE_TABLE_ID not configured" }, 400);
-    return json(await listRecords(env, env.SPARE_TABLE_ID));
+    if (!env.SPARE_LIST_TABLE_ID) return json({ error:"SPARE_LIST_TABLE_ID not configured" }, 400);
+    return json(await listRecords(env, env.SPARE_LIST_TABLE_ID));
   }
 
 
