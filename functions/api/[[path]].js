@@ -524,11 +524,14 @@ function logAccessAllowed(role) {
 function logTableConfigs(env) {
   return [
     { key:"USER_TABLE_ID", name:"User & Company Details", tableId:env.USER_TABLE_ID || "" },
-    { key:"SPARE_LIST_TABLE_ID", name:"Spare Part List", tableId:env.SPARE_LIST_TABLE_ID || "" },
+    { key:"SPARE_TABLE_ID", name:"Spare Part List", tableId:env.SPARE_TABLE_ID || env.SPARE_PART_TABLE_ID || "" },
     { key:"ORDER_UAE_TABLE_ID", name:"Spare Order UAE", tableId:env.ORDER_UAE_TABLE_ID || env.SPARE_ORDER_UAE_TABLE_ID || "" },
     { key:"ORDER_KSA_TABLE_ID", name:"Spare Order KSA", tableId:env.ORDER_KSA_TABLE_ID || env.SPARE_ORDER_KSA_TABLE_ID || "" },
     { key:"REPAIR_UAE_TABLE_ID", name:"Repair Case UAE", tableId:env.REPAIR_UAE_TABLE_ID || env.REPAIR_CASE_UAE_TABLE_ID || "" },
     { key:"REPAIR_KSA_TABLE_ID", name:"Repair Case KSA", tableId:env.REPAIR_KSA_TABLE_ID || env.REPAIR_CASE_KSA_TABLE_ID || "" },
+    { key:"INTERNAL_REPAIR_UAE_TABLE_ID", name:"Internal Repair Register - UAE & Other Region", tableId:env.INTERNAL_REPAIR_UAE_TABLE_ID || "" },
+    { key:"INTERNAL_REPAIR_KSA_TABLE_ID", name:"Internal Repair Register - KSA", tableId:env.INTERNAL_REPAIR_KSA_TABLE_ID || "" },
+    { key:"SPARE_ORDER_DETAILS_TABLE_ID", name:"Spare Order Details", tableId:env.SPARE_ORDER_DETAILS_TABLE_ID || "" },
     { key:"DEALER_REPAIR_CASE_TABLE_ID", name:"Dealer Repair Case", tableId:env.DEALER_REPAIR_CASE_TABLE_ID || "" },
     { key:"WARRANTY_STATUS_TABLE_ID", name:"Warranty Status", tableId:env.WARRANTY_STATUS_TABLE_ID || "" },
     { key:"SOFTWARE_STATUS_TABLE_ID", name:"Software Status", tableId:env.SOFTWARE_STATUS_TABLE_ID || "" },
@@ -557,6 +560,8 @@ function expectedFieldsForDiagnostics(tableName) {
     "Order File","Payment Receipt","Final Notes","Remarks","Shipment Tracking No",
     "Specialized","Spare Source"
   ];
+  if (n.includes("internal repair register")) return [];
+  if (n.includes("spare order details")) return [];
   if (n.includes("dealer repair")) return [
     "Case Register No","Company Name","Model No","Serial No","Activation Date / Invoice Date",
     "Technician Name","Material Replaced","Device Issue","Technicain Note","Repair Type",
@@ -680,7 +685,7 @@ async function deductSpareLocalStock(env, orderTableId, orderRecordId, orderFiel
     return { skipped: true, reason: "Stock already updated" };
   }
 
-  const spareTableId = env.SPARE_LIST_TABLE_ID;
+  const spareTableId = env.SPARE_LIST_TABLE_ID || env.SPARE_TABLE_ID;
   if (!spareTableId) {
     return { skipped: true, reason: "Spare Part List table id not configured" };
   }
@@ -1011,8 +1016,7 @@ async function handle(req, env) {
   }
 
   if (p === "/api/spares" || p === "/api/spare-list") {
-    if (!env.SPARE_LIST_TABLE_ID) return json({ error:"SPARE_LIST_TABLE_ID not configured" }, 400);
-    return json(await listRecords(env, env.SPARE_LIST_TABLE_ID));
+    return json(await listRecords(env, env.SPARE_LIST_TABLE_ID || env.SPARE_TABLE_ID));
   }
 
 
