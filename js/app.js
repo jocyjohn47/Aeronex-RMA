@@ -855,17 +855,22 @@ function editInternalRepair(i){
   S.internalRepairEdit=r;
   S.internalRepairPrefill=null;
   const f=r.fields||{};
-  const html = internalRepairFormHtml(f, true) + `<h3 class="details-section-title">All Lark Fields</h3><div class="table-wrap">${renderAllLarkFieldsTable(f)}</div>`;
-  showDetailsModal(`Internal Repair Details - ${(f['DJI Case ID']||f['Repair Case']||'Open')}`, html);
-  const n=internalRepairFieldsForCountry((S.internalRepairMeta||{}).country||adminModuleCountry());
-  S.irParts=parseDealerRepairMaterials(f[n.material]||'').map(x=>({materialCode:x.materialCode,materialName:x.materialName,qty:x.qty}));
-  setTimeout(()=>{try{renderInternalRepairSpareOptions();renderInternalRepairSparePreview();}catch(e){}},0);
+  if(typeof internalRepairFormHtml === 'function'){
+    const html = internalRepairFormHtml(f, true) + `<h3 class="details-section-title">All Lark Fields</h3>${renderAllLarkFieldsTable(f)}`;
+    showDetailsModal(`Internal Repair Details - ${(f['DJI Case ID']||f['Repair Case']||'Open')}`, html);
+    const n=internalRepairFieldsForCountry((S.internalRepairMeta||{}).country||adminModuleCountry());
+    S.irParts=parseDealerRepairMaterials(f[n.material]||'').map(x=>({materialCode:x.materialCode,materialName:x.materialName,qty:x.qty}));
+    setTimeout(()=>{try{renderInternalRepairSpareOptions();renderInternalRepairSparePreview();}catch(e){}},0);
+  }else{
+    renderInternalRepairForm(f);
+  }
 }
-function internalRepairFormHtml(src, isPopup){
+function renderInternalRepairForm(src){
+  const box=$('internalRepairForm'); if(!box) return;
   const meta=S.internalRepairMeta||{}, country=meta.country||adminModuleCountry(), n=internalRepairFieldsForCountry(country);
   const f=(S.internalRepairEdit&&S.internalRepairEdit.fields)||src||{};
   const rec=S.internalRepairEdit?.record_id||'';
-  return `<div class="subpanel"><h3>${rec?'Edit':'New'} Internal Repair</h3>
+  box.innerHTML=`<div class="subpanel"><h3>${rec?'Edit':'New'} Internal Repair</h3>
     <div class="grid3">
       <div><label>DJI Case ID</label><input id="irDjiCaseId" value="${esc(f['DJI Case ID']||'')}"></div>
       <div><label>DJI Internal Case ID</label><input id="irDjiInternalCaseId" value="${esc(f['DJI Internal Case ID']||'')}"></div>
@@ -897,12 +902,6 @@ function internalRepairFormHtml(src, isPopup){
     <div id="irSparePreview" class="notice"></div>
     <p><button class="act" onclick="saveInternalRepair()">Save Internal Repair</button> <span id="internalRepairMsg" class="msg"></span></p>
   </div>`;
-}
-function renderInternalRepairForm(src){
-  const box=$('internalRepairForm'); if(!box) return;
-  const meta=S.internalRepairMeta||{}, country=meta.country||adminModuleCountry(), n=internalRepairFieldsForCountry(country);
-  const f=(S.internalRepairEdit&&S.internalRepairEdit.fields)||src||{};
-  box.innerHTML=internalRepairFormHtml(src, false);
   S.irParts=parseDealerRepairMaterials(f[n.material]||'').map(x=>({materialCode:x.materialCode,materialName:x.materialName,qty:x.qty}));
   renderInternalRepairSpareOptions(); renderInternalRepairSparePreview();
 }
@@ -952,17 +951,10 @@ async function saveInternalRepair(){
       'Case Status':selectedOptionsValue('irCaseStatus'),
       [n.remark]:val('irRemark')
     };
-    const editingId=S.internalRepairEdit?.record_id||'';
-    await api('/api/save-internal-repair',{method:'POST',body:JSON.stringify({role:S.user.role||'',country:meta.country||adminModuleCountry(),record_id:editingId,fields})});
+    await api('/api/save-internal-repair',{method:'POST',body:JSON.stringify({role:S.user.role||'',country:meta.country||adminModuleCountry(),record_id:S.internalRepairEdit?.record_id||'',fields})});
     msg('internalRepairMsg','Saved successfully');
-    await loadInternalRepairMeta();
-    if(document.getElementById('detailsModalOverlay') && editingId){
-      const idx=(S.internalRepairRows||[]).findIndex(x=>x.record_id===editingId);
-      if(idx>=0) editInternalRepair(idx);
-    } else {
-      S.internalRepairEdit=null;S.internalRepairPrefill=null;
-      renderInternalRepair();
-    }
+    S.internalRepairEdit=null;S.internalRepairPrefill=null;
+    await loadInternalRepairMeta();renderInternalRepair();
   }catch(e){msg('internalRepairMsg',e.message||'Save failed')}
 }
 
@@ -970,21 +962,31 @@ async function loadSpareOrderDetailsMeta(){
   const d=await api('/api/admin-module-meta?module=spareOrderDetails&role='+encodeURIComponent(S.user.role||''));
   S.spareOrderDetailsMeta=d; S.dealers=d.dealers||S.dealers||[]; S.spareOrderDetailsRows=d.rows||[]; return d;
 }
-function renderSpareOrderDetailsError(e){const sec=$('spareOrderDetailsAdmin');if(sec)sec.innerHTML=`<div class="panel"><h2>Spare Order Details</h2><div class="msg">${esc(e.message||e)}</div></div>`}
+function renderSpareOrderDetailsError(e){
+  const sec=$('spareOrderDetailsAdmin'); if(!sec)return;
+  sec.innerHTML=`<div class="panel"><h2>Internal Spare Order details</h2><div class="notice">${esc(e.message||'Failed to load Internal Spare Order details')}</div></div>`;
+}
 function renderSpareOrderDetailsAdmin(){
   const sec=$('spareOrderDetailsAdmin'); if(!sec)return;
-  if(!currentUserIsAdminTech()){sec.innerHTML=`<div class="panel"><h2>Spare Order Details</h2><div class="notice">Admin/Technician only.</div></div>`;return;}
+  if(!isAdmin()){sec.innerHTML=`<div class="panel"><h2>Internal Spare Order details</h2><div class="notice">Admin only.</div></div>`;return;}
   const rows=S.spareOrderDetailsRows||[];
-  sec.innerHTML=`<div class="panel"><h2>Spare Order Details</h2><div class="notice">Manage DJI spare order/shipment detail records. <button class="btn-light" onclick="loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin)">Refresh</button> <button class="act" onclick="newSpareOrderDetails()">New Details</button></div><div id="spareOrderDetailsForm"></div>
-  <div class="table-wrap"><table><thead><tr><th>DJI Case ID</th><th>Company</th><th>Case Type</th><th>Billing</th><th>Order Type</th><th>Created</th><th>Closed</th><th>Action</th></tr></thead><tbody>
-  ${rows.map((r,i)=>{const f=r.fields||{};return `<tr><td>${esc(f['DJI Case ID']||'')}</td><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Case Type']||'')}</td><td>${esc(f['Billing Company']||'')}</td><td>${esc(Array.isArray(f['Order Type'])?f['Order Type'].join(', '):(f['Order Type']||''))}</td><td>${esc(dateInputValue(f['Case Creation Date']))}</td><td>${esc(dateInputValue(f['Case Close Date']))}</td><td><button class="btn-light" onclick="editSpareOrderDetails(${i})">Open</button></td></tr>`}).join('')}</tbody></table></div></div>`;
+  sec.innerHTML=`<div class="panel"><h2>Internal Spare Order details</h2><div class="notice">Admin-only table for DJI/internal spare order, shipment and document records. <button class="btn-light" onclick="loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin)">Refresh</button> <button class="act" onclick="newSpareOrderDetails()">New Internal Spare Order</button></div><div id="spareOrderDetailsForm"></div>
+  <div class="table-wrap"><table><thead><tr><th>DJI Case ID</th><th>Company</th><th>Case Type</th><th>Billing</th><th>Order Type</th><th>Created</th><th>Closed</th><th>Document</th><th>Action</th></tr></thead><tbody>
+  ${rows.map((r,i)=>{const f=r.fields||{};return `<tr><td>${esc(f['DJI Case ID']||'')}</td><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Case Type']||'')}</td><td>${esc(f['Billing Company']||'')}</td><td>${esc(Array.isArray(f['Order Type'])?f['Order Type'].join(', '):(f['Order Type']||''))}</td><td>${esc(dateInputValue(f['Case Creation Date']))}</td><td>${esc(dateInputValue(f['Case Close Date']))}</td><td>${detailsFieldValue(f['Document Upload'])}</td><td><button class="btn-light" onclick="editSpareOrderDetails(${i})">Open</button></td></tr>`}).join('')}</tbody></table></div></div>`;
   renderSpareOrderDetailsForm(S.spareOrderDetailsEdit?.fields||{});
 }
 function newSpareOrderDetails(){S.spareOrderDetailsEdit=null;renderSpareOrderDetailsForm({});}
-function editSpareOrderDetails(i){S.spareOrderDetailsEdit=(S.spareOrderDetailsRows||[])[i];renderSpareOrderDetailsForm(S.spareOrderDetailsEdit.fields||{});}
-function renderSpareOrderDetailsForm(f){
-  const box=$('spareOrderDetailsForm'); if(!box)return; const meta=S.spareOrderDetailsMeta||{};
-  box.innerHTML=`<div class="subpanel"><h3>${S.spareOrderDetailsEdit?'Edit':'New'} Spare Order Details</h3><div class="grid3">
+function editSpareOrderDetails(i){
+  const r=(S.spareOrderDetailsRows||[])[i];
+  if(!r) return;
+  S.spareOrderDetailsEdit=r;
+  const f=r.fields||{};
+  const html = spareOrderDetailsFormHtml(f) + `<h3 class="details-section-title">All Lark Fields</h3>${renderAllLarkFieldsTable(f)}`;
+  showDetailsModal(`Internal Spare Order details - ${(f['DJI Case ID']||f['Company Name']||'Open')}`, html);
+}
+function spareOrderDetailsFormHtml(f){
+  const meta=S.spareOrderDetailsMeta||{};
+  return `<div class="subpanel"><h3>${S.spareOrderDetailsEdit?'Edit':'New'} Internal Spare Order details</h3><div class="grid3">
     <div><label>DJI Case ID</label><input id="sodDjiCaseId" value="${esc(f['DJI Case ID']||'')}"></div>
     <div><label>Case ID Remarks</label><input id="sodCaseIdRemarks" value="${esc(f['Case ID Remarks']||'')}"></div>
     <div><label>Case Type</label>${selectHtml(meta,'sodCaseType','Case Type',f['Case Type']||'')}</div>
@@ -999,11 +1001,54 @@ function renderSpareOrderDetailsForm(f){
     <div><label>Shipment Cost - Sent to DJI</label><input id="sodSendCost" value="${esc(f['Shipment Cost - Sent to DJI']||'')}"></div>
     <div><label>Tracking No - Receiving</label><input id="sodRecvTrack" value="${esc(f['Shiping Tracking No -Receiving']||'')}"></div>
     <div><label>Shipment Cost - Receive from DJI</label><input id="sodRecvCost" value="${esc(f['Shipment Cost - Receive from DJI']||'')}"></div>
-  </div><label>Remarks</label><textarea id="sodRemarks">${esc(f['Remarks']||'')}</textarea>
-  <p><button class="act" onclick="saveSpareOrderDetails()">Save Spare Order Details</button> <span id="spareOrderDetailsMsg" class="msg"></span></p></div>`;
+  </div>
+  <label>Remarks</label><textarea id="sodRemarks">${esc(f['Remarks']||'')}</textarea>
+  <div class="panel">
+    <h3>Document Upload</h3>
+    <div class="notice"><b>Current document:</b> ${detailsFieldValue(f['Document Upload'])}</div>
+    <div class="row"><input id="sodDocumentUploadFile" type="file"><button class="btn-light" onclick="uploadSpareOrderDetailsDocument()">Upload / Replace Document</button></div>
+    <div id="sodDocumentMsg" class="msg"></div>
+  </div>
+  <p><button class="act" onclick="saveSpareOrderDetails()">Save Internal Spare Order</button> <span id="spareOrderDetailsMsg" class="msg"></span></p></div>`;
 }
-async function saveSpareOrderDetails(){
+function renderSpareOrderDetailsForm(f){
+  const box=$('spareOrderDetailsForm'); if(!box)return;
+  box.innerHTML=spareOrderDetailsFormHtml(f||{});
+}
+
+async function uploadSpareOrderDetailsDocument(){
+  if(!isAdmin()) return alert('Admin only');
+  const r=S.spareOrderDetailsEdit;
+  const inp=$('sodDocumentUploadFile');
+  const file=inp&&inp.files&&inp.files[0];
+  if(!r || !r.record_id) return msg('sodDocumentMsg','Save or open an Internal Spare Order record first');
+  if(!file) return msg('sodDocumentMsg','Select document file');
   try{
+    msg('sodDocumentMsg','Uploading...');
+    const data=await new Promise(resolve=>{
+      const reader=new FileReader();
+      reader.onload=()=>resolve(reader.result);
+      reader.onerror=()=>resolve(null);
+      reader.readAsDataURL(file);
+    });
+    await api('/api/upload-spare-order-details-document',{method:'POST',body:JSON.stringify({
+      role:S.user.role||'',
+      record_id:r.record_id,
+      djiCaseId:(r.fields||{})['DJI Case ID']||val('sodDjiCaseId')||'internal-spare-order',
+      file:{name:file.name,type:file.type||'application/octet-stream',data}
+    })});
+    msg('sodDocumentMsg','Document uploaded');
+    await loadSpareOrderDetailsMeta();
+    const idx=(S.spareOrderDetailsRows||[]).findIndex(x=>x.record_id===r.record_id);
+    if(idx>=0) editSpareOrderDetails(idx);
+    else renderSpareOrderDetailsAdmin();
+  }catch(e){msg('sodDocumentMsg',e.message||'Upload failed')}
+}
+
+async function saveSpareOrderDetails(){
+  if(!isAdmin()) return msg('spareOrderDetailsMsg','Admin only');
+  try{
+    const editingId=S.spareOrderDetailsEdit?.record_id||'';
     const fields={
       'DJI Case ID':val('sodDjiCaseId'),
       'Case ID Remarks':val('sodCaseIdRemarks'),
@@ -1021,9 +1066,16 @@ async function saveSpareOrderDetails(){
       'Shipment Cost - Receive from DJI':val('sodRecvCost'),
       'Remarks':val('sodRemarks')
     };
-    await api('/api/save-spare-order-details',{method:'POST',body:JSON.stringify({role:S.user.role||'',record_id:S.spareOrderDetailsEdit?.record_id||'',fields})});
+    await api('/api/save-spare-order-details',{method:'POST',body:JSON.stringify({role:S.user.role||'',record_id:editingId,fields})});
     msg('spareOrderDetailsMsg','Saved successfully');
-    S.spareOrderDetailsEdit=null; await loadSpareOrderDetailsMeta(); renderSpareOrderDetailsAdmin();
+    await loadSpareOrderDetailsMeta();
+    if(document.getElementById('detailsModalOverlay') && editingId){
+      const idx=(S.spareOrderDetailsRows||[]).findIndex(x=>x.record_id===editingId);
+      if(idx>=0) editSpareOrderDetails(idx);
+    }else{
+      S.spareOrderDetailsEdit=null;
+      renderSpareOrderDetailsAdmin();
+    }
   }catch(e){msg('spareOrderDetailsMsg',e.message||'Save failed')}
 }
 
@@ -1162,7 +1214,9 @@ function adminCenterCards(){
   }
   if(currentUserIsAdminTech()){
     cards.push(['🛠','Internal Repair','Create and update internal repair register cases.','internalRepair','Open']);
-    cards.push(['📦','Spare Order Details','Manage DJI spare order/shipment details.','spareOrderDetailsAdmin','Open']);
+  }
+  if(isAdmin()){
+    cards.push(['📦','Internal Spare Order details','Admin-only spare order internal processing records.','spareOrderDetailsAdmin','Open']);
   }
   if(logsPageEnabled()){
     cards.push(['🧾','Logs & Diagnostics','Check error logs and Lark table diagnostics.','logsDiagnostics','Open']);
@@ -1625,15 +1679,17 @@ function ensureDetailsModalStyles(){
     .details-modal-body{padding:18px}
     .details-modal-close{border:0;background:#0f2a5f;color:#fff;border-radius:8px;padding:8px 12px;cursor:pointer;font-weight:700}
     .details-kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
-    .details-kv .kv{border:1px solid #e2e8f0;background:#f8fbff;border-radius:10px;padding:10px}
+    .details-kv .kv{border:1px solid #e2e8f0;background:#f8fbff;border-radius:10px;padding:10px;min-width:0}
     .details-kv .kv b{display:block;font-size:12px;color:#475569;margin-bottom:5px}
-    .details-kv .kv div{font-size:14px;color:#0f172a;word-break:break-word}
+    .details-kv .kv div{font-size:14px;color:#0f172a;word-break:break-word;overflow-wrap:anywhere}
     .details-section-title{margin:18px 0 8px 0;color:#0f2a5f}
-    .details-all-fields{width:100%;border-collapse:collapse}
-    .details-all-fields th,.details-all-fields td{border:1px solid #e2e8f0;padding:8px;text-align:left;vertical-align:top}
-    .details-all-fields th{background:#eef6ff;color:#0f2a5f;width:260px}
+    .details-all-fields-wrap{width:100%;overflow-x:auto;border:1px solid #e2e8f0;border-radius:10px;background:#fff}
+    table.details-all-fields{width:100%;min-width:760px;border-collapse:collapse;table-layout:fixed}
+    .details-all-fields th,.details-all-fields td{border-bottom:1px solid #e2e8f0;padding:9px 10px;text-align:left;vertical-align:top}
+    .details-all-fields th{background:#eef6ff;color:#0f2a5f;width:260px;min-width:260px;max-width:260px;white-space:nowrap;word-break:normal;overflow-wrap:normal}
+    .details-all-fields td{color:#0f172a;word-break:break-word;overflow-wrap:anywhere}
     .details-modal textarea{width:100%;box-sizing:border-box}
-    @media(max-width:820px){.details-kv{grid-template-columns:1fr}.details-modal{width:98vw}.details-modal-body{padding:12px}}
+    @media(max-width:820px){.details-kv{grid-template-columns:1fr}.details-modal{width:98vw}.details-modal-body{padding:12px}.details-all-fields th{width:180px;min-width:180px;max-width:180px}}
   `;
   document.head.appendChild(s);
 }
@@ -1665,19 +1721,19 @@ function detailsFieldValue(v){
 function renderAllLarkFieldsTable(fields){
   const entries=Object.entries(fields||{});
   if(!entries.length) return '<div class="notice">No fields available.</div>';
-  return `<table class="details-all-fields"><tbody>${entries.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${detailsFieldValue(v)}</td></tr>`).join('')}</tbody></table>`;
+  return `<div class="details-all-fields-wrap"><table class="details-all-fields"><tbody>${entries.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${detailsFieldValue(v)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function kv(label, value){
   return `<div class="kv"><b>${esc(label)}</b><div>${detailsFieldValue(value)}</div></div>`;
 }
 
+function openOrderDetails(i){ return openSpareOrderDetails(i); }
 function openSpareOrderDetails(i){
   currentSpareOrderDetailIndex=i;
   const r = (Array.isArray(S.orders) ? S.orders : [])[i];
   if(!r) return;
   const f = r.fields || {};
   const orderNo = orderNoValue(f);
-  const canEdit = spareOrderCanEditInternal();
   const canReport = spareOrderCanDownloadReport();
 
   const summary = `<div class="details-kv">
@@ -1692,7 +1748,6 @@ function openSpareOrderDetails(i){
     ${kv('Shipment Tracking No', spareOrderTrackingValue(f) || '-')}
     ${kv('Specialized', spareOrderSpecializedValue(f) || '-')}
     ${kv('Spare Source', spareOrderSpareSourceValue(f) || '-')}
-    ${kv('Stock Updated', spareOrderStockUpdatedValue(f) || '-')}
     ${kv('Invoice Download', invoiceDownloadCell(r))}
     ${kv('Payment Receipt', paymentReceiptCell(r))}
     ${kv('DJI Case No', spareOrderDjiCaseValue(f) || '-')}
@@ -1700,33 +1755,13 @@ function openSpareOrderDetails(i){
   <h3 class="details-section-title">Remarks</h3><div class="notice">${esc(f['Remarks'] || '-')}</div>
   <h3 class="details-section-title">Final Notes</h3><div class="notice">${esc(spareOrderFinalNotesValue(f) || '-')}</div>`;
 
-  const adminEdit = canEdit ? `
-    <div class="panel">
-      <h3>Admin Update</h3>
-      <div class="notice">Only Admin can edit and save spare order internal details.</div>
-      <div class="grid3">
-        <div><label>Shipment Destination</label><select id="soShipDestination">${shipmentDestinationOptions(spareOrderDestinationValue(f))}</select></div>
-        <div><label>Shipment Tracking No</label><input id="soShipTracking" value="${esc(spareOrderTrackingValue(f)||'')}"></div>
-        <div><label>Specialized</label><select id="soSpecialized">${specializedOptions(spareOrderSpecializedValue(f))}</select></div>
-        <div><label>Spare Source</label><select id="soSpareSource">${spareSourceOptions(spareOrderSpareSourceValue(f))}</select></div>
-      </div>
-      <div class="grid3">
-        <div><label>DJI Cost</label><input id="soDjiCost" value="${esc(f['DJI Cost']||'')}"></div>
-        <div><label>Shipment Cost ( AED )</label><input id="soShipmentCostAed" value="${esc(f['Shipment Cost ( AED )']||'')}"></div>
-        <div><label>DJI Case No</label><input id="soDjiCaseNo" value="${esc(spareOrderDjiCaseValue(f)||'')}"></div>
-        <div><label>Dealer CN Upload</label><input id="soDealerCnFile" type="file" onchange="uploadSpareOrderDealerCn(currentSpareOrderDetailIndex)"></div>
-      </div>
-      <label>Final Notes</label><textarea id="soFinalNotes" style="min-height:90px">${esc(spareOrderFinalNotesValue(f)||'')}</textarea>
-      <div class="row"><button onclick="saveSpareOrderInternal(${i})">Save Details</button></div>
-      <div id="soDetailMsg" class="msg"></div>
-    </div>` : '';
-
+  const adminAction = isAdmin() ? `<div class="panel"><h3>Admin Internal Action</h3><div class="notice">Internal processing details are maintained in the separate <b>Internal Spare Order details</b> table.</div><button class="act" onclick="closeDetailsModal();show('spareOrderDetailsAdmin')">Open Internal Spare Order details</button></div>` : '';
   const report = canReport ? `<a class="btn-light" target="_blank" rel="noopener" href="/api/download-spare-order-report?tableId=${encodeURIComponent(r._table_id||'')}&record_id=${encodeURIComponent(r.record_id||'')}&role=${encodeURIComponent(S.user.role||'')}">Download Excel Report</a>` : '';
 
   const html = `${summary}
+    ${adminAction}
     <h3 class="details-section-title">All Lark Fields</h3>
-    <div class="table-wrap">${renderAllLarkFieldsTable(f)}</div>
-    ${adminEdit}
+    ${renderAllLarkFieldsTable(f)}
     <div class="row">${report}</div>`;
 
   showDetailsModal(`Spare Order Details - ${orderNo || '-'}`, html);
