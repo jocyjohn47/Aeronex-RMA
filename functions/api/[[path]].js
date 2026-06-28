@@ -151,6 +151,68 @@ function repairTable(env, country) {
 }
 
 
+function internalRepairTable(env, country) {
+  return lower(country).includes("ksa") ? env.INTERNAL_REPAIR_KSA_TABLE_ID : env.INTERNAL_REPAIR_UAE_TABLE_ID;
+}
+
+function internalRepairCountryKey(country) {
+  return lower(country).includes("ksa") ? "KSA" : "UAE";
+}
+
+function normalizeLarkOptionValue(v, type) {
+  if (v === undefined || v === null) return "";
+  if (type === 4) {
+    if (Array.isArray(v)) return v.filter(x => x !== undefined && x !== null && String(x).trim() !== "");
+    return String(v).split(",").map(x => x.trim()).filter(Boolean);
+  }
+  if (type === 5) return toLarkDateTimeValue(v);
+  return v;
+}
+
+function prepareFieldsForTable(fieldTypes, fields) {
+  const out = {};
+  for (const [k, v] of Object.entries(fields || {})) {
+    if (!fieldTypes[k]) continue;
+    if (v === undefined || v === null || v === "") continue;
+    const val = normalizeLarkOptionValue(v, fieldTypes[k]);
+    if (val === "" || (Array.isArray(val) && !val.length)) continue;
+    out[k] = val;
+  }
+  return out;
+}
+
+function fieldMetaMap(fields) {
+  const out = {};
+  for (const f of fields || []) out[f.field_name] = f;
+  return out;
+}
+
+function internalRepairFieldNames(country) {
+  const isKsa = lower(country).includes("ksa");
+  return {
+    warranty: isKsa ? "Warranty Status" : "Warranry Status",
+    material: isKsa ? "Material Consumed" : "Material  Consumed",
+    remark: isKsa ? "Remarks" : "Remark",
+    djiRepairStatus: isKsa ? "DJI Repair status" : "DJI Repair Status",
+    sendTracking: isKsa ? "Shipping Tracking No - Sending" : "Shiping Tracking No-Sending",
+    receiveTracking: "Shiping Tracking No -Receiving",
+    receiveCost: isKsa ? "Shipping Cost - Receiving From DJI" : "Shipment Cost - Receive from DJI"
+  };
+}
+
+async function listInternalRepairRows(env, country) {
+  const tableId = internalRepairTable(env, country);
+  if (!tableId) return [];
+  return (await listRecords(env, tableId)).map(r => ({ ...r, _table_id: tableId }));
+}
+
+async function listSpareOrderDetailsRows(env) {
+  if (!env.SPARE_ORDER_DETAILS_TABLE_ID) return [];
+  return (await listRecords(env, env.SPARE_ORDER_DETAILS_TABLE_ID)).map(r => ({ ...r, _table_id: env.SPARE_ORDER_DETAILS_TABLE_ID }));
+}
+
+
+
 
 function orderNo(fields) {
   return norm(fields["Spare Order No"] || fields["Spare Order Case"]);
@@ -1185,6 +1247,73 @@ async function handle(req, env) {
         "content-disposition":`attachment; filename="flycart-credit-use-report.xls"`
       }
     });
+  }
+
+
+  if (p === "/api/admin-module-meta") {
+    const role = norm(url.searchParams.get("role"));
+    if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    const module = lower(url.searchParams.get("module"));
+    const country = norm(url.searchParams.get("country") || "UAE & Other Region");
+
+    let tableId = "";
+    let tableName = "";
+    let rows = [];
+    if (module === "internalrepair" || module === "internal-repair") {
+      tableId = internalRepairTable(env, country);
+      tableName = lower(country).includes("ksa") ? "Internal Repair Register - KSA" : "Internal Repair Register - UAE & Other Region";
+      rows = await listInternalRepairRows(env, country);
+    } else if (module === "spareorderdetails" || module === "spare-order-details") {
+      tableId = env.SPARE_ORDER_DETAILS_TABLE_ID;
+      tableName = "Spare Order Details";
+      rows = await listSpareOrderDetailsRows(env);
+    } else {
+      return json({ error:"Unknown module" }, 400);
+    }
+
+    if (!tableId) return json({ error:"Module table id not configured", module, country }, 400);
+    const fields = await getTableFieldsForDiagnostics(env, tableId);
+    const dealers = env.USER_TABLE_ID ? await listRecords(env, env.USER_TABLE_ID) : [];
+    const repairs = (module === "internalrepair" || module === "internal-repair")
+      ? await listRecords(env, repairTable(env, country))
+      : [];
+    const spares = env.SPARE_LIST_TABLE_ID ? await listRecords(env, env.SPARE_LIST_TABLE_ID) : [];
+    return json({ ok:true, module, country, tableId, tableName, fields, rows, dealers, repairs, spares });
+  }
+
+  if (p === "/api/save-internal-repair" && req.method === "POST") {
+    const b = await readBody(req);
+    const role = norm(b.role);
+    if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    const country = norm(b.country || "UAE & Other Region");
+    const tableId = internalRepairTable(env, country);
+    if (!tableId) return json({ error:"Internal Repair table id not configured" }, 400);
+    const fieldTypes = await getFieldTypes(env, tableId);
+    const fields = prepareFieldsForTable(fieldTypes, b.fields || {});
+    if (!Object.keys(fields).length) return json({ error:"No valid fields to save" }, 400);
+    if (b.record_id) {
+      await updateRecord(env, tableId, b.record_id, fields);
+      return json({ ok:true, updated:true });
+    }
+    const rec = await createRecord(env, tableId, fields);
+    return json({ ok:true, created:true, record:rec.data || rec });
+  }
+
+  if (p === "/api/save-spare-order-details" && req.method === "POST") {
+    const b = await readBody(req);
+    const role = norm(b.role);
+    if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    const tableId = env.SPARE_ORDER_DETAILS_TABLE_ID;
+    if (!tableId) return json({ error:"SPARE_ORDER_DETAILS_TABLE_ID not configured" }, 400);
+    const fieldTypes = await getFieldTypes(env, tableId);
+    const fields = prepareFieldsForTable(fieldTypes, b.fields || {});
+    if (!Object.keys(fields).length) return json({ error:"No valid fields to save" }, 400);
+    if (b.record_id) {
+      await updateRecord(env, tableId, b.record_id, fields);
+      return json({ ok:true, updated:true });
+    }
+    const rec = await createRecord(env, tableId, fields);
+    return json({ ok:true, created:true, record:rec.data || rec });
   }
 
   if (p === "/api/my-orders") {
