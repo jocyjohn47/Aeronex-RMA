@@ -849,13 +849,23 @@ function renderInternalRepair(){
   renderInternalRepairForm(S.internalRepairEdit||S.internalRepairPrefill||{});
 }
 function newInternalRepair(){S.internalRepairEdit=null;S.internalRepairPrefill={};renderInternalRepairForm({});}
-function editInternalRepair(i){const r=(S.internalRepairRows||[])[i];S.internalRepairEdit=r;S.internalRepairPrefill=null;renderInternalRepairForm(r.fields||{});}
-function renderInternalRepairForm(src){
-  const box=$('internalRepairForm'); if(!box) return;
+function editInternalRepair(i){
+  const r=(S.internalRepairRows||[])[i];
+  if(!r) return;
+  S.internalRepairEdit=r;
+  S.internalRepairPrefill=null;
+  const f=r.fields||{};
+  const html = internalRepairFormHtml(f, true) + `<h3 class="details-section-title">All Lark Fields</h3><div class="table-wrap">${renderAllLarkFieldsTable(f)}</div>`;
+  showDetailsModal(`Internal Repair Details - ${(f['DJI Case ID']||f['Repair Case']||'Open')}`, html);
+  const n=internalRepairFieldsForCountry((S.internalRepairMeta||{}).country||adminModuleCountry());
+  S.irParts=parseDealerRepairMaterials(f[n.material]||'').map(x=>({materialCode:x.materialCode,materialName:x.materialName,qty:x.qty}));
+  setTimeout(()=>{try{renderInternalRepairSpareOptions();renderInternalRepairSparePreview();}catch(e){}},0);
+}
+function internalRepairFormHtml(src, isPopup){
   const meta=S.internalRepairMeta||{}, country=meta.country||adminModuleCountry(), n=internalRepairFieldsForCountry(country);
   const f=(S.internalRepairEdit&&S.internalRepairEdit.fields)||src||{};
   const rec=S.internalRepairEdit?.record_id||'';
-  box.innerHTML=`<div class="subpanel"><h3>${rec?'Edit':'New'} Internal Repair</h3>
+  return `<div class="subpanel"><h3>${rec?'Edit':'New'} Internal Repair</h3>
     <div class="grid3">
       <div><label>DJI Case ID</label><input id="irDjiCaseId" value="${esc(f['DJI Case ID']||'')}"></div>
       <div><label>DJI Internal Case ID</label><input id="irDjiInternalCaseId" value="${esc(f['DJI Internal Case ID']||'')}"></div>
@@ -887,6 +897,12 @@ function renderInternalRepairForm(src){
     <div id="irSparePreview" class="notice"></div>
     <p><button class="act" onclick="saveInternalRepair()">Save Internal Repair</button> <span id="internalRepairMsg" class="msg"></span></p>
   </div>`;
+}
+function renderInternalRepairForm(src){
+  const box=$('internalRepairForm'); if(!box) return;
+  const meta=S.internalRepairMeta||{}, country=meta.country||adminModuleCountry(), n=internalRepairFieldsForCountry(country);
+  const f=(S.internalRepairEdit&&S.internalRepairEdit.fields)||src||{};
+  box.innerHTML=internalRepairFormHtml(src, false);
   S.irParts=parseDealerRepairMaterials(f[n.material]||'').map(x=>({materialCode:x.materialCode,materialName:x.materialName,qty:x.qty}));
   renderInternalRepairSpareOptions(); renderInternalRepairSparePreview();
 }
@@ -936,10 +952,17 @@ async function saveInternalRepair(){
       'Case Status':selectedOptionsValue('irCaseStatus'),
       [n.remark]:val('irRemark')
     };
-    await api('/api/save-internal-repair',{method:'POST',body:JSON.stringify({role:S.user.role||'',country:meta.country||adminModuleCountry(),record_id:S.internalRepairEdit?.record_id||'',fields})});
+    const editingId=S.internalRepairEdit?.record_id||'';
+    await api('/api/save-internal-repair',{method:'POST',body:JSON.stringify({role:S.user.role||'',country:meta.country||adminModuleCountry(),record_id:editingId,fields})});
     msg('internalRepairMsg','Saved successfully');
-    S.internalRepairEdit=null;S.internalRepairPrefill=null;
-    await loadInternalRepairMeta();renderInternalRepair();
+    await loadInternalRepairMeta();
+    if(document.getElementById('detailsModalOverlay') && editingId){
+      const idx=(S.internalRepairRows||[]).findIndex(x=>x.record_id===editingId);
+      if(idx>=0) editInternalRepair(idx);
+    } else {
+      S.internalRepairEdit=null;S.internalRepairPrefill=null;
+      renderInternalRepair();
+    }
   }catch(e){msg('internalRepairMsg',e.message||'Save failed')}
 }
 
@@ -1572,7 +1595,7 @@ function spareOrderSpareSourceValue(f){ return spareOrderField(f, ['Spare Source
 function spareOrderStockUpdatedValue(f){ return spareOrderField(f, ['Stock Updated']); }
 function spareOrderFinalNotesValue(f){ return spareOrderField(f, ['Final Notes']); }
 function spareOrderDjiCaseValue(f){ return spareOrderField(f, ['DJI Case NO','DJI case NO','DJI Case No','DJI case No']); }
-function spareOrderCanEditInternal(){ return currentUserIsAdminTech(); }
+function spareOrderCanEditInternal(){ return isAdmin(); }
 function spareOrderCanDownloadReport(){ return isAdmin(); }
 function shipmentDestinationOptions(cur){
   const opts=['','HONG KONG WH','DXB FZCO (JAFZA)','DXB DSO (Mainland)','KSA Office','SHIP TO DEALER'];
@@ -1589,6 +1612,65 @@ function specializedOptions(cur){
   const opts=['','Enterprise','Delivery','Consumer','Agriculture'];
   return opts.map(x=>`<option value="${esc(x)}" ${String(cur||'')===x?'selected':''}>${esc(x||'Select')}</option>`).join('');
 }
+
+function ensureDetailsModalStyles(){
+  if(document.getElementById('aeronexDetailsModalStyles')) return;
+  const s=document.createElement('style');
+  s.id='aeronexDetailsModalStyles';
+  s.textContent=`
+    .details-modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.58);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:32px 14px;overflow:auto}
+    .details-modal{background:#fff;width:min(1180px,96vw);max-height:92vh;overflow:auto;border-radius:16px;box-shadow:0 24px 80px rgba(0,0,0,.32);border:1px solid #dbe7ff}
+    .details-modal-head{position:sticky;top:0;background:linear-gradient(90deg,#e8f1ff,#f8fbff);border-bottom:1px solid #dbe7ff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;z-index:2}
+    .details-modal-head h2{margin:0;font-size:20px;color:#0f2a5f}
+    .details-modal-body{padding:18px}
+    .details-modal-close{border:0;background:#0f2a5f;color:#fff;border-radius:8px;padding:8px 12px;cursor:pointer;font-weight:700}
+    .details-kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
+    .details-kv .kv{border:1px solid #e2e8f0;background:#f8fbff;border-radius:10px;padding:10px}
+    .details-kv .kv b{display:block;font-size:12px;color:#475569;margin-bottom:5px}
+    .details-kv .kv div{font-size:14px;color:#0f172a;word-break:break-word}
+    .details-section-title{margin:18px 0 8px 0;color:#0f2a5f}
+    .details-all-fields{width:100%;border-collapse:collapse}
+    .details-all-fields th,.details-all-fields td{border:1px solid #e2e8f0;padding:8px;text-align:left;vertical-align:top}
+    .details-all-fields th{background:#eef6ff;color:#0f2a5f;width:260px}
+    .details-modal textarea{width:100%;box-sizing:border-box}
+    @media(max-width:820px){.details-kv{grid-template-columns:1fr}.details-modal{width:98vw}.details-modal-body{padding:12px}}
+  `;
+  document.head.appendChild(s);
+}
+function closeDetailsModal(){
+  const el=document.getElementById('detailsModalOverlay');
+  if(el) el.remove();
+}
+function showDetailsModal(title, html){
+  ensureDetailsModalStyles();
+  closeDetailsModal();
+  const el=document.createElement('div');
+  el.id='detailsModalOverlay';
+  el.className='details-modal-overlay';
+  el.innerHTML=`<div class="details-modal"><div class="details-modal-head"><h2>${esc(title||'Details')}</h2><button class="details-modal-close" onclick="closeDetailsModal()">Close ✕</button></div><div class="details-modal-body">${html}</div></div>`;
+  el.addEventListener('click', function(e){ if(e.target===el) closeDetailsModal(); });
+  document.body.appendChild(el);
+}
+function detailsFieldValue(v){
+  if(v===undefined || v===null || v==='') return '-';
+  if(Array.isArray(v)) return v.map(detailsFieldValue).join('<br>');
+  if(typeof v==='object'){
+    const link = v.link || v.url || v.href || v.file_url || v.tmp_url;
+    const name = v.text || v.name || v.filename || v.value || v.title || 'Open';
+    if(link) return `<a target="_blank" rel="noopener" href="${esc(link)}">${esc(name)}</a>`;
+    try{return esc(JSON.stringify(v));}catch(e){return esc(String(v));}
+  }
+  return esc(String(v));
+}
+function renderAllLarkFieldsTable(fields){
+  const entries=Object.entries(fields||{});
+  if(!entries.length) return '<div class="notice">No fields available.</div>';
+  return `<table class="details-all-fields"><tbody>${entries.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${detailsFieldValue(v)}</td></tr>`).join('')}</tbody></table>`;
+}
+function kv(label, value){
+  return `<div class="kv"><b>${esc(label)}</b><div>${detailsFieldValue(value)}</div></div>`;
+}
+
 function openSpareOrderDetails(i){
   currentSpareOrderDetailIndex=i;
   const r = (Array.isArray(S.orders) ? S.orders : [])[i];
@@ -1597,11 +1679,31 @@ function openSpareOrderDetails(i){
   const orderNo = orderNoValue(f);
   const canEdit = spareOrderCanEditInternal();
   const canReport = spareOrderCanDownloadReport();
-  const sec = $('spare');
-  if(!sec) return;
-  const internalEdit = canEdit ? `
+
+  const summary = `<div class="details-kv">
+    ${kv('Spare Order No', orderNo || '-')}
+    ${kv('Status', f['Status'] || '-')}
+    ${kv('Invoice Currency', f['Invoice Currency'] || '-')}
+    ${kv('Company Name', f['Company Name'] || '-')}
+    ${kv('Contact Name', f['Contact Name'] || '-')}
+    ${kv('Billing / Invoice Address', f['Billing Address'] || f['Invoice Address'] || '-')}
+    ${kv('Dealer CN', spareOrderDealerCnCell(f))}
+    ${kv('Shipment Destination', spareOrderDestinationValue(f) || '-')}
+    ${kv('Shipment Tracking No', spareOrderTrackingValue(f) || '-')}
+    ${kv('Specialized', spareOrderSpecializedValue(f) || '-')}
+    ${kv('Spare Source', spareOrderSpareSourceValue(f) || '-')}
+    ${kv('Stock Updated', spareOrderStockUpdatedValue(f) || '-')}
+    ${kv('Invoice Download', invoiceDownloadCell(r))}
+    ${kv('Payment Receipt', paymentReceiptCell(r))}
+    ${kv('DJI Case No', spareOrderDjiCaseValue(f) || '-')}
+  </div>
+  <h3 class="details-section-title">Remarks</h3><div class="notice">${esc(f['Remarks'] || '-')}</div>
+  <h3 class="details-section-title">Final Notes</h3><div class="notice">${esc(spareOrderFinalNotesValue(f) || '-')}</div>`;
+
+  const adminEdit = canEdit ? `
     <div class="panel">
-      <h3>Admin / Technician Update</h3>
+      <h3>Admin Update</h3>
+      <div class="notice">Only Admin can edit and save spare order internal details.</div>
       <div class="grid3">
         <div><label>Shipment Destination</label><select id="soShipDestination">${shipmentDestinationOptions(spareOrderDestinationValue(f))}</select></div>
         <div><label>Shipment Tracking No</label><input id="soShipTracking" value="${esc(spareOrderTrackingValue(f)||'')}"></div>
@@ -1615,42 +1717,19 @@ function openSpareOrderDetails(i){
         <div><label>Dealer CN Upload</label><input id="soDealerCnFile" type="file" onchange="uploadSpareOrderDealerCn(currentSpareOrderDetailIndex)"></div>
       </div>
       <label>Final Notes</label><textarea id="soFinalNotes" style="min-height:90px">${esc(spareOrderFinalNotesValue(f)||'')}</textarea>
-      <div class="row">
-        <button onclick="saveSpareOrderInternal(${i})">Save Details</button>
-      </div>
+      <div class="row"><button onclick="saveSpareOrderInternal(${i})">Save Details</button></div>
       <div id="soDetailMsg" class="msg"></div>
     </div>` : '';
-  sec.innerHTML = `<div class="panel">
-    <h2>Spare Order Details - ${esc(orderNo || '-')}</h2>
-    <div class="grid3">
-      <div><label>Spare Order No</label><input disabled value="${esc(orderNo || '-')}"></div>
-      <div><label>Status</label><input disabled value="${esc(f['Status'] || '-')}"></div>
-      <div><label>Invoice Currency</label><input disabled value="${esc(f['Invoice Currency'] || '-')}"></div>
-    </div>
-    <div class="grid3">
-      <div><label>Company Name</label><input disabled value="${esc(f['Company Name'] || '-')}"></div>
-      <div><label>Contact Name</label><input disabled value="${esc(f['Contact Name'] || '-')}"></div>
-      <div><label>Billing Address</label><input disabled value="${esc(f['Billing Address'] || f['Invoice Address'] || '-')}"></div>
-    </div>
-    <div class="grid3">
-      <div><label>Dealer CN</label><div>${spareOrderDealerCnCell(f)}</div></div>
-      <div><label>Shipment Destination</label><input disabled value="${esc(spareOrderDestinationValue(f) || '-')}"></div>
-      <div><label>Shipment Tracking No</label><input disabled value="${esc(spareOrderTrackingValue(f) || '-')}"></div>
-    </div>
-    <div class="grid3">
-      <div><label>Specialized</label><input disabled value="${esc(spareOrderSpecializedValue(f) || '-')}"></div>
-      <div><label>Spare Source</label><input disabled value="${esc(spareOrderSpareSourceValue(f) || '-')}"></div>
-      <div><label>Stock Updated</label><input disabled value="${esc(spareOrderStockUpdatedValue(f) || '-')}"></div>
-      <div><label>Invoice Download</label><div>${invoiceDownloadCell(r)}</div></div>
-      <div><label>Payment Receipt</label><div>${paymentReceiptCell(r)}</div></div>
-    </div>
-    <label>Remarks</label><textarea disabled>${esc(f['Remarks'] || '')}</textarea>
-    <label>Final Notes</label><textarea disabled>${esc(spareOrderFinalNotesValue(f) || '')}</textarea>
-    <div class="row">
-      <button class="btn-light" onclick="renderSpare()">Back to Spare Order</button>
-      ${canReport?`<a class="btn-light" target="_blank" rel="noopener" href="/api/download-spare-order-report?tableId=${encodeURIComponent(r._table_id||'')}&record_id=${encodeURIComponent(r.record_id||'')}&role=${encodeURIComponent(S.user.role||'')}">Download Excel Report</a>`:''}
-    </div>
-  </div>${internalEdit}`;
+
+  const report = canReport ? `<a class="btn-light" target="_blank" rel="noopener" href="/api/download-spare-order-report?tableId=${encodeURIComponent(r._table_id||'')}&record_id=${encodeURIComponent(r.record_id||'')}&role=${encodeURIComponent(S.user.role||'')}">Download Excel Report</a>` : '';
+
+  const html = `${summary}
+    <h3 class="details-section-title">All Lark Fields</h3>
+    <div class="table-wrap">${renderAllLarkFieldsTable(f)}</div>
+    ${adminEdit}
+    <div class="row">${report}</div>`;
+
+  showDetailsModal(`Spare Order Details - ${orderNo || '-'}`, html);
 }
 async function saveSpareOrderInternal(i){
   const r = (Array.isArray(S.orders) ? S.orders : [])[i];
