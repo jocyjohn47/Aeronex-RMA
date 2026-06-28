@@ -524,7 +524,7 @@ function logAccessAllowed(role) {
 function logTableConfigs(env) {
   return [
     { key:"USER_TABLE_ID", name:"User & Company Details", tableId:env.USER_TABLE_ID || "" },
-    { key:"SPARE_TABLE_ID", name:"Spare Part List", tableId:env.SPARE_TABLE_ID || env.SPARE_PART_TABLE_ID || "" },
+    { key:"SPARE_LIST_TABLE_ID", name:"Spare Part List", tableId:env.SPARE_LIST_TABLE_ID || "" },
     { key:"ORDER_UAE_TABLE_ID", name:"Spare Order UAE", tableId:env.ORDER_UAE_TABLE_ID || env.SPARE_ORDER_UAE_TABLE_ID || "" },
     { key:"ORDER_KSA_TABLE_ID", name:"Spare Order KSA", tableId:env.ORDER_KSA_TABLE_ID || env.SPARE_ORDER_KSA_TABLE_ID || "" },
     { key:"REPAIR_UAE_TABLE_ID", name:"Repair Case UAE", tableId:env.REPAIR_UAE_TABLE_ID || env.REPAIR_CASE_UAE_TABLE_ID || "" },
@@ -540,12 +540,34 @@ function logTableConfigs(env) {
   ];
 }
 
+function diagnosticFieldOptions(f) {
+  const candidates = [
+    f?.ui_property?.options,
+    f?.ui_property?.option,
+    f?.property?.options,
+    f?.property?.option,
+    f?.options,
+    f?.option
+  ];
+  const raw = candidates.find(x => Array.isArray(x)) || [];
+  return raw.map(o => {
+    if (typeof o === "string") return o;
+    if (!o || typeof o !== "object") return "";
+    return String(o.name || o.text || o.value || o.label || o.id || "").trim();
+  }).filter(Boolean);
+}
+
 async function getTableFieldsForDiagnostics(env, tableId) {
   const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields`);
-  return (data.data?.items || []).map(f => ({
-    field_name: f.field_name,
-    type: f.type
-  }));
+  return (data.data?.items || []).map(f => {
+    const options = diagnosticFieldOptions(f);
+    return {
+      field_name: f.field_name,
+      type: f.type,
+      options,
+      optionCount: options.length
+    };
+  });
 }
 
 async function countRecordsForDiagnostics(env, tableId) {
@@ -685,7 +707,7 @@ async function deductSpareLocalStock(env, orderTableId, orderRecordId, orderFiel
     return { skipped: true, reason: "Stock already updated" };
   }
 
-  const spareTableId = env.SPARE_LIST_TABLE_ID || env.SPARE_TABLE_ID;
+  const spareTableId = env.SPARE_LIST_TABLE_ID;
   if (!spareTableId) {
     return { skipped: true, reason: "Spare Part List table id not configured" };
   }
@@ -1016,7 +1038,8 @@ async function handle(req, env) {
   }
 
   if (p === "/api/spares" || p === "/api/spare-list") {
-    return json(await listRecords(env, env.SPARE_LIST_TABLE_ID || env.SPARE_TABLE_ID));
+    if (!env.SPARE_LIST_TABLE_ID) return json({ error:"SPARE_LIST_TABLE_ID not configured" }, 400);
+    return json(await listRecords(env, env.SPARE_LIST_TABLE_ID));
   }
 
 
