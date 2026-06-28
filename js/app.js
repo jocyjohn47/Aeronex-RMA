@@ -446,7 +446,7 @@ function ensureAeronexLogoStyles(){
 }
 
 function layout(){ensureAeronexLogoStyles();let n=S.user?.displayName||S.user?.username||'User';document.body.innerHTML=`<header class="topbar"><div class="brand"><img class="brand-logo-img" src="img/aeronex_rma_logo_transparent.png" alt="AERONEX RMA Portal" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div class=&quot;brand-title&quot;>AERO NEX</div><div class=&quot;brand-sub&quot;>RMA & Spare Order Portal</div>')"></div><nav class="nav">
-<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${adminCenterEnabled()?`<a data-sec="adminCenter" href="#" onclick="show('adminCenter')">🧰 Admin Center</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','flycartCredit','dealers','adminCenter','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
+<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${adminCenterEnabled()?`<a data-sec="adminCenter" href="#" onclick="show('adminCenter')">🧰 Admin Center</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','flycartCredit','dealers','adminCenter','internalRepair','spareOrderDetailsAdmin','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
 function show(sec){
   document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));
   $(sec)?.classList.add('active');
@@ -459,7 +459,7 @@ function show(sec){
         try{renderDealerRepairCase()}catch(err){console.error('renderDealerRepairCase failed',err)}
       });
   }
-  if(sec==='warrantySoftwareStatus'){try{renderWarrantySoftwareStatus()}catch(e){console.error('renderWarrantySoftwareStatus failed',e)}}if(sec==='flycartCredit'){loadFlycartCredit().then(renderFlycartCredit).catch(e=>{console.error('flycartCredit failed',e);try{renderFlycartCredit()}catch(err){}})}if(sec==='logsDiagnostics'){try{renderLogsDiagnostics()}catch(e){console.error('renderLogsDiagnostics failed',e)}}if(sec==='adminCenter'){try{renderAdminCenter()}catch(e){console.error('renderAdminCenter failed',e)}}scrollTo(0,0)
+  if(sec==='warrantySoftwareStatus'){try{renderWarrantySoftwareStatus()}catch(e){console.error('renderWarrantySoftwareStatus failed',e)}}if(sec==='flycartCredit'){loadFlycartCredit().then(renderFlycartCredit).catch(e=>{console.error('flycartCredit failed',e);try{renderFlycartCredit()}catch(err){}})}if(sec==='logsDiagnostics'){try{renderLogsDiagnostics()}catch(e){console.error('renderLogsDiagnostics failed',e)}}if(sec==='adminCenter'){try{renderAdminCenter()}catch(e){console.error('renderAdminCenter failed',e)}}if(sec==='internalRepair'){loadInternalRepairMeta().then(renderInternalRepair).catch(e=>{console.error('internalRepair failed',e);try{renderInternalRepairError(e)}catch(_){}})}if(sec==='spareOrderDetailsAdmin'){loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin).catch(e=>{console.error('spareOrderDetails failed',e);try{renderSpareOrderDetailsError(e)}catch(_){}})}scrollTo(0,0)
 }
 
 function dealerRepairCaseEnabled(){
@@ -724,6 +724,287 @@ function downloadDiagnosticsJson(){
 }
 
 
+
+function adminCountryOptions(cur){
+  const list=['UAE & Other Region','KSA - SAUDI ARABIA'];
+  return list.map(x=>`<option value="${esc(x)}" ${String(cur||'')===x?'selected':''}>${esc(x)}</option>`).join('');
+}
+function adminModuleCountry(){
+  return localStorage.getItem('aeronexInternalRepairCountry') || 'UAE & Other Region';
+}
+function setInternalRepairCountry(v){
+  localStorage.setItem('aeronexInternalRepairCountry', v);
+  S.internalRepairMeta=null;
+  loadInternalRepairMeta().then(renderInternalRepair).catch(renderInternalRepairError);
+}
+function fieldMetaByName(meta){
+  const out={};
+  (meta?.fields||[]).forEach(f=>out[f.field_name]=f);
+  return out;
+}
+function metaOptions(meta, fieldName, current){
+  const f=fieldMetaByName(meta)[fieldName] || {};
+  const opts=[...(f.options||[])];
+  if(current && !opts.includes(current)) opts.unshift(current);
+  return `<option value=""></option>`+opts.map(x=>`<option value="${esc(x)}" ${String(current||'')===String(x)?'selected':''}>${esc(x)}</option>`).join('');
+}
+function isMetaMulti(meta, fieldName){
+  return (fieldMetaByName(meta)[fieldName]||{}).type===4;
+}
+function companyOptions(current){
+  const names=[...new Set((S.dealers||[]).map(r=>(r.fields||{})['Company Name']).filter(Boolean))].sort();
+  if(current && !names.includes(current)) names.unshift(current);
+  return `<option value=""></option>`+names.map(x=>`<option value="${esc(x)}" ${String(current||'')===String(x)?'selected':''}>${esc(x)}</option>`).join('');
+}
+function companyInputHtml(id, label, current){
+  return `<div><label>${esc(label)}</label><input list="${id}List" id="${id}" value="${esc(current||'')}" placeholder="Select or type custom company"><datalist id="${id}List">${companyOptions(current).replaceAll('<option value=""></option>','')}</datalist></div>`;
+}
+function val(id){return ($(id)?.value||'').trim();}
+function setVal(id,v){const el=$(id); if(el) el.value=v||'';}
+function dateInputValue(v){
+  if(!v) return '';
+  if(typeof v==='number'){
+    try{return new Date(v).toISOString().slice(0,10)}catch(e){return ''}
+  }
+  const s=String(v);
+  const m=s.match(/\d{4}-\d{2}-\d{2}/);
+  return m?m[0]:s;
+}
+function selectedOptionsValue(id){
+  const el=$(id);
+  if(!el) return '';
+  if(el.multiple) return Array.from(el.selectedOptions).map(o=>o.value).filter(Boolean);
+  return el.value || '';
+}
+function selectHtml(meta, id, fieldName, current){
+  const multi=isMetaMulti(meta, fieldName);
+  return `<select id="${id}" ${multi?'multiple size="4"':''}>${metaOptions(meta, fieldName, current)}</select>`;
+}
+function internalRepairFieldsForCountry(country){
+  const k=String(country||'').toLowerCase().includes('ksa');
+  return {
+    warranty:k?'Warranty Status':'Warranry Status',
+    material:k?'Material Consumed':'Material  Consumed',
+    remark:k?'Remarks':'Remark',
+    djiStatus:k?'DJI Repair status':'DJI Repair Status',
+    sendTracking:k?'Shipping Tracking No - Sending':'Shiping Tracking No-Sending',
+    recvTracking:'Shiping Tracking No -Receiving',
+    recvCost:k?'Shipping Cost - Receiving From DJI':'Shipment Cost - Receive from DJI'
+  };
+}
+async function loadInternalRepairMeta(){
+  const country=adminModuleCountry();
+  const d=await api('/api/admin-module-meta?module=internalRepair&country='+encodeURIComponent(country)+'&role='+encodeURIComponent(S.user.role||''));
+  S.internalRepairMeta=d;
+  S.dealers=d.dealers||S.dealers||[];
+  S.spares=d.spares||S.spares||[];
+  S.repairSourceRows=d.repairs||[];
+  S.internalRepairRows=d.rows||[];
+  return d;
+}
+function internalRepairCaseNo(f){
+  return f['REPAIR CASE']||f['Repair Case']||f['Case Register No']||'';
+}
+function internalRepairCaseLink(row){
+  const f=row.fields||{};
+  const no=internalRepairCaseNo(f);
+  if(!currentUserIsAdminTech()) return esc(no||'-');
+  return `<a href="#" onclick="openInternalRepairFromRepair('${esc(row.record_id)}');return false;">${esc(no||'Open')}</a>`;
+}
+function openInternalRepairFromRepair(recordId){
+  const row=(S.repairs||[]).find(r=>r.record_id===recordId) || {};
+  const f=row.fields||{};
+  S.internalRepairEdit=null;
+  S.internalRepairPrefill={
+    'Repair Case': internalRepairCaseNo(f),
+    'Company Name': f['Company Name']||f['Dealer Name']||'',
+    'Product Model': f['Model No']||'',
+    'Serial No': f['Serial No']||'',
+    'Warranty Status': f['Warranty Status']||'',
+    'Warranry Status': f['Warranty Status']||'',
+    'Remark': f['Details Of Issue']||f['Issue Description']||f['Remarks']||'',
+    'Remarks': f['Details Of Issue']||f['Issue Description']||f['Remarks']||''
+  };
+  show('internalRepair');
+}
+function renderInternalRepairError(e){
+  const sec=$('internalRepair');
+  if(sec) sec.innerHTML=`<div class="panel"><h2>Internal Repair</h2><div class="msg">${esc(e.message||e)}</div></div>`;
+}
+function renderInternalRepair(){
+  const sec=$('internalRepair'); if(!sec) return;
+  if(!currentUserIsAdminTech()){sec.innerHTML=`<div class="panel"><h2>Internal Repair</h2><div class="notice">Admin/Technician only.</div></div>`;return;}
+  const meta=S.internalRepairMeta||{};
+  const country=meta.country||adminModuleCountry();
+  const rows=S.internalRepairRows||[];
+  sec.innerHTML=`<div class="panel"><h2>Internal Repair</h2>
+    <div class="notice"><b>Country:</b> <select id="internalRepairCountry" onchange="setInternalRepairCountry(this.value)">${adminCountryOptions(country)}</select>
+    <button class="btn-light" onclick="loadInternalRepairMeta().then(renderInternalRepair)">Refresh</button>
+    <button class="act" onclick="newInternalRepair()">New Internal Repair</button></div>
+    <div id="internalRepairForm"></div>
+    <h3>Internal Repair Register</h3>
+    <div class="table-wrap"><table><thead><tr><th>DJI Case ID</th><th>Repair Case</th><th>Company</th><th>Model</th><th>Serial</th><th>Case Type</th><th>Status</th><th>Action</th></tr></thead><tbody>
+    ${rows.map((r,i)=>{const f=r.fields||{};return `<tr><td>${esc(f['DJI Case ID']||'')}</td><td>${esc(f['Repair Case']||'')}</td><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Product Model']||'')}</td><td>${esc(f['Serial No']||'')}</td><td>${esc(f['Case Type']||'')}</td><td>${esc(f['Case Status']||'')}</td><td><button class="btn-light" onclick="editInternalRepair(${i})">Open</button></td></tr>`}).join('')}
+    </tbody></table></div></div>`;
+  renderInternalRepairForm(S.internalRepairEdit||S.internalRepairPrefill||{});
+}
+function newInternalRepair(){S.internalRepairEdit=null;S.internalRepairPrefill={};renderInternalRepairForm({});}
+function editInternalRepair(i){const r=(S.internalRepairRows||[])[i];S.internalRepairEdit=r;S.internalRepairPrefill=null;renderInternalRepairForm(r.fields||{});}
+function renderInternalRepairForm(src){
+  const box=$('internalRepairForm'); if(!box) return;
+  const meta=S.internalRepairMeta||{}, country=meta.country||adminModuleCountry(), n=internalRepairFieldsForCountry(country);
+  const f=(S.internalRepairEdit&&S.internalRepairEdit.fields)||src||{};
+  const rec=S.internalRepairEdit?.record_id||'';
+  box.innerHTML=`<div class="subpanel"><h3>${rec?'Edit':'New'} Internal Repair</h3>
+    <div class="grid3">
+      <div><label>DJI Case ID</label><input id="irDjiCaseId" value="${esc(f['DJI Case ID']||'')}"></div>
+      <div><label>DJI Internal Case ID</label><input id="irDjiInternalCaseId" value="${esc(f['DJI Internal Case ID']||'')}"></div>
+      <div><label>Repair Case</label><input id="irRepairCase" value="${esc(f['Repair Case']||'')}"></div>
+      ${companyInputHtml('irCompanyName','Company Name',f['Company Name']||'')}
+      <div><label>Product Model</label><input id="irProductModel" value="${esc(f['Product Model']||'')}"></div>
+      <div><label>Serial No</label><input id="irSerialNo" value="${esc(f['Serial No']||'')}"></div>
+      <div><label>Case Type</label>${selectHtml(meta,'irCaseType','Case Type',f['Case Type']||'')}</div>
+      <div><label>Warranty Status</label>${selectHtml(meta,'irWarranty',n.warranty,f[n.warranty]||'')}</div>
+      ${companyInputHtml('irBillingCompany','Billing Company',f['Billing Company']||'')}
+      <div><label>Issue Type</label>${selectHtml(meta,'irIssueType','Issue Type',f['Issue Type']||'')}</div>
+      <div><label>Case Creation Date</label><input id="irCreationDate" type="date" value="${esc(dateInputValue(f['Case Creation Date']))}"></div>
+      <div><label>Case Close Date</label><input id="irCloseDate" type="date" value="${esc(dateInputValue(f['Case Close Date']))}"></div>
+      <div><label>Shipper Name</label>${selectHtml(meta,'irShipper','Shipper Name',f['Shipper Name']||'')}</div>
+      <div><label>Tracking No - Sending</label><input id="irSendTrack" value="${esc(f[n.sendTracking]||'')}"></div>
+      <div><label>Shipment Cost - Sent to DJI</label><input id="irSendCost" value="${esc(f['Shipment Cost - Sent to DJI']||'')}"></div>
+      <div><label>Tracking No - Receiving</label><input id="irRecvTrack" value="${esc(f[n.recvTracking]||'')}"></div>
+      <div><label>Shipment Cost - Receiving</label><input id="irRecvCost" value="${esc(f[n.recvCost]||'')}"></div>
+      <div><label>Unit Consumed</label><input id="irUnitConsumed" value="${esc(f['Unit Consumed']||'')}"></div>
+      <div><label>Material Consumed</label><input id="irMaterialConsumed" value="${esc(f[n.material]||'')}"></div>
+      <div><label>DJI Invoice</label><input id="irDjiInvoice" value="${esc(f['DJI Invoice']||'')}"></div>
+      <div><label>DJI Repair Status</label>${fieldMetaByName(meta)[n.djiStatus]?.optionCount?selectHtml(meta,'irDjiStatus',n.djiStatus,f[n.djiStatus]||''):`<input id="irDjiStatus" value="${esc(f[n.djiStatus]||'')}">`}</div>
+      <div><label>Case Status</label>${selectHtml(meta,'irCaseStatus','Case Status',f['Case Status']||'')}</div>
+    </div>
+    <label>Remarks</label><textarea id="irRemark">${esc(f[n.remark]||'')}</textarea>
+    <div class="notice"><b>Add spare used:</b> select from Spare Part List. It saves to Material Consumed / Unit Consumed in the same case row.</div>
+    <div class="row"><input id="irSpareSearch" placeholder="Search Material Code or Name" oninput="renderInternalRepairSpareOptions()"><input id="irSpareQty" class="qty" type="number" min="1" value="1"><button class="btn-light" onclick="addInternalRepairSpare()">Add Spare</button></div>
+    <select id="irSpareSelect"></select>
+    <div id="irSparePreview" class="notice"></div>
+    <p><button class="act" onclick="saveInternalRepair()">Save Internal Repair</button> <span id="internalRepairMsg" class="msg"></span></p>
+  </div>`;
+  S.irParts=parseDealerRepairMaterials(f[n.material]||'').map(x=>({materialCode:x.materialCode,materialName:x.materialName,qty:x.qty}));
+  renderInternalRepairSpareOptions(); renderInternalRepairSparePreview();
+}
+function renderInternalRepairSpareOptions(){
+  const s=$('irSpareSelect'); if(!s) return;
+  const q=($('irSpareSearch')?.value||'').toLowerCase();
+  s.innerHTML=(S.spares||[]).filter(x=>{const f=x.fields||{};return `${f['Material Code']||''} ${f['Material Name']||''}`.toLowerCase().includes(q)}).slice(0,200).map(x=>{const f=x.fields||{},o={materialCode:f['Material Code']||'',materialName:f['Material Name']||''};return `<option value="${encodeURIComponent(JSON.stringify(o))}">${esc(o.materialCode)} - ${esc(o.materialName)}</option>`}).join('');
+}
+function addInternalRepairSpare(){
+  const s=$('irSpareSelect'); if(!s||!s.value) return;
+  const o=JSON.parse(decodeURIComponent(s.value)); o.qty=val('irSpareQty')||'1';
+  S.irParts=S.irParts||[]; S.irParts.push(o);
+  setVal('irMaterialConsumed', S.irParts.map(p=>`${p.materialCode} - ${p.materialName} x ${p.qty}`).join('; '));
+  setVal('irUnitConsumed', S.irParts.reduce((a,p)=>a+(Number(p.qty)||0),0));
+  renderInternalRepairSparePreview();
+}
+function renderInternalRepairSparePreview(){
+  const box=$('irSparePreview'); if(!box) return;
+  const parts=S.irParts||[];
+  box.innerHTML=parts.length?parts.map((p,i)=>`${esc(p.materialCode)} - ${esc(p.materialName)} x ${esc(p.qty)} <button class="btn-light" onclick="S.irParts.splice(${i},1);setVal('irMaterialConsumed',S.irParts.map(p=>p.materialCode+' - '+p.materialName+' x '+p.qty).join('; '));setVal('irUnitConsumed',S.irParts.reduce((a,p)=>a+(Number(p.qty)||0),0));renderInternalRepairSparePreview()">Remove</button>`).join('<br>'):'No spare selected.';
+}
+async function saveInternalRepair(){
+  try{
+    const meta=S.internalRepairMeta||{}, n=internalRepairFieldsForCountry(meta.country);
+    const fields={
+      'DJI Case ID':val('irDjiCaseId'),
+      'DJI Internal Case ID':val('irDjiInternalCaseId'),
+      'Repair Case':val('irRepairCase'),
+      'Company Name':val('irCompanyName'),
+      'Product Model':val('irProductModel'),
+      'Serial No':val('irSerialNo'),
+      'Case Type':selectedOptionsValue('irCaseType'),
+      [n.warranty]:selectedOptionsValue('irWarranty'),
+      'Billing Company':val('irBillingCompany'),
+      'Issue Type':selectedOptionsValue('irIssueType'),
+      'Case Creation Date':val('irCreationDate'),
+      'Case Close Date':val('irCloseDate'),
+      'Shipper Name':selectedOptionsValue('irShipper'),
+      [n.sendTracking]:val('irSendTrack'),
+      'Shipment Cost - Sent to DJI':val('irSendCost'),
+      [n.recvTracking]:val('irRecvTrack'),
+      [n.recvCost]:val('irRecvCost'),
+      'Unit Consumed':val('irUnitConsumed'),
+      [n.material]:val('irMaterialConsumed'),
+      'DJI Invoice':val('irDjiInvoice'),
+      [n.djiStatus]:selectedOptionsValue('irDjiStatus')||val('irDjiStatus'),
+      'Case Status':selectedOptionsValue('irCaseStatus'),
+      [n.remark]:val('irRemark')
+    };
+    await api('/api/save-internal-repair',{method:'POST',body:JSON.stringify({role:S.user.role||'',country:meta.country||adminModuleCountry(),record_id:S.internalRepairEdit?.record_id||'',fields})});
+    msg('internalRepairMsg','Saved successfully');
+    S.internalRepairEdit=null;S.internalRepairPrefill=null;
+    await loadInternalRepairMeta();renderInternalRepair();
+  }catch(e){msg('internalRepairMsg',e.message||'Save failed')}
+}
+
+async function loadSpareOrderDetailsMeta(){
+  const d=await api('/api/admin-module-meta?module=spareOrderDetails&role='+encodeURIComponent(S.user.role||''));
+  S.spareOrderDetailsMeta=d; S.dealers=d.dealers||S.dealers||[]; S.spareOrderDetailsRows=d.rows||[]; return d;
+}
+function renderSpareOrderDetailsError(e){const sec=$('spareOrderDetailsAdmin');if(sec)sec.innerHTML=`<div class="panel"><h2>Spare Order Details</h2><div class="msg">${esc(e.message||e)}</div></div>`}
+function renderSpareOrderDetailsAdmin(){
+  const sec=$('spareOrderDetailsAdmin'); if(!sec)return;
+  if(!currentUserIsAdminTech()){sec.innerHTML=`<div class="panel"><h2>Spare Order Details</h2><div class="notice">Admin/Technician only.</div></div>`;return;}
+  const rows=S.spareOrderDetailsRows||[];
+  sec.innerHTML=`<div class="panel"><h2>Spare Order Details</h2><div class="notice">Manage DJI spare order/shipment detail records. <button class="btn-light" onclick="loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin)">Refresh</button> <button class="act" onclick="newSpareOrderDetails()">New Details</button></div><div id="spareOrderDetailsForm"></div>
+  <div class="table-wrap"><table><thead><tr><th>DJI Case ID</th><th>Company</th><th>Case Type</th><th>Billing</th><th>Order Type</th><th>Created</th><th>Closed</th><th>Action</th></tr></thead><tbody>
+  ${rows.map((r,i)=>{const f=r.fields||{};return `<tr><td>${esc(f['DJI Case ID']||'')}</td><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Case Type']||'')}</td><td>${esc(f['Billing Company']||'')}</td><td>${esc(Array.isArray(f['Order Type'])?f['Order Type'].join(', '):(f['Order Type']||''))}</td><td>${esc(dateInputValue(f['Case Creation Date']))}</td><td>${esc(dateInputValue(f['Case Close Date']))}</td><td><button class="btn-light" onclick="editSpareOrderDetails(${i})">Open</button></td></tr>`}).join('')}</tbody></table></div></div>`;
+  renderSpareOrderDetailsForm(S.spareOrderDetailsEdit?.fields||{});
+}
+function newSpareOrderDetails(){S.spareOrderDetailsEdit=null;renderSpareOrderDetailsForm({});}
+function editSpareOrderDetails(i){S.spareOrderDetailsEdit=(S.spareOrderDetailsRows||[])[i];renderSpareOrderDetailsForm(S.spareOrderDetailsEdit.fields||{});}
+function renderSpareOrderDetailsForm(f){
+  const box=$('spareOrderDetailsForm'); if(!box)return; const meta=S.spareOrderDetailsMeta||{};
+  box.innerHTML=`<div class="subpanel"><h3>${S.spareOrderDetailsEdit?'Edit':'New'} Spare Order Details</h3><div class="grid3">
+    <div><label>DJI Case ID</label><input id="sodDjiCaseId" value="${esc(f['DJI Case ID']||'')}"></div>
+    <div><label>Case ID Remarks</label><input id="sodCaseIdRemarks" value="${esc(f['Case ID Remarks']||'')}"></div>
+    <div><label>Case Type</label>${selectHtml(meta,'sodCaseType','Case Type',f['Case Type']||'')}</div>
+    ${companyInputHtml('sodCompanyName','Company Name',f['Company Name']||'')}
+    <div><label>Type of Case</label><input id="sodTypeOfCase" value="${esc(f['Type of Case']||'')}"></div>
+    <div><label>Billing Company</label>${selectHtml(meta,'sodBillingCompany','Billing Company',f['Billing Company']||'')}</div>
+    <div><label>Order Type</label>${selectHtml(meta,'sodOrderType','Order Type',Array.isArray(f['Order Type'])?f['Order Type'].join(','):(f['Order Type']||''))}</div>
+    <div><label>Case Creation Date</label><input id="sodCreationDate" type="date" value="${esc(dateInputValue(f['Case Creation Date']))}"></div>
+    <div><label>Case Close Date</label><input id="sodCloseDate" type="date" value="${esc(dateInputValue(f['Case Close Date']))}"></div>
+    <div><label>Shipper Name</label>${selectHtml(meta,'sodShipper','Shipper Name',f['Shipper Name']||'')}</div>
+    <div><label>Tracking No - Sending</label><input id="sodSendTrack" value="${esc(f['Shiping Tracking No-Sending']||'')}"></div>
+    <div><label>Shipment Cost - Sent to DJI</label><input id="sodSendCost" value="${esc(f['Shipment Cost - Sent to DJI']||'')}"></div>
+    <div><label>Tracking No - Receiving</label><input id="sodRecvTrack" value="${esc(f['Shiping Tracking No -Receiving']||'')}"></div>
+    <div><label>Shipment Cost - Receive from DJI</label><input id="sodRecvCost" value="${esc(f['Shipment Cost - Receive from DJI']||'')}"></div>
+  </div><label>Remarks</label><textarea id="sodRemarks">${esc(f['Remarks']||'')}</textarea>
+  <p><button class="act" onclick="saveSpareOrderDetails()">Save Spare Order Details</button> <span id="spareOrderDetailsMsg" class="msg"></span></p></div>`;
+}
+async function saveSpareOrderDetails(){
+  try{
+    const fields={
+      'DJI Case ID':val('sodDjiCaseId'),
+      'Case ID Remarks':val('sodCaseIdRemarks'),
+      'Case Type':selectedOptionsValue('sodCaseType'),
+      'Company Name':val('sodCompanyName'),
+      'Type of Case':val('sodTypeOfCase'),
+      'Billing Company':selectedOptionsValue('sodBillingCompany'),
+      'Order Type':selectedOptionsValue('sodOrderType'),
+      'Case Creation Date':val('sodCreationDate'),
+      'Case Close Date':val('sodCloseDate'),
+      'Shipper Name':selectedOptionsValue('sodShipper'),
+      'Shiping Tracking No-Sending':val('sodSendTrack'),
+      'Shipment Cost - Sent to DJI':val('sodSendCost'),
+      'Shiping Tracking No -Receiving':val('sodRecvTrack'),
+      'Shipment Cost - Receive from DJI':val('sodRecvCost'),
+      'Remarks':val('sodRemarks')
+    };
+    await api('/api/save-spare-order-details',{method:'POST',body:JSON.stringify({role:S.user.role||'',record_id:S.spareOrderDetailsEdit?.record_id||'',fields})});
+    msg('spareOrderDetailsMsg','Saved successfully');
+    S.spareOrderDetailsEdit=null; await loadSpareOrderDetailsMeta(); renderSpareOrderDetailsAdmin();
+  }catch(e){msg('spareOrderDetailsMsg',e.message||'Save failed')}
+}
+
+
 function flycartCreditEnabled(){ return isAdmin(); }
 
 function flycartFields(){
@@ -855,6 +1136,10 @@ function adminCenterCards(){
   }
   if(flycartCreditEnabled()){
     cards.push(['💳','Flycart Credit Use','Manage Flycart credit use records.','flycartCredit','Open']);
+  }
+  if(currentUserIsAdminTech()){
+    cards.push(['🛠','Internal Repair','Create and update internal repair register cases.','internalRepair','Open']);
+    cards.push(['📦','Spare Order Details','Manage DJI spare order/shipment details.','spareOrderDetailsAdmin','Open']);
   }
   if(logsPageEnabled()){
     cards.push(['🧾','Logs & Diagnostics','Check error logs and Lark table diagnostics.','logsDiagnostics','Open']);
@@ -1518,7 +1803,7 @@ async function submitRepair(){
   }
 }
 function renderRepairStatus(){
-  $('repairStatus').innerHTML=`<div class="panel"><h2>Repair Status <button class="btn-light" onclick="refreshRepairs()">Refresh</button></h2><div class="table-wrap"><table><thead><tr><th>Repair Case No</th><th>Dealer / Company</th><th>Model No</th><th>Serial No</th><th>Date</th><th>Status</th><th>Log Link</th><th>Issue Media / Required Details</th><th>Remarks</th><th>Notes</th><th>Case Close Comment</th></tr></thead><tbody>${(Array.isArray(S.repairs)?S.repairs:[]).map(r=>{let f=r.fields||{};return `<tr><td>${esc(f['REPAIR CASE']||f['Repair Case']||'')}</td><td>${esc(f['Company Name']||f['Dealer Name']||'')}</td><td>${esc(f['Model No']||'')}</td><td>${esc(f['Serial No']||'')}</td><td>${new Date(Number(f['Date of Purchase / Activation date']||f['Date Of Activation']||'')).toLocaleDateString('en-GB')}</td><td>${statusCell(r,'repair')}</td><td>${linkCell(f['Log File']||f['Log for Drone and RC'])}</td><td>${linkCell(f['Upload all the required details']||f['Issue Video and Pictures'])}</td><td>${esc(f['Remarks']||'')}</td><td>${esc(f['Notes']||'')}</td><td>${esc(f['Case Close Comment']||'')}</td></tr>`}).join('')}</tbody></table></div></div>`;
+  $('repairStatus').innerHTML=`<div class="panel"><h2>Repair Status <button class="btn-light" onclick="refreshRepairs()">Refresh</button></h2><div class="table-wrap"><table><thead><tr><th>Repair Case No</th><th>Dealer / Company</th><th>Model No</th><th>Serial No</th><th>Date</th><th>Status</th><th>Log Link</th><th>Issue Media / Required Details</th><th>Remarks</th><th>Notes</th><th>Case Close Comment</th></tr></thead><tbody>${(Array.isArray(S.repairs)?S.repairs:[]).map(r=>{let f=r.fields||{};return `<tr><td>${internalRepairCaseLink(r)}</td><td>${esc(f['Company Name']||f['Dealer Name']||'')}</td><td>${esc(f['Model No']||'')}</td><td>${esc(f['Serial No']||'')}</td><td>${new Date(Number(f['Date of Purchase / Activation date']||f['Date Of Activation']||'')).toLocaleDateString('en-GB')}</td><td>${statusCell(r,'repair')}</td><td>${linkCell(f['Log File']||f['Log for Drone and RC'])}</td><td>${linkCell(f['Upload all the required details']||f['Issue Video and Pictures'])}</td><td>${esc(f['Remarks']||'')}</td><td>${esc(f['Notes']||'')}</td><td>${esc(f['Case Close Comment']||'')}</td></tr>`}).join('')}</tbody></table></div></div>`;
 }
 function linkCell(v){if(!v)return '-'; if(typeof v==='object'&&v.link)return `<a href="${esc(v.link)}" target="_blank">Open</a>`; return `<a href="${esc(v)}" target="_blank">Open</a>`;}
 function renderDealers(){
@@ -1545,5 +1830,5 @@ function renderAdmin(){
 }
 async function loadOrders(){S.orders=await api('/api/my-orders?country='+encodeURIComponent(selectedCountry())+'&role='+encodeURIComponent(S.user.role||'')+'&email='+encodeURIComponent(userEmail())+'&companyName='+encodeURIComponent(companyName()))}
 async function loadRepairs(){S.repairs=await api('/api/my-repairs?country='+encodeURIComponent(selectedCountry())+'&role='+encodeURIComponent(S.user.role||'')+'&email='+encodeURIComponent(userEmail())+'&companyName='+encodeURIComponent(companyName())+'&contactName='+encodeURIComponent(contactName()))}
-async function initApp(){if(!requireLogin())return;layout();renderDashboard();try{S.spares=await api('/api/spares')}catch{}try{await loadOrders()}catch{}try{await loadRepairs()}catch{}try{S.dealers=await api('/api/dealers')}catch{}try{S.notes=await api('/api/portal-notes')}catch{}renderSpare();renderRepairCreate();renderRepairStatus();renderDealers();renderNotes();renderChangePassword();renderAdmin();renderFlycartCredit();renderAdminCenter()}
+async function initApp(){if(!requireLogin())return;layout();renderDashboard();try{S.spares=await api('/api/spares'); if(!Array.isArray(S.spares)) S.spares=[];}catch(e){S.spares=[]; console.warn('Spare list load failed',e);}try{await loadOrders()}catch{}try{await loadRepairs()}catch{}try{S.dealers=await api('/api/dealers')}catch{}try{S.notes=await api('/api/portal-notes')}catch{}renderSpare();renderRepairCreate();renderRepairStatus();renderDealers();renderNotes();renderChangePassword();renderAdmin();renderFlycartCredit();renderAdminCenter()}
 
