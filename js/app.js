@@ -855,22 +855,17 @@ function editInternalRepair(i){
   S.internalRepairEdit=r;
   S.internalRepairPrefill=null;
   const f=r.fields||{};
-  if(typeof internalRepairFormHtml === 'function'){
-    const html = internalRepairFormHtml(f, true) + `<h3 class="details-section-title">All Lark Fields</h3>${renderAllLarkFieldsTable(f)}`;
-    showDetailsModal(`Internal Repair Details - ${(f['DJI Case ID']||f['Repair Case']||'Open')}`, html);
-    const n=internalRepairFieldsForCountry((S.internalRepairMeta||{}).country||adminModuleCountry());
-    S.irParts=parseDealerRepairMaterials(f[n.material]||'').map(x=>({materialCode:x.materialCode,materialName:x.materialName,qty:x.qty}));
-    setTimeout(()=>{try{renderInternalRepairSpareOptions();renderInternalRepairSparePreview();}catch(e){}},0);
-  }else{
-    renderInternalRepairForm(f);
-  }
+  const html = internalRepairFormHtml(f, true) + `<h3 class="details-section-title">All Lark Fields</h3>${renderAllLarkFieldsTable(f)}`;
+  showDetailsModal(`Internal Repair Details - ${(f['DJI Case ID']||f['Repair Case']||'Open')}`, html);
+  const n=internalRepairFieldsForCountry((S.internalRepairMeta||{}).country||adminModuleCountry());
+  S.irParts=parseDealerRepairMaterials(f[n.material]||'').map(x=>({materialCode:x.materialCode,materialName:x.materialName,qty:x.qty}));
+  setTimeout(()=>{try{renderInternalRepairSpareOptions();renderInternalRepairSparePreview();}catch(e){}},0);
 }
-function renderInternalRepairForm(src){
-  const box=$('internalRepairForm'); if(!box) return;
+function internalRepairFormHtml(src, isPopup){
   const meta=S.internalRepairMeta||{}, country=meta.country||adminModuleCountry(), n=internalRepairFieldsForCountry(country);
   const f=(S.internalRepairEdit&&S.internalRepairEdit.fields)||src||{};
   const rec=S.internalRepairEdit?.record_id||'';
-  box.innerHTML=`<div class="subpanel"><h3>${rec?'Edit':'New'} Internal Repair</h3>
+  return `<div class="subpanel"><h3>${rec?'Edit':'New'} Internal Repair</h3>
     <div class="grid3">
       <div><label>DJI Case ID</label><input id="irDjiCaseId" value="${esc(f['DJI Case ID']||'')}"></div>
       <div><label>DJI Internal Case ID</label><input id="irDjiInternalCaseId" value="${esc(f['DJI Internal Case ID']||'')}"></div>
@@ -902,6 +897,12 @@ function renderInternalRepairForm(src){
     <div id="irSparePreview" class="notice"></div>
     <p><button class="act" onclick="saveInternalRepair()">Save Internal Repair</button> <span id="internalRepairMsg" class="msg"></span></p>
   </div>`;
+}
+function renderInternalRepairForm(src){
+  const box=$('internalRepairForm'); if(!box) return;
+  const meta=S.internalRepairMeta||{}, country=meta.country||adminModuleCountry(), n=internalRepairFieldsForCountry(country);
+  const f=(S.internalRepairEdit&&S.internalRepairEdit.fields)||src||{};
+  box.innerHTML=internalRepairFormHtml(src, false);
   S.irParts=parseDealerRepairMaterials(f[n.material]||'').map(x=>({materialCode:x.materialCode,materialName:x.materialName,qty:x.qty}));
   renderInternalRepairSpareOptions(); renderInternalRepairSparePreview();
 }
@@ -951,10 +952,17 @@ async function saveInternalRepair(){
       'Case Status':selectedOptionsValue('irCaseStatus'),
       [n.remark]:val('irRemark')
     };
-    await api('/api/save-internal-repair',{method:'POST',body:JSON.stringify({role:S.user.role||'',country:meta.country||adminModuleCountry(),record_id:S.internalRepairEdit?.record_id||'',fields})});
+    const editingId=S.internalRepairEdit?.record_id||'';
+    await api('/api/save-internal-repair',{method:'POST',body:JSON.stringify({role:S.user.role||'',country:meta.country||adminModuleCountry(),record_id:editingId,fields})});
     msg('internalRepairMsg','Saved successfully');
-    S.internalRepairEdit=null;S.internalRepairPrefill=null;
-    await loadInternalRepairMeta();renderInternalRepair();
+    await loadInternalRepairMeta();
+    if(document.getElementById('detailsModalOverlay') && editingId){
+      const idx=(S.internalRepairRows||[]).findIndex(x=>x.record_id===editingId);
+      if(idx>=0) editInternalRepair(idx);
+    }else{
+      S.internalRepairEdit=null;S.internalRepairPrefill=null;
+      renderInternalRepair();
+    }
   }catch(e){msg('internalRepairMsg',e.message||'Save failed')}
 }
 
