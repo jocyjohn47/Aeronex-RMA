@@ -1299,10 +1299,29 @@ async function handle(req, env) {
     return json({ ok:true, created:true, record:rec.data || rec });
   }
 
-  if (p === "/api/save-spare-order-details" && req.method === "POST") {
+  
+  if (p === "/api/upload-spare-order-details-document" && req.method === "POST") {
     const b = await readBody(req);
     const role = norm(b.role);
-    if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    if (!flycartAdminOnly(role)) return json({ error:"Forbidden" }, 403);
+    const tableId = env.SPARE_ORDER_DETAILS_TABLE_ID;
+    if (!tableId) return json({ error:"SPARE_ORDER_DETAILS_TABLE_ID not configured" }, 400);
+    if (!b.record_id) return json({ error:"Missing record_id" }, 400);
+    const name = b.file?.name || "internal-spare-order-document.pdf";
+    const safeName = String(name).replace(/[^a-zA-Z0-9._-]/g, "_");
+    const folder = norm(b.djiCaseId || "internal-spare-order") || "internal-spare-order";
+    const fileUrl = await putR2(env, `internal-spare-order-details/${folder}/document-upload-${Date.now()}-${safeName}`, bytesFromDataUrl(b.file?.data), b.file?.type || "application/octet-stream");
+    const fieldTypes = await getFieldTypes(env, tableId);
+    if (!fieldTypes["Document Upload"]) return json({ error:"Document Upload field not found in Internal Spare Order details table" }, 400);
+    const update = { "Document Upload": fieldTypes["Document Upload"] === 15 ? larkUrl(fileUrl, "Document Upload") : fileUrl };
+    await updateRecord(env, tableId, b.record_id, update);
+    return json({ ok:true, url:fileUrl });
+  }
+
+if (p === "/api/save-spare-order-details" && req.method === "POST") {
+    const b = await readBody(req);
+    const role = norm(b.role);
+    if (!flycartAdminOnly(role)) return json({ error:"Forbidden" }, 403);
     const tableId = env.SPARE_ORDER_DETAILS_TABLE_ID;
     if (!tableId) return json({ error:"SPARE_ORDER_DETAILS_TABLE_ID not configured" }, 400);
     const fieldTypes = await getFieldTypes(env, tableId);
@@ -1586,7 +1605,7 @@ async function handle(req, env) {
 
   if (p === "/api/update-spare-order-internal" && req.method === "POST") {
     const b = await readBody(req);
-    if (!flycartAdminOnly(b.role)) return json({ error:"Forbidden" }, 403);
+    if (!canSeeAll(b.role)) return json({ error:"Forbidden" }, 403);
     if (!b.tableId || !b.record_id) return json({ error:"Missing tableId/record_id" }, 400);
     const fieldTypes = await getFieldTypes(env, b.tableId);
     const fields = {};
@@ -1607,7 +1626,7 @@ async function handle(req, env) {
 
   if (p === "/api/upload-dealer-cn" && req.method === "POST") {
     const b = await readBody(req);
-    if (!flycartAdminOnly(b.role)) return json({ error:"Forbidden" }, 403);
+    if (!canSeeAll(b.role)) return json({ error:"Forbidden" }, 403);
     if (!b.tableId || !b.record_id) return json({ error:"Missing tableId/record_id" }, 400);
     const no = await resolveOrderNoForUpload(env, b);
     const name = b.file?.name || "dealer-cn.pdf";
