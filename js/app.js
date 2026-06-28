@@ -729,10 +729,35 @@ function adminCountryOptions(cur){
   const list=['UAE & Other Region','KSA - SAUDI ARABIA'];
   return list.map(x=>`<option value="${esc(x)}" ${String(cur||'')===x?'selected':''}>${esc(x)}</option>`).join('');
 }
+
+function userCountryText(){
+  const u=S.user||{}, f=u.fields||{};
+  return String(u.country || u.Country || f.Country || f['Country'] || '').trim();
+}
+function normalizedPortalCountry(v){
+  const s=String(v||'').toLowerCase();
+  if(s.includes('ksa') || s.includes('saudi')) return 'KSA - SAUDI ARABIA';
+  return 'UAE & Other Region';
+}
+function allowedInternalRepairCountry(){
+  if(isAdmin()) return localStorage.getItem('aeronexInternalRepairCountry') || 'UAE & Other Region';
+  return normalizedPortalCountry(userCountryText() || country());
+}
+function internalRepairCountryQuery(){
+  return allowedInternalRepairCountry();
+}
+function internalRepairCountryControl(current){
+  if(isAdmin()){
+    return `<b>Country:</b> <select id="internalRepairCountry" onchange="setInternalRepairCountry(this.value)">${adminCountryOptions(current)}</select>`;
+  }
+  return `<b>Country:</b> ${esc(current)} <span class="muted">(based on your user permission)</span>`;
+}
+
 function adminModuleCountry(){
-  return localStorage.getItem('aeronexInternalRepairCountry') || 'UAE & Other Region';
+  return allowedInternalRepairCountry();
 }
 function setInternalRepairCountry(v){
+  if(!isAdmin()) return;
   localStorage.setItem('aeronexInternalRepairCountry', v);
   S.internalRepairMeta=null;
   loadInternalRepairMeta().then(renderInternalRepair).catch(renderInternalRepairError);
@@ -793,8 +818,8 @@ function internalRepairFieldsForCountry(country){
   };
 }
 async function loadInternalRepairMeta(){
-  const country=adminModuleCountry();
-  const d=await api('/api/admin-module-meta?module=internalRepair&country='+encodeURIComponent(country)+'&role='+encodeURIComponent(S.user.role||''));
+  const country=internalRepairCountryQuery();
+  const d=await api('/api/admin-module-meta?module=internalRepair&country='+encodeURIComponent(country)+'&role='+encodeURIComponent(S.user.role||'')+'&userCountry='+encodeURIComponent(userCountryText()||country));
   S.internalRepairMeta=d;
   S.dealers=d.dealers||S.dealers||[];
   S.spares=d.spares||S.spares||[];
@@ -838,7 +863,7 @@ function renderInternalRepair(){
   const country=meta.country||adminModuleCountry();
   const rows=S.internalRepairRows||[];
   sec.innerHTML=`<div class="panel"><h2>Internal Repair</h2>
-    <div class="notice"><b>Country:</b> <select id="internalRepairCountry" onchange="setInternalRepairCountry(this.value)">${adminCountryOptions(country)}</select>
+    <div class="notice">${internalRepairCountryControl(country)}
     <button class="btn-light" onclick="loadInternalRepairMeta().then(renderInternalRepair)">Refresh</button>
     <button class="act" onclick="newInternalRepair()">New Internal Repair</button></div>
     <div id="internalRepairForm"></div>
@@ -953,7 +978,7 @@ async function saveInternalRepair(){
       [n.remark]:val('irRemark')
     };
     const editingId=S.internalRepairEdit?.record_id||'';
-    await api('/api/save-internal-repair',{method:'POST',body:JSON.stringify({role:S.user.role||'',country:meta.country||adminModuleCountry(),record_id:editingId,fields})});
+    await api('/api/save-internal-repair',{method:'POST',body:JSON.stringify({role:S.user.role||'',country:meta.country||adminModuleCountry(),userCountry:userCountryText()||'',record_id:editingId,fields})});
     msg('internalRepairMsg','Saved successfully');
     await loadInternalRepairMeta();
     if(document.getElementById('detailsModalOverlay') && editingId){
