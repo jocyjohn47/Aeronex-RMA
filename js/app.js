@@ -802,8 +802,12 @@ function val(id){return ($(id)?.value||'').trim();}
 function setVal(id,v){const el=$(id); if(el) el.value=v||'';}
 function dateInputValue(v){
   if(!v) return '';
-  if(typeof v==='number'){
-    try{return new Date(v).toISOString().slice(0,10)}catch(e){return ''}
+  if(typeof v==='number' || /^\d{10,13}$/.test(String(v).trim())){
+    try{
+      const n=Number(String(v).trim());
+      const ms=String(Math.trunc(n)).length===10 ? n*1000 : n;
+      return new Date(ms).toISOString().slice(0,10);
+    }catch(e){return ''}
   }
   const s=String(v);
   const m=s.match(/\d{4}-\d{2}-\d{2}/);
@@ -816,7 +820,8 @@ function selectedOptionsValue(id){
   return el.value || '';
 }
 function selectHtml(meta, id, fieldName, current){
-  const multi=isMetaMulti(meta, fieldName) && fieldName !== 'Order Type';
+  const singleLineFields = ['Order Type','Issue Type'];
+  const multi=isMetaMulti(meta, fieldName) && !singleLineFields.includes(fieldName);
   return `<select id="${id}" ${multi?'multiple size="4"':''}>${metaOptions(meta, fieldName, current)}</select>`;
 }
 function internalRepairFieldsForCountry(country){
@@ -895,7 +900,7 @@ function editInternalRepair(i){
   S.internalRepairPrefill=null;
   const f=r.fields||{};
   const html = internalRepairFormHtml(f, true) + `<h3 class="details-section-title">All Lark Fields</h3>${renderAllLarkFieldsTable(f)}`;
-  showDetailsModal(`Internal Repair Details - ${(f['DJI Case ID']||f['Repair Case']||'Open')}`, html);
+  showDetailsModal(`Internal Spare Order & Shipment Details - ${(f['DJI Case ID']||f['Repair Case']||'Open')}`, html);
   const n=internalRepairFieldsForCountry((S.internalRepairMeta||{}).country||adminModuleCountry());
   S.irParts=parseDealerRepairMaterials(f[n.material]||'').map(x=>({materialCode:x.materialCode,materialName:x.materialName,qty:x.qty}));
   setTimeout(()=>{try{renderInternalRepairSpareOptions();renderInternalRepairSparePreview();}catch(e){}},0);
@@ -1302,7 +1307,7 @@ function adminCenterCards(){
     cards.push(['🛠','Internal Repair','Create and update internal repair register cases.','internalRepair','Open']);
   }
   if(isAdmin()){
-    cards.push(['📦','Internal Spare Order & Shipment Details','Manage internal spare orders, shipments, and document records.','spareOrderDetailsAdmin','Open']);
+    cards.push(['📦','Internal Spare Order & Shipment Details','Admin-only spare order internal processing records.','spareOrderDetailsAdmin','Open']);
   }
   if(logsPageEnabled()){
     cards.push(['🧾','Logs & Diagnostics','Check error logs and Lark table diagnostics.','logsDiagnostics','Open']);
@@ -1793,9 +1798,28 @@ function showDetailsModal(title, html){
   el.addEventListener('click', function(e){ if(e.target===el) closeDetailsModal(); });
   document.body.appendChild(el);
 }
-function detailsFieldValue(v){
+function formatLarkDateDisplayValue(v){
+  if(v===undefined || v===null || v==='') return '';
+  const s=String(v).trim();
+  if(!/^\d{10,13}$/.test(s)) return '';
+  try{
+    const n=Number(s);
+    const ms=s.length===10 ? n*1000 : n;
+    const d=new Date(ms);
+    if(isNaN(d.getTime())) return '';
+    const dd=String(d.getDate()).padStart(2,'0');
+    const mm=String(d.getMonth()+1).padStart(2,'0');
+    const yy=d.getFullYear();
+    return `${dd}-${mm}-${yy}`;
+  }catch(e){return ''}
+}
+function detailsFieldValue(v, fieldName){
   if(v===undefined || v===null || v==='') return '-';
-  if(Array.isArray(v)) return v.map(detailsFieldValue).join('<br>');
+  if(Array.isArray(v)) return v.map(x=>detailsFieldValue(x, fieldName)).join('<br>');
+  if((fieldName||'').toLowerCase().includes('date')){
+    const d=formatLarkDateDisplayValue(v);
+    if(d) return esc(d);
+  }
   if(typeof v==='object'){
     const link = v.link || v.url || v.href || v.file_url || v.tmp_url;
     const name = v.text || v.name || v.filename || v.value || v.title || 'Open';
@@ -1807,7 +1831,7 @@ function detailsFieldValue(v){
 function renderAllLarkFieldsTable(fields){
   const entries=Object.entries(fields||{});
   if(!entries.length) return '<div class="notice">No fields available.</div>';
-  return `<div class="details-all-fields-wrap"><table class="details-all-fields"><tbody>${entries.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${detailsFieldValue(v)}</td></tr>`).join('')}</tbody></table></div>`;
+  return `<div class="details-all-fields-wrap"><table class="details-all-fields"><tbody>${entries.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${detailsFieldValue(v,k)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function kv(label, value){
   return `<div class="kv"><b>${esc(label)}</b><div>${detailsFieldValue(value)}</div></div>`;
