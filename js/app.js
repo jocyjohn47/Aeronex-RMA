@@ -1053,7 +1053,7 @@ function spareOrderDetailsFormHtml(f){
   <div class="panel">
     <h3>Document Upload</h3>
     <div class="notice"><b>Current document:</b> ${detailsFieldValue(f['Document Upload'])}</div>
-    <div class="row"><input id="sodDocumentUploadFile" type="file"><button class="btn-light" onclick="uploadSpareOrderDetailsDocument()">Upload / Replace Document</button></div>
+    <div class="row"><input id="sodDocumentUploadFile" type="file" multiple><button class="btn-light" onclick="uploadSpareOrderDetailsDocument()">Upload Document(s)</button></div>
     <div id="sodDocumentMsg" class="msg"></div>
   </div>
   <p><button class="act" onclick="saveSpareOrderDetails()">Save Internal Spare Order</button> <span id="spareOrderDetailsMsg" class="msg"></span></p></div>`;
@@ -1067,24 +1067,28 @@ async function uploadSpareOrderDetailsDocument(){
   if(!isAdmin()) return alert('Admin only');
   const r=S.spareOrderDetailsEdit;
   const inp=$('sodDocumentUploadFile');
-  const file=inp&&inp.files&&inp.files[0];
+  const files=inp&&inp.files ? Array.from(inp.files) : [];
   if(!r || !r.record_id) return msg('sodDocumentMsg','Save or open an Internal Spare Order record first');
-  if(!file) return msg('sodDocumentMsg','Select document file');
+  if(!files.length) return msg('sodDocumentMsg','Select document file');
   try{
     msg('sodDocumentMsg','Uploading...');
-    const data=await new Promise(resolve=>{
-      const reader=new FileReader();
-      reader.onload=()=>resolve(reader.result);
-      reader.onerror=()=>resolve(null);
-      reader.readAsDataURL(file);
-    });
+    const uploaded=[];
+    for(const file of files){
+      const data=await new Promise(resolve=>{
+        const reader=new FileReader();
+        reader.onload=()=>resolve(reader.result);
+        reader.onerror=()=>resolve(null);
+        reader.readAsDataURL(file);
+      });
+      uploaded.push({name:file.name,type:file.type||'application/octet-stream',data});
+    }
     await api('/api/upload-spare-order-details-document',{method:'POST',body:JSON.stringify({
       role:S.user.role||'',
       record_id:r.record_id,
       djiCaseId:(r.fields||{})['DJI Case ID']||val('sodDjiCaseId')||'internal-spare-order',
-      file:{name:file.name,type:file.type||'application/octet-stream',data}
+      files:uploaded
     })});
-    msg('sodDocumentMsg','Document uploaded');
+    msg('sodDocumentMsg','Document uploaded to Lark');
     await loadSpareOrderDetailsMeta();
     const idx=(S.spareOrderDetailsRows||[]).findIndex(x=>x.record_id===r.record_id);
     if(idx>=0) editSpareOrderDetails(idx);
