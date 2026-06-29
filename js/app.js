@@ -801,13 +801,22 @@ function companyInputHtml(id, label, current){
 function val(id){return ($(id)?.value||'').trim();}
 function setVal(id,v){const el=$(id); if(el) el.value=v||'';}
 function dateInputValue(v){
-  if(!v) return '';
-  if(typeof v==='number'){
-    try{return new Date(v).toISOString().slice(0,10)}catch(e){return ''}
+  if(v===undefined || v===null || v==='') return '';
+  if(typeof v==='number' || /^\d{10,13}$/.test(String(v).trim())){
+    const n=Number(String(v).trim());
+    const ms=String(v).trim().length===10 ? n*1000 : n;
+    try{
+      const d=new Date(ms);
+      if(!Number.isNaN(d.getTime())) return d.toISOString().slice(0,10);
+    }catch(e){return ''}
   }
   const s=String(v);
   const m=s.match(/\d{4}-\d{2}-\d{2}/);
   return m?m[0]:s;
+}
+function detailsDateValue(v){
+  const d=dateInputValue(v);
+  return d || '-';
 }
 function selectedOptionsValue(id){
   const el=$(id);
@@ -1807,7 +1816,8 @@ function detailsFieldValue(v){
 function renderAllLarkFieldsTable(fields){
   const entries=Object.entries(fields||{});
   if(!entries.length) return '<div class="notice">No fields available.</div>';
-  return `<div class="details-all-fields-wrap"><table class="details-all-fields"><tbody>${entries.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${detailsFieldValue(v)}</td></tr>`).join('')}</tbody></table></div>`;
+  const isDateField=k=>/date/i.test(String(k||''));
+  return `<div class="details-all-fields-wrap"><table class="details-all-fields"><tbody>${entries.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${isDateField(k)?esc(detailsDateValue(v)):detailsFieldValue(v)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function kv(label, value){
   return `<div class="kv"><b>${esc(label)}</b><div>${detailsFieldValue(value)}</div></div>`;
