@@ -613,17 +613,13 @@ function dealerRepairCanAccess(company,role,recordFields){if(canSeeAll(role))ret
 function parseDealerRepairMaterialsText(s){return String(s||"").split(";").map(x=>x.trim()).filter(Boolean).map(x=>{const m=x.match(/^(.*?)\s*-\s*(.*?)\s+x\s*([0-9.]+)$/i);if(m)return{materialCode:m[1].trim(),materialName:m[2].trim(),qty:m[3].trim()};const m2=x.match(/^(.*?)\s+x\s*([0-9.]+)$/i);if(m2)return{materialCode:"",materialName:m2[1].trim(),qty:m2[2].trim()};return{materialCode:"",materialName:x,qty:1}})}
 
 async function uploadBitableAttachmentToLark(env, tableId, recordId, fieldId, file) {
+  // Upload the file to Lark Drive as a bitable_file, then write the returned
+  // file_token into the Bitable attachment field. This is the same stable
+  // method used by the spare order Excel upload.
   const name = file?.name || "document";
   const bytes = bytesFromDataUrl(file?.data);
-  const blob = new Blob([bytes], { type: file?.type || "application/octet-stream" });
-  const form = new FormData();
-  form.append("file", blob, name);
-  const data = await larkFetchRaw(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/records/${recordId}/fields/${fieldId}/attachment/upload`, {
-    method: "POST",
-    body: form
-  });
-  const fileToken = data.data?.file_token || data.data?.attachment?.file_token || data.file_token;
-  if (!fileToken) throw new Error("Lark upload returned no file_token: " + JSON.stringify(data));
+  if (!bytes || !bytes.length) throw new Error("Empty file data for " + name);
+  const fileToken = await larkUploadBitableAttachment(env, bytes, name, file?.type || "application/octet-stream");
   return { file_token: fileToken, name };
 }
 
