@@ -801,28 +801,13 @@ function companyInputHtml(id, label, current){
 function val(id){return ($(id)?.value||'').trim();}
 function setVal(id,v){const el=$(id); if(el) el.value=v||'';}
 function dateInputValue(v){
-  if(v===undefined || v===null || v==='') return '';
-  if(Array.isArray(v)) v = v[0];
-  if(typeof v==='object') v = v.value || v.text || v.date || v.timestamp || '';
-  if(v===undefined || v===null || v==='') return '';
-  const s=String(v).trim();
-  const n=Number(s);
-  if(Number.isFinite(n) && s.length >= 10){
-    const ms=n>1000000000000?n:n*1000;
-    const d=new Date(ms);
-    if(!isNaN(d.getTime())) return d.toISOString().slice(0,10);
+  if(!v) return '';
+  if(typeof v==='number'){
+    try{return new Date(v).toISOString().slice(0,10)}catch(e){return ''}
   }
+  const s=String(v);
   const m=s.match(/\d{4}-\d{2}-\d{2}/);
   return m?m[0]:s;
-}
-function larkDateDisplay(v){
-  const d=dateInputValue(v);
-  if(!d) return '';
-  const m=String(d).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  return m?`${m[3]}-${m[2]}-${m[1]}`:d;
-}
-function isDateFieldName(name){
-  return /date/i.test(String(name||''));
 }
 function selectedOptionsValue(id){
   const el=$(id);
@@ -831,8 +816,7 @@ function selectedOptionsValue(id){
   return el.value || '';
 }
 function selectHtml(meta, id, fieldName, current){
-  const singleLineFields = ['Order Type','Issue Type'];
-  const multi=isMetaMulti(meta, fieldName) && !singleLineFields.includes(fieldName);
+  const multi=isMetaMulti(meta, fieldName) && fieldName !== 'Order Type';
   return `<select id="${id}" ${multi?'multiple size="4"':''}>${metaOptions(meta, fieldName, current)}</select>`;
 }
 function internalRepairFieldsForCountry(country){
@@ -911,7 +895,7 @@ function editInternalRepair(i){
   S.internalRepairPrefill=null;
   const f=r.fields||{};
   const html = internalRepairFormHtml(f, true) + `<h3 class="details-section-title">All Lark Fields</h3>${renderAllLarkFieldsTable(f)}`;
-  showDetailsModal(`Internal Spare Order & Shipment details - ${(f['DJI Case ID']||f['Repair Case']||'Open')}`, html);
+  showDetailsModal(`Internal Repair Details - ${(f['DJI Case ID']||f['Repair Case']||'Open')}`, html);
   const n=internalRepairFieldsForCountry((S.internalRepairMeta||{}).country||adminModuleCountry());
   S.irParts=parseDealerRepairMaterials(f[n.material]||'').map(x=>({materialCode:x.materialCode,materialName:x.materialName,qty:x.qty}));
   setTimeout(()=>{try{renderInternalRepairSpareOptions();renderInternalRepairSparePreview();}catch(e){}},0);
@@ -1027,13 +1011,13 @@ async function loadSpareOrderDetailsMeta(){
 }
 function renderSpareOrderDetailsError(e){
   const sec=$('spareOrderDetailsAdmin'); if(!sec)return;
-  sec.innerHTML=`<div class="panel"><h2>Internal Spare Order details</h2><div class="notice">${esc(e.message||'Failed to load Internal Spare Order details')}</div></div>`;
+  sec.innerHTML=`<div class="panel"><h2>Internal Spare Order & Shipment Details</h2><div class="notice">${esc(e.message||'Failed to load Internal Spare Order & Shipment Details')}</div></div>`;
 }
 function renderSpareOrderDetailsAdmin(){
   const sec=$('spareOrderDetailsAdmin'); if(!sec)return;
-  if(!isAdmin()){sec.innerHTML=`<div class="panel"><h2>Internal Spare Order details</h2><div class="notice">Admin only.</div></div>`;return;}
+  if(!isAdmin()){sec.innerHTML=`<div class="panel"><h2>Internal Spare Order & Shipment Details</h2><div class="notice">Admin only.</div></div>`;return;}
   const rows=S.spareOrderDetailsRows||[];
-  sec.innerHTML=`<div class="panel"><h2>Internal Spare Order details</h2><div class="notice">Admin-only table for DJI/internal spare order, shipment and document records. <button class="btn-light" onclick="loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin)">Refresh</button> <button class="act" onclick="newSpareOrderDetails()">New Internal Spare Order</button></div><div id="spareOrderDetailsForm"></div>
+  sec.innerHTML=`<div class="panel"><h2>Internal Spare Order & Shipment Details</h2><div class="notice">Admin-only table for DJI/internal spare order, shipment and document records. <button class="btn-light" onclick="loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin)">Refresh</button> <button class="act" onclick="newSpareOrderDetails()">New Internal Spare Order</button></div><div id="spareOrderDetailsForm"></div>
   <div class="table-wrap"><table><thead><tr><th>DJI Case ID</th><th>Company</th><th>Case Type</th><th>Billing</th><th>Order Type</th><th>Created</th><th>Closed</th><th>Document</th><th>Action</th></tr></thead><tbody>
   ${rows.map((r,i)=>{const f=r.fields||{};return `<tr><td>${esc(f['DJI Case ID']||'')}</td><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Case Type']||'')}</td><td>${esc(f['Billing Company']||'')}</td><td>${esc(Array.isArray(f['Order Type'])?f['Order Type'].join(', '):(f['Order Type']||''))}</td><td>${esc(dateInputValue(f['Case Creation Date']))}</td><td>${esc(dateInputValue(f['Case Close Date']))}</td><td>${detailsFieldValue(f['Document Upload'])}</td><td><button class="btn-light" onclick="editSpareOrderDetails(${i})">Open</button></td></tr>`}).join('')}</tbody></table></div></div>`;
   renderSpareOrderDetailsForm(S.spareOrderDetailsEdit?.fields||{});
@@ -1047,11 +1031,11 @@ function editSpareOrderDetails(i){
   if(inline) inline.innerHTML='';
   const f=r.fields||{};
   const html = spareOrderDetailsFormHtml(f) + `<h3 class="details-section-title">All Lark Fields</h3>${renderAllLarkFieldsTable(f)}`;
-  showDetailsModal(`Internal Spare Order details - ${(f['DJI Case ID']||f['Company Name']||'Open')}`, html);
+  showDetailsModal(`Internal Spare Order & Shipment Details - ${(f['DJI Case ID']||f['Company Name']||'Open')}`, html);
 }
 function spareOrderDetailsFormHtml(f){
   const meta=S.spareOrderDetailsMeta||{};
-  return `<div class="subpanel"><h3>${S.spareOrderDetailsEdit?'Edit':'New'} Internal Spare Order details</h3><div class="grid3">
+  return `<div class="subpanel"><h3>${S.spareOrderDetailsEdit?'Edit':'New'} Internal Spare Order & Shipment Details</h3><div class="grid3">
     <div><label>DJI Case ID</label><input id="sodDjiCaseId" value="${esc(f['DJI Case ID']||'')}"></div>
     <div><label>Case ID Remarks</label><input id="sodCaseIdRemarks" value="${esc(f['Case ID Remarks']||'')}"></div>
     <div><label>Case Type</label>${selectHtml(meta,'sodCaseType','Case Type',f['Case Type']||'')}</div>
@@ -1318,7 +1302,7 @@ function adminCenterCards(){
     cards.push(['🛠','Internal Repair','Create and update internal repair register cases.','internalRepair','Open']);
   }
   if(isAdmin()){
-    cards.push(['📦','Internal Spare Order details','Admin-only spare order internal processing records.','spareOrderDetailsAdmin','Open']);
+    cards.push(['📦','Internal Spare Order & Shipment Details','Manage internal spare orders, shipments, and document records.','spareOrderDetailsAdmin','Open']);
   }
   if(logsPageEnabled()){
     cards.push(['🧾','Logs & Diagnostics','Check error logs and Lark table diagnostics.','logsDiagnostics','Open']);
@@ -1820,20 +1804,13 @@ function detailsFieldValue(v){
   }
   return esc(String(v));
 }
-function detailsFieldValueByName(name, v){
-  if(isDateFieldName(name)){
-    const d=larkDateDisplay(v);
-    return d ? esc(d) : '-';
-  }
-  return detailsFieldValue(v);
-}
 function renderAllLarkFieldsTable(fields){
   const entries=Object.entries(fields||{});
   if(!entries.length) return '<div class="notice">No fields available.</div>';
-  return `<div class="details-all-fields-wrap"><table class="details-all-fields"><tbody>${entries.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${detailsFieldValueByName(k,v)}</td></tr>`).join('')}</tbody></table></div>`;
+  return `<div class="details-all-fields-wrap"><table class="details-all-fields"><tbody>${entries.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${detailsFieldValue(v)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function kv(label, value){
-  return `<div class="kv"><b>${esc(label)}</b><div>${detailsFieldValueByName(label,value)}</div></div>`;
+  return `<div class="kv"><b>${esc(label)}</b><div>${detailsFieldValue(value)}</div></div>`;
 }
 function kvHtml(label, html){
   return `<div class="kv"><b>${esc(label)}</b><div>${html || '-'}</div></div>`;
@@ -1872,7 +1849,7 @@ function openSpareOrderDetails(i){
   const adminEdit = canEdit ? `
     <div class="panel">
       <h3>Admin Spare Order Update</h3>
-      <div class="notice">Admin can update the spare order processing fields here. Internal Spare Order details remains a separate Admin Center page and is not linked automatically.</div>
+      <div class="notice">Admin can update the spare order processing fields here. Internal Spare Order & Shipment Details remains a separate Admin Center page and is not linked automatically.</div>
       <div class="grid3">
         <div><label>Shipment Destination</label><select id="soShipDestination">${shipmentDestinationOptions(spareOrderDestinationValue(f))}</select></div>
         <div><label>Shipment Tracking No</label><input id="soShipTracking" value="${esc(spareOrderTrackingValue(f)||'')}"></div>
