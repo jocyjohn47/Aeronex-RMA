@@ -801,13 +801,28 @@ function companyInputHtml(id, label, current){
 function val(id){return ($(id)?.value||'').trim();}
 function setVal(id,v){const el=$(id); if(el) el.value=v||'';}
 function dateInputValue(v){
-  if(!v) return '';
-  if(typeof v==='number'){
-    try{return new Date(v).toISOString().slice(0,10)}catch(e){return ''}
+  if(v===undefined || v===null || v==='') return '';
+  if(Array.isArray(v)) v = v[0];
+  if(typeof v==='object') v = v.value || v.text || v.date || v.timestamp || '';
+  if(v===undefined || v===null || v==='') return '';
+  const s=String(v).trim();
+  const n=Number(s);
+  if(Number.isFinite(n) && s.length >= 10){
+    const ms=n>1000000000000?n:n*1000;
+    const d=new Date(ms);
+    if(!isNaN(d.getTime())) return d.toISOString().slice(0,10);
   }
-  const s=String(v);
   const m=s.match(/\d{4}-\d{2}-\d{2}/);
   return m?m[0]:s;
+}
+function larkDateDisplay(v){
+  const d=dateInputValue(v);
+  if(!d) return '';
+  const m=String(d).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m?`${m[3]}-${m[2]}-${m[1]}`:d;
+}
+function isDateFieldName(name){
+  return /date/i.test(String(name||''));
 }
 function selectedOptionsValue(id){
   const el=$(id);
@@ -816,7 +831,8 @@ function selectedOptionsValue(id){
   return el.value || '';
 }
 function selectHtml(meta, id, fieldName, current){
-  const multi=isMetaMulti(meta, fieldName) && fieldName !== 'Order Type';
+  const singleLineFields = ['Order Type','Issue Type'];
+  const multi=isMetaMulti(meta, fieldName) && !singleLineFields.includes(fieldName);
   return `<select id="${id}" ${multi?'multiple size="4"':''}>${metaOptions(meta, fieldName, current)}</select>`;
 }
 function internalRepairFieldsForCountry(country){
@@ -864,13 +880,7 @@ function openInternalRepairFromRepair(recordId){
     'Remark': f['Details Of Issue']||f['Issue Description']||f['Remarks']||'',
     'Remarks': f['Details Of Issue']||f['Issue Description']||f['Remarks']||''
   };
-  S.returnToRepairStatus = true;
   show('internalRepair');
-}
-function backToRepairStatus(){
-  S.returnToRepairStatus = false;
-  show('repairStatus');
-  if(typeof refreshRepairs === 'function') refreshRepairs();
 }
 function renderInternalRepairError(e){
   const sec=$('internalRepair');
@@ -883,8 +893,7 @@ function renderInternalRepair(){
   const country=meta.country||adminModuleCountry();
   const rows=S.internalRepairRows||[];
   sec.innerHTML=`<div class="panel"><h2>Internal Repair</h2>
-    <div class="notice">${S.returnToRepairStatus ? '<button class="btn-light" onclick="backToRepairStatus()">← Back to Repair Status</button>' : ''}
-    ${internalRepairCountryControl(country)}
+    <div class="notice">${internalRepairCountryControl(country)}
     <button class="btn-light" onclick="loadInternalRepairMeta().then(renderInternalRepair)">Refresh</button>
     <button class="act" onclick="newInternalRepair()">New Internal Repair</button></div>
     <div id="internalRepairForm"></div>
@@ -902,7 +911,7 @@ function editInternalRepair(i){
   S.internalRepairPrefill=null;
   const f=r.fields||{};
   const html = internalRepairFormHtml(f, true) + `<h3 class="details-section-title">All Lark Fields</h3>${renderAllLarkFieldsTable(f)}`;
-  showDetailsModal(`Internal Repair Details - ${(f['DJI Case ID']||f['Repair Case']||'Open')}`, html);
+  showDetailsModal(`Internal Spare Order & Shipment details - ${(f['DJI Case ID']||f['Repair Case']||'Open')}`, html);
   const n=internalRepairFieldsForCountry((S.internalRepairMeta||{}).country||adminModuleCountry());
   S.irParts=parseDealerRepairMaterials(f[n.material]||'').map(x=>({materialCode:x.materialCode,materialName:x.materialName,qty:x.qty}));
   setTimeout(()=>{try{renderInternalRepairSpareOptions();renderInternalRepairSparePreview();}catch(e){}},0);
@@ -1811,13 +1820,20 @@ function detailsFieldValue(v){
   }
   return esc(String(v));
 }
+function detailsFieldValueByName(name, v){
+  if(isDateFieldName(name)){
+    const d=larkDateDisplay(v);
+    return d ? esc(d) : '-';
+  }
+  return detailsFieldValue(v);
+}
 function renderAllLarkFieldsTable(fields){
   const entries=Object.entries(fields||{});
   if(!entries.length) return '<div class="notice">No fields available.</div>';
-  return `<div class="details-all-fields-wrap"><table class="details-all-fields"><tbody>${entries.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${detailsFieldValue(v)}</td></tr>`).join('')}</tbody></table></div>`;
+  return `<div class="details-all-fields-wrap"><table class="details-all-fields"><tbody>${entries.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${detailsFieldValueByName(k,v)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function kv(label, value){
-  return `<div class="kv"><b>${esc(label)}</b><div>${detailsFieldValue(value)}</div></div>`;
+  return `<div class="kv"><b>${esc(label)}</b><div>${detailsFieldValueByName(label,value)}</div></div>`;
 }
 function kvHtml(label, html){
   return `<div class="kv"><b>${esc(label)}</b><div>${html || '-'}</div></div>`;
