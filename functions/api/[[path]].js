@@ -1292,7 +1292,7 @@ async function handle(req, env) {
     const repairs = (module === "internalrepair" || module === "internal-repair")
       ? await listRecords(env, repairTable(env, country))
       : [];
-    const spares = env.SPARE_LIST_TABLE_ID ? await listRecords(env, env.SPARE_LIST_TABLE_ID) : [];
+    const spares = [];
     return json({ ok:true, module, country, tableId, tableName, fields, rows, dealers, repairs, spares });
   }
 
