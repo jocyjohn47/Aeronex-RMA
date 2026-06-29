@@ -447,10 +447,24 @@ function ensureAeronexLogoStyles(){
 
 function layout(){ensureAeronexLogoStyles();let n=S.user?.displayName||S.user?.username||'User';document.body.innerHTML=`<header class="topbar"><div class="brand"><img class="brand-logo-img" src="img/aeronex_rma_logo_transparent.png" alt="AERONEX RMA Portal" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div class=&quot;brand-title&quot;>AERO NEX</div><div class=&quot;brand-sub&quot;>RMA & Spare Order Portal</div>')"></div><nav class="nav">
 <a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${adminCenterEnabled()?`<a data-sec="adminCenter" href="#" onclick="show('adminCenter')">🧰 Admin Center</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','flycartCredit','dealers','adminCenter','internalRepair','spareOrderDetailsAdmin','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
+
+async function ensureSpareListLoaded(){
+  if(Array.isArray(S.spares) && S.spares.length) return S.spares;
+  try{
+    S.spares = await api('/api/spares');
+    if(!Array.isArray(S.spares)) S.spares=[];
+  }catch(e){
+    S.spares=[];
+    console.warn('Spare list load failed', e);
+  }
+  return S.spares;
+}
+
 function show(sec){
   document.querySelectorAll('.section').forEach(x=>x.classList.remove('active'));
   $(sec)?.classList.add('active');
   document.querySelectorAll('.nav a').forEach(a=>a.classList.toggle('active',a.dataset.sec===sec));
+  if(sec==='spare'){ensureSpareListLoaded().then(()=>{try{renderSpareOptions();drawCart();}catch(e){try{renderSpare()}catch(_){}}}).catch(e=>console.error('spare list lazy load failed',e))}
   if(sec==='dealerRepairCase'){
     loadDealerRepairCases()
       .then(()=>renderDealerRepairCase())
@@ -822,7 +836,7 @@ async function loadInternalRepairMeta(){
   const d=await api('/api/admin-module-meta?module=internalRepair&country='+encodeURIComponent(country)+'&role='+encodeURIComponent(S.user.role||'')+'&userCountry='+encodeURIComponent(userCountryText()||country));
   S.internalRepairMeta=d;
   S.dealers=d.dealers||S.dealers||[];
-  S.spares=d.spares||S.spares||[];
+  if(Array.isArray(d.spares) && d.spares.length) S.spares=d.spares;
   S.repairSourceRows=d.repairs||[];
   S.internalRepairRows=d.rows||[];
   return d;
@@ -2002,5 +2016,27 @@ function renderAdmin(){
 }
 async function loadOrders(){S.orders=await api('/api/my-orders?country='+encodeURIComponent(selectedCountry())+'&role='+encodeURIComponent(S.user.role||'')+'&email='+encodeURIComponent(userEmail())+'&companyName='+encodeURIComponent(companyName()))}
 async function loadRepairs(){S.repairs=await api('/api/my-repairs?country='+encodeURIComponent(selectedCountry())+'&role='+encodeURIComponent(S.user.role||'')+'&email='+encodeURIComponent(userEmail())+'&companyName='+encodeURIComponent(companyName())+'&contactName='+encodeURIComponent(contactName()))}
-async function initApp(){if(!requireLogin())return;layout();renderDashboard();try{S.spares=await api('/api/spares'); if(!Array.isArray(S.spares)) S.spares=[];}catch(e){S.spares=[]; console.warn('Spare list load failed',e);}try{await loadOrders()}catch{}try{await loadRepairs()}catch{}try{S.dealers=await api('/api/dealers')}catch{}try{S.notes=await api('/api/portal-notes')}catch{}renderSpare();renderRepairCreate();renderRepairStatus();renderDealers();renderNotes();renderChangePassword();renderAdmin();renderFlycartCredit();renderAdminCenter()}
+async function initApp(){
+  if(!requireLogin())return;
+  layout();
+  renderDashboard();
+
+  // Do not load full spare list during initial login; it is large and slows the portal.
+  S.spares = Array.isArray(S.spares) ? S.spares : [];
+
+  try{await loadOrders()}catch{}
+  try{await loadRepairs()}catch{}
+  try{S.dealers=await api('/api/dealers')}catch{}
+  try{S.notes=await api('/api/portal-notes')}catch{}
+
+  renderSpare();
+  renderRepairCreate();
+  renderRepairStatus();
+  renderDealers();
+  renderNotes();
+  renderChangePassword();
+  renderAdmin();
+  renderFlycartCredit();
+  renderAdminCenter();
+}
 
