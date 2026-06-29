@@ -1027,6 +1027,8 @@ function editSpareOrderDetails(i){
   const r=(S.spareOrderDetailsRows||[])[i];
   if(!r) return;
   S.spareOrderDetailsEdit=r;
+  const inline=$('spareOrderDetailsForm');
+  if(inline) inline.innerHTML='';
   const f=r.fields||{};
   const html = spareOrderDetailsFormHtml(f) + `<h3 class="details-section-title">All Lark Fields</h3>${renderAllLarkFieldsTable(f)}`;
   showDetailsModal(`Internal Spare Order details - ${(f['DJI Case ID']||f['Company Name']||'Open')}`, html);
@@ -1054,7 +1056,7 @@ function spareOrderDetailsFormHtml(f){
     <h3>Document Upload</h3>
     <div class="notice"><b>Current document:</b> ${detailsFieldValue(f['Document Upload'])}</div>
     <div class="row"><input id="sodDocumentUploadFile" type="file" multiple multiple><button class="btn-light" onclick="uploadSpareOrderDetailsDocument()">Upload Document(s)</button></div>
-    <div id="sodDocumentMsg" class="msg" style="margin-top:8px"></div>
+    <div id="sodDocumentMsg" class="msg"></div>
   </div>
   <p><button class="act" onclick="saveSpareOrderDetails()">Save Internal Spare Order</button> <span id="spareOrderDetailsMsg" class="msg"></span></p></div>`;
 }
@@ -1066,9 +1068,9 @@ function renderSpareOrderDetailsForm(f){
 async function uploadSpareOrderDetailsDocument(){
   if(!isAdmin()) return alert('Admin only');
   const r=S.spareOrderDetailsEdit;
-  const inp=$('sodDocumentUploadFile');
+  const inp=scopedEl('sodDocumentUploadFile');
   const files=inp&&inp.files ? Array.from(inp.files) : [];
-  const box=$('sodDocumentMsg');
+  const box=scopedEl('sodDocumentMsg');
   const setUploadMsg=(text,cls)=>{
     if(box){
       box.className='msg '+(cls||'');
@@ -1107,33 +1109,51 @@ async function uploadSpareOrderDetailsDocument(){
   }
 }
 
+
+function modalRoot(){
+  return document.querySelector('#detailsModalOverlay .details-modal') || document;
+}
+function scopedEl(id){
+  const root=modalRoot();
+  return (root && root.querySelector('#'+CSS.escape(id))) || document.getElementById(id);
+}
+function scopedVal(id){
+  const el=scopedEl(id);
+  return el ? String(el.value || '').trim() : '';
+}
+function scopedSelectedOptionsValue(id){
+  const el=scopedEl(id);
+  if(!el) return '';
+  if(el.multiple) return Array.from(el.selectedOptions).map(o=>o.value).filter(Boolean);
+  return el.value || '';
+}
+
 async function saveSpareOrderDetails(){
   if(!isAdmin()) return msg('spareOrderDetailsMsg','Admin only');
   try{
     const editingId=S.spareOrderDetailsEdit?.record_id||'';
+    const base=(S.spareOrderDetailsEdit&&S.spareOrderDetailsEdit.fields)||{};
+    const get=(id, name)=>scopedVal(id) || '';
+    const getSel=(id, name)=>scopedSelectedOptionsValue(id) || '';
     const fields={
-      'DJI Case ID':val('sodDjiCaseId'),
-      'Case ID Remarks':val('sodCaseIdRemarks'),
-      'Case Type':selectedOptionsValue('sodCaseType'),
-      'Company Name':val('sodCompanyName'),
-      'Type of Case':val('sodTypeOfCase'),
-      'Billing Company':selectedOptionsValue('sodBillingCompany'),
-      'Order Type':selectedOptionsValue('sodOrderType'),
-      'Case Creation Date':val('sodCreationDate'),
-      'Case Close Date':val('sodCloseDate'),
-      'Shipper Name':selectedOptionsValue('sodShipper'),
-      'Shiping Tracking No-Sending':val('sodSendTrack'),
-      'Shipment Cost - Sent to DJI':val('sodSendCost'),
-      'Shiping Tracking No -Receiving':val('sodRecvTrack'),
-      'Shipment Cost - Receive from DJI':val('sodRecvCost'),
-      'Remarks':val('sodRemarks')
+      'DJI Case ID':get('sodDjiCaseId','DJI Case ID'),
+      'Case ID Remarks':get('sodCaseIdRemarks','Case ID Remarks'),
+      'Case Type':getSel('sodCaseType','Case Type'),
+      'Company Name':get('sodCompanyName','Company Name'),
+      'Type of Case':get('sodTypeOfCase','Type of Case'),
+      'Billing Company':getSel('sodBillingCompany','Billing Company'),
+      'Order Type':getSel('sodOrderType','Order Type'),
+      'Case Creation Date':get('sodCreationDate','Case Creation Date'),
+      'Case Close Date':get('sodCloseDate','Case Close Date'),
+      'Shipper Name':getSel('sodShipper','Shipper Name'),
+      'Shiping Tracking No-Sending':get('sodSendTrack','Shiping Tracking No-Sending'),
+      'Shipment Cost - Sent to DJI':get('sodSendCost','Shipment Cost - Sent to DJI'),
+      'Shiping Tracking No -Receiving':get('sodRecvTrack','Shiping Tracking No -Receiving'),
+      'Shipment Cost - Receive from DJI':get('sodRecvCost','Shipment Cost - Receive from DJI'),
+      'Remarks':get('sodRemarks','Remarks')
     };
     const res=await api('/api/save-spare-order-details',{method:'POST',body:JSON.stringify({role:S.user.role||'',record_id:editingId,fields})});
-    if(res && res.partial){
-      msg('spareOrderDetailsMsg','Saved partially. Some fields were skipped.');
-    }else{
-      msg('spareOrderDetailsMsg','Saved successfully');
-    }
+    msg('spareOrderDetailsMsg',res&&res.partial?'Saved partially. Some fields were skipped.':'Saved successfully');
     await loadSpareOrderDetailsMeta();
     if(document.getElementById('detailsModalOverlay') && editingId){
       const idx=(S.spareOrderDetailsRows||[]).findIndex(x=>x.record_id===editingId);
