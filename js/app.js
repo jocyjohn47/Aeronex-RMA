@@ -1759,6 +1759,10 @@ function renderAllLarkFieldsTable(fields){
 function kv(label, value){
   return `<div class="kv"><b>${esc(label)}</b><div>${detailsFieldValue(value)}</div></div>`;
 }
+function kvHtml(label, html){
+  return `<div class="kv"><b>${esc(label)}</b><div>${html || '-'}</div></div>`;
+}
+
 
 function openOrderDetails(i){ return openSpareOrderDetails(i); }
 function openSpareOrderDetails(i){
@@ -1767,6 +1771,7 @@ function openSpareOrderDetails(i){
   if(!r) return;
   const f = r.fields || {};
   const orderNo = orderNoValue(f);
+  const canEdit = spareOrderCanEditInternal();
   const canReport = spareOrderCanDownloadReport();
 
   const summary = `<div class="details-kv">
@@ -1776,23 +1781,43 @@ function openSpareOrderDetails(i){
     ${kv('Company Name', f['Company Name'] || '-')}
     ${kv('Contact Name', f['Contact Name'] || '-')}
     ${kv('Billing / Invoice Address', f['Billing Address'] || f['Invoice Address'] || '-')}
-    ${kv('Dealer CN', spareOrderDealerCnCell(f))}
+    ${kvHtml('Dealer CN', spareOrderDealerCnCell(f))}
     ${kv('Shipment Destination', spareOrderDestinationValue(f) || '-')}
     ${kv('Shipment Tracking No', spareOrderTrackingValue(f) || '-')}
     ${kv('Specialized', spareOrderSpecializedValue(f) || '-')}
     ${kv('Spare Source', spareOrderSpareSourceValue(f) || '-')}
-    ${kv('Invoice Download', invoiceDownloadCell(r))}
-    ${kv('Payment Receipt', paymentReceiptCell(r))}
+    ${kvHtml('Invoice Download', invoiceDownloadCell(r))}
+    ${kvHtml('Payment Receipt', paymentReceiptCell(r))}
     ${kv('DJI Case No', spareOrderDjiCaseValue(f) || '-')}
   </div>
   <h3 class="details-section-title">Remarks</h3><div class="notice">${esc(f['Remarks'] || '-')}</div>
   <h3 class="details-section-title">Final Notes</h3><div class="notice">${esc(spareOrderFinalNotesValue(f) || '-')}</div>`;
 
-  const adminAction = isAdmin() ? `<div class="panel"><h3>Admin Internal Action</h3><div class="notice">Internal processing details are maintained in the separate <b>Internal Spare Order details</b> table.</div><button class="act" onclick="closeDetailsModal();show('spareOrderDetailsAdmin')">Open Internal Spare Order details</button></div>` : '';
+  const adminEdit = canEdit ? `
+    <div class="panel">
+      <h3>Admin Spare Order Update</h3>
+      <div class="notice">Admin can update the spare order processing fields here. Internal Spare Order details remains a separate Admin Center page and is not linked automatically.</div>
+      <div class="grid3">
+        <div><label>Shipment Destination</label><select id="soShipDestination">${shipmentDestinationOptions(spareOrderDestinationValue(f))}</select></div>
+        <div><label>Shipment Tracking No</label><input id="soShipTracking" value="${esc(spareOrderTrackingValue(f)||'')}"></div>
+        <div><label>Specialized</label><select id="soSpecialized">${specializedOptions(spareOrderSpecializedValue(f))}</select></div>
+        <div><label>Spare Source</label><select id="soSpareSource">${spareSourceOptions(spareOrderSpareSourceValue(f))}</select></div>
+      </div>
+      <div class="grid3">
+        <div><label>DJI Cost</label><input id="soDjiCost" value="${esc(f['DJI Cost']||'')}"></div>
+        <div><label>Shipment Cost ( AED )</label><input id="soShipmentCostAed" value="${esc(f['Shipment Cost ( AED )']||'')}"></div>
+        <div><label>DJI Case No</label><input id="soDjiCaseNo" value="${esc(spareOrderDjiCaseValue(f)||'')}"></div>
+        <div><label>Dealer CN Upload</label><input id="soDealerCnFile" type="file" onchange="uploadSpareOrderDealerCn(currentSpareOrderDetailIndex)"></div>
+      </div>
+      <label>Final Notes</label><textarea id="soFinalNotes" style="min-height:90px">${esc(spareOrderFinalNotesValue(f)||'')}</textarea>
+      <div class="row"><button onclick="saveSpareOrderInternal(${i})">Save Details</button></div>
+      <div id="soDetailMsg" class="msg"></div>
+    </div>` : '';
+
   const report = canReport ? `<a class="btn-light" target="_blank" rel="noopener" href="/api/download-spare-order-report?tableId=${encodeURIComponent(r._table_id||'')}&record_id=${encodeURIComponent(r.record_id||'')}&role=${encodeURIComponent(S.user.role||'')}">Download Excel Report</a>` : '';
 
   const html = `${summary}
-    ${adminAction}
+    ${adminEdit}
     <h3 class="details-section-title">All Lark Fields</h3>
     ${renderAllLarkFieldsTable(f)}
     <div class="row">${report}</div>`;
