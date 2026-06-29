@@ -864,7 +864,13 @@ function openInternalRepairFromRepair(recordId){
     'Remark': f['Details Of Issue']||f['Issue Description']||f['Remarks']||'',
     'Remarks': f['Details Of Issue']||f['Issue Description']||f['Remarks']||''
   };
+  S.returnToRepairStatus = true;
   show('internalRepair');
+}
+function backToRepairStatus(){
+  S.returnToRepairStatus = false;
+  show('repairStatus');
+  if(typeof refreshRepairs === 'function') refreshRepairs();
 }
 function renderInternalRepairError(e){
   const sec=$('internalRepair');
@@ -877,7 +883,8 @@ function renderInternalRepair(){
   const country=meta.country||adminModuleCountry();
   const rows=S.internalRepairRows||[];
   sec.innerHTML=`<div class="panel"><h2>Internal Repair</h2>
-    <div class="notice">${internalRepairCountryControl(country)}
+    <div class="notice">${S.returnToRepairStatus ? '<button class="btn-light" onclick="backToRepairStatus()">← Back to Repair Status</button>' : ''}
+    ${internalRepairCountryControl(country)}
     <button class="btn-light" onclick="loadInternalRepairMeta().then(renderInternalRepair)">Refresh</button>
     <button class="act" onclick="newInternalRepair()">New Internal Repair</button></div>
     <div id="internalRepairForm"></div>
