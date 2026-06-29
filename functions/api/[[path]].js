@@ -1620,7 +1620,7 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
 
   if (p === "/api/update-spare-order-internal" && req.method === "POST") {
     const b = await readBody(req);
-    if (!canSeeAll(b.role)) return json({ error:"Forbidden" }, 403);
+    if (!flycartAdminOnly(b.role)) return json({ error:"Forbidden" }, 403);
     if (!b.tableId || !b.record_id) return json({ error:"Missing tableId/record_id" }, 400);
     const fieldTypes = await getFieldTypes(env, b.tableId);
     const fields = {};
@@ -1641,7 +1641,7 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
 
   if (p === "/api/upload-dealer-cn" && req.method === "POST") {
     const b = await readBody(req);
-    if (!canSeeAll(b.role)) return json({ error:"Forbidden" }, 403);
+    if (!flycartAdminOnly(b.role)) return json({ error:"Forbidden" }, 403);
     if (!b.tableId || !b.record_id) return json({ error:"Missing tableId/record_id" }, 400);
     const no = await resolveOrderNoForUpload(env, b);
     const name = b.file?.name || "dealer-cn.pdf";
