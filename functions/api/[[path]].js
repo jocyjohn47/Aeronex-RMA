@@ -1322,15 +1322,42 @@ async function handle(req, env) {
     const tableId = env.SPARE_ORDER_DETAILS_TABLE_ID;
     if (!tableId) return json({ error:"SPARE_ORDER_DETAILS_TABLE_ID not configured" }, 400);
     if (!b.record_id) return json({ error:"Missing record_id" }, 400);
-    const name = b.file?.name || "internal-spare-order-document.pdf";
-    const safeName = String(name).replace(/[^a-zA-Z0-9._-]/g, "_");
-    const folder = norm(b.djiCaseId || "internal-spare-order") || "internal-spare-order";
-    const fileUrl = await putR2(env, `internal-spare-order-details/${folder}/document-upload-${Date.now()}-${safeName}`, bytesFromDataUrl(b.file?.data), b.file?.type || "application/octet-stream");
+
+    const inputFiles = Array.isArray(b.files) && b.files.length ? b.files : (b.file ? [b.file] : []);
+    if (!inputFiles.length) return json({ error:"No file received" }, 400);
+
     const fieldTypes = await getFieldTypes(env, tableId);
     if (!fieldTypes["Document Upload"]) return json({ error:"Document Upload field not found in Internal Spare Order details table" }, 400);
-    const update = { "Document Upload": fieldTypes["Document Upload"] === 15 ? larkUrl(fileUrl, "Document Upload") : fileUrl };
+
+    const folder = norm(b.djiCaseId || "internal-spare-order") || "internal-spare-order";
+    const uploaded = [];
+    for (const file of inputFiles) {
+      const name = file?.name || "internal-spare-order-document.pdf";
+      const safeName = String(name).replace(/[^a-zA-Z0-9._-]/g, "_");
+      const url = await putR2(env, `internal-spare-order-details/${folder}/document-upload-${Date.now()}-${safeName}`, bytesFromDataUrl(file?.data), file?.type || "application/octet-stream");
+      uploaded.push({ name, url });
+    }
+
+    const current = await getRecord(env, tableId, b.record_id);
+    const currentValue = current?.fields?.["Document Upload"];
+    let merged = [];
+    if (Array.isArray(currentValue)) {
+      merged = currentValue.filter(x => x);
+    }
+
+    const fieldType = fieldTypes["Document Upload"];
+    const update = {};
+    if (fieldType === 17) {
+      update["Document Upload"] = [...merged, ...larkAttachmentValue(uploaded)];
+    } else if (fieldType === 15) {
+      const first = uploaded[0];
+      update["Document Upload"] = larkUrl(first.url, first.name || "Document Upload");
+    } else {
+      update["Document Upload"] = uploaded.map(x => x.url).join("\n");
+    }
+
     await updateRecord(env, tableId, b.record_id, update);
-    return json({ ok:true, url:fileUrl });
+    return json({ ok:true, uploaded });
   }
 
 if (p === "/api/save-spare-order-details" && req.method === "POST") {
