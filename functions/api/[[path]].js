@@ -219,6 +219,32 @@ function prepareFieldsForTable(fieldTypes, fields) {
   return out;
 }
 
+async function updateRecordBestEffort(env, tableId, recordId, fields) {
+  try {
+    await updateRecord(env, tableId, recordId, fields);
+    return { ok:true, updated:Object.keys(fields), skipped:[] };
+  } catch (bulkErr) {
+    const updated = [];
+    const skipped = [];
+    for (const [k, v] of Object.entries(fields || {})) {
+      try {
+        await updateRecord(env, tableId, recordId, { [k]: v });
+        updated.push(k);
+      } catch (e) {
+        skipped.push({ field:k, error:String(e.message || e) });
+      }
+    }
+    if (!updated.length) {
+      throw new Error("No fields saved. First error: " + (skipped[0]?.error || bulkErr.message || bulkErr));
+    }
+    return { ok:true, partial:true, updated, skipped };
+  }
+}
+async function createRecordBestEffort(env, tableId, fields) {
+  return createRecord(env, tableId, fields);
+}
+
+
 function fieldMetaMap(fields) {
   const out = {};
   for (const f of fields || []) out[f.field_name] = f;
@@ -1398,12 +1424,14 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     if (!tableId) return json({ error:"SPARE_ORDER_DETAILS_TABLE_ID not configured" }, 400);
     const fieldTypes = await getFieldTypes(env, tableId);
     const fields = prepareFieldsForTable(fieldTypes, b.fields || {});
-    if (!Object.keys(fields).length) return json({ error:"No valid fields to save" }, 400);
-    if (b.record_id) {
-      await updateRecord(env, tableId, b.record_id, fields);
-      return json({ ok:true, updated:true });
+    if (!Object.keys(fields).length) {
+      return json({ error:"No valid fields to save", received:Object.keys(b.fields || {}), available:Object.keys(fieldTypes || {}) }, 400);
     }
-    const rec = await createRecord(env, tableId, fields);
+    if (b.record_id) {
+      const result = await updateRecordBestEffort(env, tableId, b.record_id, fields);
+      return json(result);
+    }
+    const rec = await createRecordBestEffort(env, tableId, fields);
     return json({ ok:true, created:true, record:rec.data || rec });
   }
 
