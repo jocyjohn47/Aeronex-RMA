@@ -76,6 +76,24 @@ async function larkFetch(env, path, init = {}) {
   return data;
 }
 
+
+async function larkFetchRaw(env, path, init = {}) {
+  const token = await larkToken(env);
+  const res = await fetch("https://open.larksuite.com/open-apis" + path, {
+    ...init,
+    headers: {
+      authorization: `Bearer ${token}`,
+      ...(init.headers || {})
+    }
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.code) {
+    await writeErrorLog(env, { source:"larkFetchRaw", method:init.method || "GET", path, status:res.status, response:data });
+    throw new Error("Lark API error: " + JSON.stringify(data));
+  }
+  return data;
+}
+
 async function listRecords(env, tableId) {
   if (!tableId) return [];
   let rows = [];
@@ -95,6 +113,14 @@ async function getFieldTypes(env, tableId) {
   const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields`);
   const out = {};
   for (const f of data.data?.items || []) out[f.field_name] = f.type;
+  return out;
+}
+
+
+async function getFieldMetaByName(env, tableId) {
+  const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields`);
+  const out = {};
+  for (const f of data.data?.items || []) out[f.field_name] = f;
   return out;
 }
 
@@ -559,6 +585,22 @@ function dealerRepairCaseNo(fields){return fields["Case Register No"]||fields["D
 function isDealerRepairLocked(status){const s=norm(status);return s==="Repaired & Returned"||s==="Not Repair & Returned"}
 function dealerRepairCanAccess(company,role,recordFields){if(canSeeAll(role))return true;const uc=norm(company),rc=norm((recordFields||{})["Company Name"]);return uc&&rc&&lower(uc)===lower(rc)}
 function parseDealerRepairMaterialsText(s){return String(s||"").split(";").map(x=>x.trim()).filter(Boolean).map(x=>{const m=x.match(/^(.*?)\s*-\s*(.*?)\s+x\s*([0-9.]+)$/i);if(m)return{materialCode:m[1].trim(),materialName:m[2].trim(),qty:m[3].trim()};const m2=x.match(/^(.*?)\s+x\s*([0-9.]+)$/i);if(m2)return{materialCode:"",materialName:m2[1].trim(),qty:m2[2].trim()};return{materialCode:"",materialName:x,qty:1}})}
+
+async function uploadBitableAttachmentToLark(env, tableId, recordId, fieldId, file) {
+  const name = file?.name || "document";
+  const bytes = bytesFromDataUrl(file?.data);
+  const blob = new Blob([bytes], { type: file?.type || "application/octet-stream" });
+  const form = new FormData();
+  form.append("file", blob, name);
+  const data = await larkFetchRaw(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/records/${recordId}/fields/${fieldId}/attachment/upload`, {
+    method: "POST",
+    body: form
+  });
+  const fileToken = data.data?.file_token || data.data?.attachment?.file_token || data.file_token;
+  if (!fileToken) throw new Error("Lark upload returned no file_token: " + JSON.stringify(data));
+  return { file_token: fileToken, name };
+}
+
 function formatDealerRepairMaterials(items){return(items||[]).map(i=>{const code=norm(i.materialCode||i["Material Code"]||"CUSTOM")||"CUSTOM";const name=norm(i.materialName||i["Material Name"]||"");const qty=norm(i.qty||i.Qty||1)||"1";return`${code} - ${name} x${qty}`}).join("; ")}
 function dealerRepairExcelBytes(caseNo,fields){const escHtml=v=>String(v??"").replace(/[&<>"]/g,s=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[s]));const materials=parseDealerRepairMaterialsText(fields["Material Replaced"]||"");const rows=materials.map((i,idx)=>`<tr><td>${idx+1}</td><td>${escHtml(i.materialCode||"CUSTOM")}</td><td>${escHtml(i.materialName||"")}</td><td>${escHtml(i.qty||1)}</td></tr>`).join("");const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif}h1{font-size:20px;color:#1f3b8a}table{border-collapse:collapse;width:100%}th{background:#1f3b8a;color:#fff}th,td{border:1px solid #777;padding:8px;text-align:left}.meta th{width:230px}</style></head><body><h1>AERO NEX Dealer Repair Case</h1><table class="meta"><tr><th>Case Register No</th><td>${escHtml(caseNo)}</td></tr><tr><th>Company Name</th><td>${escHtml(fields["Company Name"])}</td></tr><tr><th>Model No</th><td>${escHtml(fields["Model No"])}</td></tr><tr><th>Serial No</th><td>${escHtml(fields["Serial No"])}</td></tr><tr><th>Activation Date / Invoice Date</th><td>${escHtml(fields["Activation Date / Invoice Date"])}</td></tr><tr><th>Technician Name</th><td>${escHtml(fields["Technician Name"])}</td></tr><tr><th>Repair Type</th><td>${escHtml(fields["Repair Type"])}</td></tr><tr><th>Repair Status</th><td>${escHtml(fields["Repair Status"])}</td></tr><tr><th>Upload Repair Data</th><td>${escHtml(fields["Upload Repair Data"])}</td></tr></table><h2>Device Issue</h2><p>${escHtml(fields["Device Issue"])}</p><h2>Technician Note</h2><p>${escHtml(fields["Technicain Note"])}</p><h2>Material Replaced</h2><table><thead><tr><th>No</th><th>Material Code</th><th>Material Name</th><th>Qty</th></tr></thead><tbody>${rows||'<tr><td colspan="4">No materials</td></tr>'}</tbody></table></body></html>`;return new TextEncoder().encode(html)}
 async function resolveDealerRepairNo(env){const d=new Date();const ymd=d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");const prefix=`DRC${ymd}`;const rows=await listRecords(env,env.DEALER_REPAIR_CASE_TABLE_ID);let max=0;for(const r of rows||[]){const no=dealerRepairCaseNo(r.fields||{});if(String(no).startsWith(prefix)){const n=Number(String(no).slice(prefix.length));if(Number.isFinite(n)&&n>max)max=n}}return prefix+String(max+1).padStart(4,"0")}
@@ -1326,37 +1368,25 @@ async function handle(req, env) {
     const inputFiles = Array.isArray(b.files) && b.files.length ? b.files : (b.file ? [b.file] : []);
     if (!inputFiles.length) return json({ error:"No file received" }, 400);
 
-    const fieldTypes = await getFieldTypes(env, tableId);
-    if (!fieldTypes["Document Upload"]) return json({ error:"Document Upload field not found in Internal Spare Order details table" }, 400);
+    const fieldMeta = await getFieldMetaByName(env, tableId);
+    const docField = fieldMeta["Document Upload"];
+    if (!docField) return json({ error:"Document Upload field not found in Internal Spare Order details table" }, 400);
+    const fieldId = docField.field_id;
+    if (!fieldId) return json({ error:"Document Upload field_id not found" }, 400);
 
-    const folder = norm(b.djiCaseId || "internal-spare-order") || "internal-spare-order";
     const uploaded = [];
     for (const file of inputFiles) {
-      const name = file?.name || "internal-spare-order-document.pdf";
-      const safeName = String(name).replace(/[^a-zA-Z0-9._-]/g, "_");
-      const url = await putR2(env, `internal-spare-order-details/${folder}/document-upload-${Date.now()}-${safeName}`, bytesFromDataUrl(file?.data), file?.type || "application/octet-stream");
-      uploaded.push({ name, url });
+      uploaded.push(await uploadBitableAttachmentToLark(env, tableId, b.record_id, fieldId, file));
     }
 
     const current = await getRecord(env, tableId, b.record_id);
     const currentValue = current?.fields?.["Document Upload"];
     let merged = [];
     if (Array.isArray(currentValue)) {
-      merged = currentValue.filter(x => x);
+      merged = currentValue.filter(x => x && x.file_token);
     }
 
-    const fieldType = fieldTypes["Document Upload"];
-    const update = {};
-    if (fieldType === 17) {
-      update["Document Upload"] = [...merged, ...larkAttachmentValue(uploaded)];
-    } else if (fieldType === 15) {
-      const first = uploaded[0];
-      update["Document Upload"] = larkUrl(first.url, first.name || "Document Upload");
-    } else {
-      update["Document Upload"] = uploaded.map(x => x.url).join("\n");
-    }
-
-    await updateRecord(env, tableId, b.record_id, update);
+    await updateRecord(env, tableId, b.record_id, { "Document Upload": [...merged, ...uploaded] });
     return json({ ok:true, uploaded });
   }
 
