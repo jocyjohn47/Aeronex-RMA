@@ -1054,7 +1054,7 @@ function spareOrderDetailsFormHtml(f){
     <h3>Document Upload</h3>
     <div class="notice"><b>Current document:</b> ${detailsFieldValue(f['Document Upload'])}</div>
     <div class="row"><input id="sodDocumentUploadFile" type="file" multiple multiple><button class="btn-light" onclick="uploadSpareOrderDetailsDocument()">Upload Document(s)</button></div>
-    <div id="sodDocumentMsg" class="msg"></div>
+    <div id="sodDocumentMsg" class="msg" style="margin-top:8px"></div>
   </div>
   <p><button class="act" onclick="saveSpareOrderDetails()">Save Internal Spare Order</button> <span id="spareOrderDetailsMsg" class="msg"></span></p></div>`;
 }
@@ -1068,10 +1068,17 @@ async function uploadSpareOrderDetailsDocument(){
   const r=S.spareOrderDetailsEdit;
   const inp=$('sodDocumentUploadFile');
   const files=inp&&inp.files ? Array.from(inp.files) : [];
-  if(!r || !r.record_id) return msg('sodDocumentMsg','Save or open an Internal Spare Order record first');
-  if(!files.length) return msg('sodDocumentMsg','Select document file');
+  const box=$('sodDocumentMsg');
+  const setUploadMsg=(text,cls)=>{
+    if(box){
+      box.className='msg '+(cls||'');
+      box.textContent=text;
+    }
+  };
+  if(!r || !r.record_id) return setUploadMsg('Upload Failed: save or open an Internal Spare Order record first','upload-fail');
+  if(!files.length) return setUploadMsg('Upload Failed: select document file','upload-fail');
   try{
-    msg('sodDocumentMsg','Uploading to Lark...');
+    setUploadMsg('Uploading... Please wait','upload-wait');
     const uploaded=[];
     for(const file of files){
       const data=await new Promise(resolve=>{
@@ -1087,12 +1094,17 @@ async function uploadSpareOrderDetailsDocument(){
       record_id:r.record_id,
       files:uploaded
     })});
-    msg('sodDocumentMsg','Document uploaded to Lark');
+    setUploadMsg(`Upload Success: ${files.length} document(s) uploaded to Lark`,'upload-ok');
     await loadSpareOrderDetailsMeta();
     const idx=(S.spareOrderDetailsRows||[]).findIndex(x=>x.record_id===r.record_id);
-    if(idx>=0) editSpareOrderDetails(idx);
-    else renderSpareOrderDetailsAdmin();
-  }catch(e){msg('sodDocumentMsg',e.message||'Upload failed')}
+    if(idx>=0){
+      setTimeout(()=>editSpareOrderDetails(idx),700);
+    }else{
+      renderSpareOrderDetailsAdmin();
+    }
+  }catch(e){
+    setUploadMsg('Upload Failed: '+(e.message||'Unknown error'),'upload-fail');
+  }
 }
 
 async function saveSpareOrderDetails(){
@@ -1116,17 +1128,21 @@ async function saveSpareOrderDetails(){
       'Shipment Cost - Receive from DJI':val('sodRecvCost'),
       'Remarks':val('sodRemarks')
     };
-    await api('/api/save-spare-order-details',{method:'POST',body:JSON.stringify({role:S.user.role||'',record_id:editingId,fields})});
-    msg('spareOrderDetailsMsg','Saved successfully');
+    const res=await api('/api/save-spare-order-details',{method:'POST',body:JSON.stringify({role:S.user.role||'',record_id:editingId,fields})});
+    if(res && res.partial){
+      msg('spareOrderDetailsMsg','Saved partially. Some fields were skipped.');
+    }else{
+      msg('spareOrderDetailsMsg','Saved successfully');
+    }
     await loadSpareOrderDetailsMeta();
     if(document.getElementById('detailsModalOverlay') && editingId){
       const idx=(S.spareOrderDetailsRows||[]).findIndex(x=>x.record_id===editingId);
-      if(idx>=0) editSpareOrderDetails(idx);
+      if(idx>=0) setTimeout(()=>editSpareOrderDetails(idx),500);
     }else{
       S.spareOrderDetailsEdit=null;
       renderSpareOrderDetailsAdmin();
     }
-  }catch(e){msg('spareOrderDetailsMsg',e.message||'Save failed')}
+  }catch(e){msg('spareOrderDetailsMsg','Save Failed: '+(e.message||'Unknown error'))}
 }
 
 
@@ -1738,7 +1754,7 @@ function ensureDetailsModalStyles(){
     .details-all-fields th,.details-all-fields td{border-bottom:1px solid #e2e8f0;padding:9px 10px;text-align:left;vertical-align:top}
     .details-all-fields th{background:#eef6ff;color:#0f2a5f;width:260px;min-width:260px;max-width:260px;white-space:nowrap;word-break:normal;overflow-wrap:normal}
     .details-all-fields td{color:#0f172a;word-break:break-word;overflow-wrap:anywhere}
-    .details-modal textarea{width:100%;box-sizing:border-box}
+    .details-modal textarea{width:100%;box-sizing:border-box}.upload-ok{color:#15803d;font-weight:700}.upload-fail{color:#b91c1c;font-weight:700}.upload-wait{color:#1d4ed8;font-weight:700}
     @media(max-width:820px){.details-kv{grid-template-columns:1fr}.details-modal{width:98vw}.details-modal-body{padding:12px}.details-all-fields th{width:180px;min-width:180px;max-width:180px}}
   `;
   document.head.appendChild(s);
