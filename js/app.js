@@ -1832,10 +1832,23 @@ function showDetailsModal(title, html){
   el.addEventListener('click', function(e){ if(e.target===el) closeDetailsModal(); });
   document.body.appendChild(el);
 }
-function detailsFieldValue(v, fieldName){
+function shouldFormatAsDisplayDate(fieldName, value){
+  const k = String(fieldName || '').toLowerCase();
+  if(!(k.includes('date') || k.includes('created') || k.includes('creation') || k.includes('closed') || k.includes('close') || k.includes('updated') || k.includes('modified'))) return false;
+  return !!larkTimestampToDate(value) || /\d{4}-\d{2}-\d{2}/.test(String(value || ''));
+}
+function detailsFieldValue(v, fieldName, row){
   if(v===undefined || v===null || v==='') return '-';
-  if(isDateFieldName(fieldName)) return esc(formatDisplayDate(v));
-  if(Array.isArray(v)) return v.map(x=>detailsFieldValue(x, fieldName)).join('<br>');
+
+  const k = String(fieldName || '').toLowerCase();
+  if(row && (k === 'order file' || k.includes('order file')) && typeof backendOrderDownloadLink === 'function'){
+    return backendOrderDownloadLink(row);
+  }
+
+  if(Array.isArray(v)) return v.map(x=>detailsFieldValue(x, fieldName, row)).join('<br>');
+
+  if(shouldFormatAsDisplayDate(fieldName, v)) return esc(formatDisplayDate(v));
+
   if(typeof v==='object'){
     const link = v.link || v.url || v.href || v.file_url || v.tmp_url;
     const name = v.text || v.name || v.filename || v.value || v.title || 'Open';
@@ -1844,10 +1857,10 @@ function detailsFieldValue(v, fieldName){
   }
   return esc(String(v));
 }
-function renderAllLarkFieldsTable(fields){
+function renderAllLarkFieldsTable(fields, row){
   const entries=Object.entries(fields||{});
   if(!entries.length) return '<div class="notice">No fields available.</div>';
-  return `<div class="details-all-fields-wrap"><table class="details-all-fields"><tbody>${entries.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${detailsFieldValue(v,k)}</td></tr>`).join('')}</tbody></table></div>`;
+  return `<div class="details-all-fields-wrap"><table class="details-all-fields"><tbody>${entries.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${detailsFieldValue(v,k,row)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function kv(label, value){
   return `<div class="kv"><b>${esc(label)}</b><div>${detailsFieldValue(value,label)}</div></div>`;
@@ -1913,7 +1926,7 @@ function openSpareOrderDetails(i){
   const html = `${summary}
     ${adminEdit}
     <h3 class="details-section-title">All Lark Fields</h3>
-    ${renderAllLarkFieldsTable(f)}
+    ${renderAllLarkFieldsTable(f, r)}
     <div class="row">${report}</div>`;
 
   showDetailsModal(`Spare Order Details - ${orderNo || '-'}`, html);
