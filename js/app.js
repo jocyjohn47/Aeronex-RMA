@@ -439,15 +439,14 @@ function ensureAeronexLogoStyles(){
   const s=document.createElement('style');
   s.id='aeronexLogoStyles';
   s.textContent=`
-    .brand{min-width:260px}
-    .brand-logo-img{height:42px;max-width:200px;object-fit:contain;display:block}
-    .login-logo-img{width:360px;max-width:88%;height:auto;display:block;margin:0 auto 22px auto}
+    .brand-logo-img{height:44px;max-width:220px;object-fit:contain;display:block}
+    .login-logo-img{width:260px;max-width:88%;height:auto;display:block;margin:0 auto 16px auto}
   `;
   document.head.appendChild(s);
 }
 
-function layout(){ensureAeronexLogoStyles();let n=S.user?.displayName||S.user?.username||'User';document.body.innerHTML=`<header class="topbar"><div class="brand"><img class="brand-logo-img" src="img/aeronex_rma_logo_new.png" alt="AERONEX RMA Portal" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div class=&quot;brand-title&quot;>AERO NEX</div><div class=&quot;brand-sub&quot;>RMA & Spare Order Portal</div>')"></div><nav class="nav">
-<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${adminCenterEnabled()?`<a data-sec="adminCenter" href="#" onclick="show('adminCenter')">🧰 Admin Center</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','flycartCredit','dealers','adminCenter','reportBackup','internalRepair','spareOrderDetailsAdmin','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
+function layout(){ensureAeronexLogoStyles();let n=S.user?.displayName||S.user?.username||'User';document.body.innerHTML=`<header class="topbar"><div class="brand"><img class="brand-logo-img" src="img/aeronex_rma_logo_transparent.png" alt="AERONEX RMA Portal" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div class=&quot;brand-title&quot;>AERO NEX</div><div class=&quot;brand-sub&quot;>RMA & Spare Order Portal</div>')"></div><nav class="nav">
+<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${adminCenterEnabled()?`<a data-sec="adminCenter" href="#" onclick="show('adminCenter')">🧰 Admin Center</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','flycartCredit','dealers','adminCenter','internalRepair','spareOrderDetailsAdmin','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
 
 async function ensureSpareListLoaded(){
   if(Array.isArray(S.spares) && S.spares.length) return S.spares;
@@ -474,7 +473,7 @@ function show(sec){
         try{renderDealerRepairCase()}catch(err){console.error('renderDealerRepairCase failed',err)}
       });
   }
-  if(sec==='warrantySoftwareStatus'){try{renderWarrantySoftwareStatus()}catch(e){console.error('renderWarrantySoftwareStatus failed',e)}}if(sec==='flycartCredit'){loadFlycartCredit().then(renderFlycartCredit).catch(e=>{console.error('flycartCredit failed',e);try{renderFlycartCredit()}catch(err){}})}if(sec==='logsDiagnostics'){try{renderLogsDiagnostics()}catch(e){console.error('renderLogsDiagnostics failed',e)}}if(sec==='adminCenter'){try{renderAdminCenter()}catch(e){console.error('renderAdminCenter failed',e)}}if(sec==='reportBackup'){try{renderReportBackup()}catch(e){console.error('renderReportBackup failed',e)}}if(sec==='internalRepair'){loadInternalRepairMeta().then(renderInternalRepair).catch(e=>{console.error('internalRepair failed',e);try{renderInternalRepairError(e)}catch(_){}})}if(sec==='spareOrderDetailsAdmin'){loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin).catch(e=>{console.error('spareOrderDetails failed',e);try{renderSpareOrderDetailsError(e)}catch(_){}})}scrollTo(0,0)
+  if(sec==='warrantySoftwareStatus'){try{renderWarrantySoftwareStatus()}catch(e){console.error('renderWarrantySoftwareStatus failed',e)}}if(sec==='flycartCredit'){loadFlycartCredit().then(renderFlycartCredit).catch(e=>{console.error('flycartCredit failed',e);try{renderFlycartCredit()}catch(err){}})}if(sec==='logsDiagnostics'){try{renderLogsDiagnostics()}catch(e){console.error('renderLogsDiagnostics failed',e)}}if(sec==='adminCenter'){try{renderAdminCenter()}catch(e){console.error('renderAdminCenter failed',e)}}if(sec==='internalRepair'){loadInternalRepairMeta().then(renderInternalRepair).catch(e=>{console.error('internalRepair failed',e);try{renderInternalRepairError(e)}catch(_){}})}if(sec==='spareOrderDetailsAdmin'){loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin).catch(e=>{console.error('spareOrderDetails failed',e);try{renderSpareOrderDetailsError(e)}catch(_){}})}scrollTo(0,0)
 }
 
 function dealerRepairCaseEnabled(){
@@ -801,11 +800,42 @@ function companyInputHtml(id, label, current){
 }
 function val(id){return ($(id)?.value||'').trim();}
 function setVal(id,v){const el=$(id); if(el) el.value=v||'';}
+function larkTimestampToDate(v){
+  if(v===undefined || v===null || v==='') return '';
+  const s=String(v).trim();
+  if(/^\d{13}$/.test(s)){
+    const d=new Date(Number(s));
+    if(!isNaN(d.getTime())) return d;
+  }
+  if(/^\d{10}$/.test(s)){
+    const d=new Date(Number(s)*1000);
+    if(!isNaN(d.getTime())) return d;
+  }
+  if(typeof v==='number'){
+    const d=new Date(v);
+    if(!isNaN(d.getTime())) return d;
+  }
+  return null;
+}
+function formatDisplayDate(v){
+  const d=larkTimestampToDate(v);
+  if(d) return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  const s=String(v||'').trim();
+  const m=s.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if(m){
+    const d2=new Date(Number(m[1]),Number(m[2])-1,Number(m[3]));
+    if(!isNaN(d2.getTime())) return d2.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  }
+  return s;
+}
+function isDateFieldName(name){
+  const k=String(name||'').toLowerCase();
+  return k.includes('date') || k.includes('created') || k.includes('closed') || k.includes('creation') || k.includes('close');
+}
 function dateInputValue(v){
   if(!v) return '';
-  if(typeof v==='number'){
-    try{return new Date(v).toISOString().slice(0,10)}catch(e){return ''}
-  }
+  const d=larkTimestampToDate(v);
+  if(d) return d.toISOString().slice(0,10);
   const s=String(v);
   const m=s.match(/\d{4}-\d{2}-\d{2}/);
   return m?m[0]:s;
@@ -1315,61 +1345,7 @@ function adminCenterCards(){
   if(logsPageEnabled()){
     cards.push(['🧾','Logs & Diagnostics','Check error logs and Lark table diagnostics.','logsDiagnostics','Open']);
   }
-  if(isAdmin()){
-    cards.push(['💾','Report & Backup','Daily Lark Base backup status, SFTP settings, retention, and backup history.','reportBackup','Open']);
-  }
   return cards;
-}
-
-
-
-function renderReportBackup(){
-  const sec=$('reportBackup');
-  if(!sec) return;
-  if(!isAdmin()){
-    sec.innerHTML=`<div class="panel"><h2>Report & Backup</h2><div class="notice">You do not have permission to access Report & Backup.</div></div>`;
-    return;
-  }
-  sec.innerHTML=`<div class="panel"><h2>Report & Backup</h2>
-    <div class="notice">Automatic backup is planned every day at 04:00 AM. The system will keep only the latest 3 successful backups. Status, failures, and manual backup results will be shown here.</div>
-
-    <h3>Backup Status</h3>
-    <div class="grid4">
-      <div><label>Current Status</label><input value="Not configured" disabled></div>
-      <div><label>Last Backup</label><input value="-" disabled></div>
-      <div><label>Last Successful Backup</label><input value="-" disabled></div>
-      <div><label>Next Scheduled Backup</label><input value="Daily 04:00 AM" disabled></div>
-    </div>
-
-    <h3>Backup Policy</h3>
-    <div class="grid4">
-      <div><label>Schedule</label><input value="Every day at 04:00 AM" disabled></div>
-      <div><label>Backup Type</label><input value="Full backup" disabled></div>
-      <div><label>Retention</label><input value="Keep latest 3 successful backups" disabled></div>
-      <div><label>Storage</label><input value="SFTP NAS only" disabled></div>
-    </div>
-    <p class="muted">Old backups will be deleted only after the new backup completes successfully and passes verification.</p>
-
-    <h3>SFTP Backup Settings</h3>
-    <div class="grid3">
-      <div><label>SFTP Host</label><input id="backupSftpHost" placeholder="NAS IP or hostname"></div>
-      <div><label>SFTP Port</label><input id="backupSftpPort" value="22"></div>
-      <div><label>Username</label><input id="backupSftpUser" placeholder="backup_user"></div>
-      <div><label>Password / SSH Key</label><input id="backupSftpSecret" type="password" placeholder="Enter password or key reference"></div>
-      <div><label>Remote Backup Folder</label><input id="backupSftpFolder" placeholder="/AERONEX_RMA_Backup"></div>
-      <div><label>Backup Contents</label><input value="All tables, attachments, CSV, Excel, JSON" disabled></div>
-    </div>
-    <p class="muted">SFTP backend is not connected in this UI patch. These fields are prepared for the next backend implementation.</p>
-    <button class="btn-light" onclick="msg('backupMsg','SFTP test backend not implemented yet')">Test SFTP Connection</button>
-    <button class="btn-light" onclick="msg('backupMsg','Backup backend not implemented yet')">Backup Now</button>
-    <button onclick="msg('backupMsg','Settings backend not implemented yet')">Save Settings</button>
-    <div id="backupMsg" class="msg"></div>
-
-    <h3>Backup History</h3>
-    <div class="table-wrap"><table><thead><tr><th>Date</th><th>Status</th><th>Records</th><th>Attachments</th><th>Size</th><th>Destination</th><th>Error</th></tr></thead><tbody>
-      <tr><td colspan="7" class="muted">No backup history available yet. After backend implementation, this table will show the latest 3 retained backups and any failed attempts.</td></tr>
-    </tbody></table></div>
-  </div>`;
 }
 
 function renderAdminCenter(){
@@ -1381,7 +1357,7 @@ function renderAdminCenter(){
   }
   const cards=adminCenterCards();
   sec.innerHTML=`<div class="panel"><h2>Admin Center</h2><div class="notice">Role-based admin and technician tools.</div>
-    <div class="cards admin-center-cards">
+    <div class="cards">
       ${cards.map(c=>`<div class="card"><div class="ico">${c[0]}</div><h3>${c[1]}</h3><p>${c[2]}</p><a href="#" onclick="show('${c[3]}')">${c[4]} →</a></div>`).join('') || '<div class="notice">No tools available for this role.</div>'}
     </div>
   </div>`;
@@ -1752,12 +1728,13 @@ async function uploadReceiptForRow(r, inputId){
 
 
 function backendOrderDownloadLink(r){
+  if(!canSeeInternalFiles()) return '<span class="muted">Admin / Technician only</span>';
   const no = getSpareOrderNoFromRow(r);
   const tableId = r && (r._table_id || r.tableId || r.table_id) || '';
   const recordId = r && r.record_id || '';
   if(!tableId || !recordId) return '-';
-  const url = `/api/download-order-excel?tableId=${encodeURIComponent(tableId)}&record_id=${encodeURIComponent(recordId)}&orderNo=${encodeURIComponent(no)}`;
-  return `<a class="btn-light" href="${url}" target="_blank" rel="noopener">Download Excel</a>`;
+  const url = `/api/download-order-excel?tableId=${encodeURIComponent(tableId)}&record_id=${encodeURIComponent(recordId)}&orderNo=${encodeURIComponent(no)}&role=${encodeURIComponent(S.user.role||'')}`;
+  return `<a class="btn-light" href="${url}" target="_blank" rel="noopener">Download Order File</a>`;
 }
 
 function localOrderDownloadLink(orderNo, fileVal, row){
@@ -1855,9 +1832,10 @@ function showDetailsModal(title, html){
   el.addEventListener('click', function(e){ if(e.target===el) closeDetailsModal(); });
   document.body.appendChild(el);
 }
-function detailsFieldValue(v){
+function detailsFieldValue(v, fieldName){
   if(v===undefined || v===null || v==='') return '-';
-  if(Array.isArray(v)) return v.map(detailsFieldValue).join('<br>');
+  if(isDateFieldName(fieldName)) return esc(formatDisplayDate(v));
+  if(Array.isArray(v)) return v.map(x=>detailsFieldValue(x, fieldName)).join('<br>');
   if(typeof v==='object'){
     const link = v.link || v.url || v.href || v.file_url || v.tmp_url;
     const name = v.text || v.name || v.filename || v.value || v.title || 'Open';
@@ -1869,10 +1847,10 @@ function detailsFieldValue(v){
 function renderAllLarkFieldsTable(fields){
   const entries=Object.entries(fields||{});
   if(!entries.length) return '<div class="notice">No fields available.</div>';
-  return `<div class="details-all-fields-wrap"><table class="details-all-fields"><tbody>${entries.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${detailsFieldValue(v)}</td></tr>`).join('')}</tbody></table></div>`;
+  return `<div class="details-all-fields-wrap"><table class="details-all-fields"><tbody>${entries.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${detailsFieldValue(v,k)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function kv(label, value){
-  return `<div class="kv"><b>${esc(label)}</b><div>${detailsFieldValue(value)}</div></div>`;
+  return `<div class="kv"><b>${esc(label)}</b><div>${detailsFieldValue(value,label)}</div></div>`;
 }
 function kvHtml(label, html){
   return `<div class="kv"><b>${esc(label)}</b><div>${html || '-'}</div></div>`;
@@ -1896,6 +1874,7 @@ function openSpareOrderDetails(i){
     ${kv('Company Name', f['Company Name'] || '-')}
     ${kv('Contact Name', f['Contact Name'] || '-')}
     ${kv('Billing / Invoice Address', f['Billing Address'] || f['Invoice Address'] || '-')}
+    ${kvHtml('Order File', backendOrderDownloadLink(r))}
     ${kvHtml('Dealer CN', spareOrderDealerCnCell(f))}
     ${kv('Shipment Destination', spareOrderDestinationValue(f) || '-')}
     ${kv('Shipment Tracking No', spareOrderTrackingValue(f) || '-')}
