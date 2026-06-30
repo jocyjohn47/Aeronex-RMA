@@ -439,14 +439,15 @@ function ensureAeronexLogoStyles(){
   const s=document.createElement('style');
   s.id='aeronexLogoStyles';
   s.textContent=`
-    .brand-logo-img{height:44px;max-width:220px;object-fit:contain;display:block}
-    .login-logo-img{width:260px;max-width:88%;height:auto;display:block;margin:0 auto 16px auto}
+    .brand{min-width:260px}
+    .brand-logo-img{height:42px;max-width:200px;object-fit:contain;display:block}
+    .login-logo-img{width:360px;max-width:88%;height:auto;display:block;margin:0 auto 22px auto}
   `;
   document.head.appendChild(s);
 }
 
-function layout(){ensureAeronexLogoStyles();let n=S.user?.displayName||S.user?.username||'User';document.body.innerHTML=`<header class="topbar"><div class="brand"><img class="brand-logo-img" src="img/aeronex_rma_logo_transparent.png" alt="AERONEX RMA Portal" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div class=&quot;brand-title&quot;>AERO NEX</div><div class=&quot;brand-sub&quot;>RMA & Spare Order Portal</div>')"></div><nav class="nav">
-<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${adminCenterEnabled()?`<a data-sec="adminCenter" href="#" onclick="show('adminCenter')">🧰 Admin Center</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','flycartCredit','dealers','adminCenter','internalRepair','spareOrderDetailsAdmin','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
+function layout(){ensureAeronexLogoStyles();let n=S.user?.displayName||S.user?.username||'User';document.body.innerHTML=`<header class="topbar"><div class="brand"><img class="brand-logo-img" src="img/aeronex_rma_logo_new.png" alt="AERONEX RMA Portal" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div class=&quot;brand-title&quot;>AERO NEX</div><div class=&quot;brand-sub&quot;>RMA & Spare Order Portal</div>')"></div><nav class="nav">
+<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${adminCenterEnabled()?`<a data-sec="adminCenter" href="#" onclick="show('adminCenter')">🧰 Admin Center</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','flycartCredit','dealers','adminCenter','reportBackup','internalRepair','spareOrderDetailsAdmin','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
 
 async function ensureSpareListLoaded(){
   if(Array.isArray(S.spares) && S.spares.length) return S.spares;
@@ -473,7 +474,7 @@ function show(sec){
         try{renderDealerRepairCase()}catch(err){console.error('renderDealerRepairCase failed',err)}
       });
   }
-  if(sec==='warrantySoftwareStatus'){try{renderWarrantySoftwareStatus()}catch(e){console.error('renderWarrantySoftwareStatus failed',e)}}if(sec==='flycartCredit'){loadFlycartCredit().then(renderFlycartCredit).catch(e=>{console.error('flycartCredit failed',e);try{renderFlycartCredit()}catch(err){}})}if(sec==='logsDiagnostics'){try{renderLogsDiagnostics()}catch(e){console.error('renderLogsDiagnostics failed',e)}}if(sec==='adminCenter'){try{renderAdminCenter()}catch(e){console.error('renderAdminCenter failed',e)}}if(sec==='internalRepair'){loadInternalRepairMeta().then(renderInternalRepair).catch(e=>{console.error('internalRepair failed',e);try{renderInternalRepairError(e)}catch(_){}})}if(sec==='spareOrderDetailsAdmin'){loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin).catch(e=>{console.error('spareOrderDetails failed',e);try{renderSpareOrderDetailsError(e)}catch(_){}})}scrollTo(0,0)
+  if(sec==='warrantySoftwareStatus'){try{renderWarrantySoftwareStatus()}catch(e){console.error('renderWarrantySoftwareStatus failed',e)}}if(sec==='flycartCredit'){loadFlycartCredit().then(renderFlycartCredit).catch(e=>{console.error('flycartCredit failed',e);try{renderFlycartCredit()}catch(err){}})}if(sec==='logsDiagnostics'){try{renderLogsDiagnostics()}catch(e){console.error('renderLogsDiagnostics failed',e)}}if(sec==='adminCenter'){try{renderAdminCenter()}catch(e){console.error('renderAdminCenter failed',e)}}if(sec==='reportBackup'){try{renderReportBackup()}catch(e){console.error('renderReportBackup failed',e)}}if(sec==='internalRepair'){loadInternalRepairMeta().then(renderInternalRepair).catch(e=>{console.error('internalRepair failed',e);try{renderInternalRepairError(e)}catch(_){}})}if(sec==='spareOrderDetailsAdmin'){loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin).catch(e=>{console.error('spareOrderDetails failed',e);try{renderSpareOrderDetailsError(e)}catch(_){}})}scrollTo(0,0)
 }
 
 function dealerRepairCaseEnabled(){
@@ -802,12 +803,8 @@ function val(id){return ($(id)?.value||'').trim();}
 function setVal(id,v){const el=$(id); if(el) el.value=v||'';}
 function dateInputValue(v){
   if(!v) return '';
-  if(typeof v==='number' || /^\d{10,13}$/.test(String(v).trim())){
-    try{
-      const n=Number(String(v).trim());
-      const ms=String(Math.trunc(n)).length===10 ? n*1000 : n;
-      return new Date(ms).toISOString().slice(0,10);
-    }catch(e){return ''}
+  if(typeof v==='number'){
+    try{return new Date(v).toISOString().slice(0,10)}catch(e){return ''}
   }
   const s=String(v);
   const m=s.match(/\d{4}-\d{2}-\d{2}/);
@@ -820,8 +817,7 @@ function selectedOptionsValue(id){
   return el.value || '';
 }
 function selectHtml(meta, id, fieldName, current){
-  const singleLineFields = ['Order Type','Issue Type'];
-  const multi=isMetaMulti(meta, fieldName) && !singleLineFields.includes(fieldName);
+  const multi=isMetaMulti(meta, fieldName) && fieldName !== 'Order Type';
   return `<select id="${id}" ${multi?'multiple size="4"':''}>${metaOptions(meta, fieldName, current)}</select>`;
 }
 function internalRepairFieldsForCountry(country){
@@ -869,7 +865,13 @@ function openInternalRepairFromRepair(recordId){
     'Remark': f['Details Of Issue']||f['Issue Description']||f['Remarks']||'',
     'Remarks': f['Details Of Issue']||f['Issue Description']||f['Remarks']||''
   };
+  S.returnToRepairStatus = true;
   show('internalRepair');
+}
+function backToRepairStatus(){
+  S.returnToRepairStatus = false;
+  show('repairStatus');
+  if(typeof refreshRepairs === 'function') refreshRepairs();
 }
 function renderInternalRepairError(e){
   const sec=$('internalRepair');
@@ -882,7 +884,8 @@ function renderInternalRepair(){
   const country=meta.country||adminModuleCountry();
   const rows=S.internalRepairRows||[];
   sec.innerHTML=`<div class="panel"><h2>Internal Repair</h2>
-    <div class="notice">${internalRepairCountryControl(country)}
+    <div class="notice">${S.returnToRepairStatus ? '<button class="btn-light" onclick="backToRepairStatus()">← Back to Repair Status</button>' : ''}
+    ${internalRepairCountryControl(country)}
     <button class="btn-light" onclick="loadInternalRepairMeta().then(renderInternalRepair)">Refresh</button>
     <button class="act" onclick="newInternalRepair()">New Internal Repair</button></div>
     <div id="internalRepairForm"></div>
@@ -900,7 +903,7 @@ function editInternalRepair(i){
   S.internalRepairPrefill=null;
   const f=r.fields||{};
   const html = internalRepairFormHtml(f, true) + `<h3 class="details-section-title">All Lark Fields</h3>${renderAllLarkFieldsTable(f)}`;
-  showDetailsModal(`Internal Spare Order & Shipment Details - ${(f['DJI Case ID']||f['Repair Case']||'Open')}`, html);
+  showDetailsModal(`Internal Repair Details - ${(f['DJI Case ID']||f['Repair Case']||'Open')}`, html);
   const n=internalRepairFieldsForCountry((S.internalRepairMeta||{}).country||adminModuleCountry());
   S.irParts=parseDealerRepairMaterials(f[n.material]||'').map(x=>({materialCode:x.materialCode,materialName:x.materialName,qty:x.qty}));
   setTimeout(()=>{try{renderInternalRepairSpareOptions();renderInternalRepairSparePreview();}catch(e){}},0);
@@ -1016,13 +1019,13 @@ async function loadSpareOrderDetailsMeta(){
 }
 function renderSpareOrderDetailsError(e){
   const sec=$('spareOrderDetailsAdmin'); if(!sec)return;
-  sec.innerHTML=`<div class="panel"><h2>Internal Spare Order & Shipment Details</h2><div class="notice">${esc(e.message||'Failed to load Internal Spare Order & Shipment Details')}</div></div>`;
+  sec.innerHTML=`<div class="panel"><h2>Internal Spare Order details</h2><div class="notice">${esc(e.message||'Failed to load Internal Spare Order details')}</div></div>`;
 }
 function renderSpareOrderDetailsAdmin(){
   const sec=$('spareOrderDetailsAdmin'); if(!sec)return;
-  if(!isAdmin()){sec.innerHTML=`<div class="panel"><h2>Internal Spare Order & Shipment Details</h2><div class="notice">Admin only.</div></div>`;return;}
+  if(!isAdmin()){sec.innerHTML=`<div class="panel"><h2>Internal Spare Order details</h2><div class="notice">Admin only.</div></div>`;return;}
   const rows=S.spareOrderDetailsRows||[];
-  sec.innerHTML=`<div class="panel"><h2>Internal Spare Order & Shipment Details</h2><div class="notice">Admin-only table for DJI/internal spare order, shipment and document records. <button class="btn-light" onclick="loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin)">Refresh</button> <button class="act" onclick="newSpareOrderDetails()">New Internal Spare Order</button></div><div id="spareOrderDetailsForm"></div>
+  sec.innerHTML=`<div class="panel"><h2>Internal Spare Order details</h2><div class="notice">Admin-only table for DJI/internal spare order, shipment and document records. <button class="btn-light" onclick="loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin)">Refresh</button> <button class="act" onclick="newSpareOrderDetails()">New Internal Spare Order</button></div><div id="spareOrderDetailsForm"></div>
   <div class="table-wrap"><table><thead><tr><th>DJI Case ID</th><th>Company</th><th>Case Type</th><th>Billing</th><th>Order Type</th><th>Created</th><th>Closed</th><th>Document</th><th>Action</th></tr></thead><tbody>
   ${rows.map((r,i)=>{const f=r.fields||{};return `<tr><td>${esc(f['DJI Case ID']||'')}</td><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Case Type']||'')}</td><td>${esc(f['Billing Company']||'')}</td><td>${esc(Array.isArray(f['Order Type'])?f['Order Type'].join(', '):(f['Order Type']||''))}</td><td>${esc(dateInputValue(f['Case Creation Date']))}</td><td>${esc(dateInputValue(f['Case Close Date']))}</td><td>${detailsFieldValue(f['Document Upload'])}</td><td><button class="btn-light" onclick="editSpareOrderDetails(${i})">Open</button></td></tr>`}).join('')}</tbody></table></div></div>`;
   renderSpareOrderDetailsForm(S.spareOrderDetailsEdit?.fields||{});
@@ -1036,11 +1039,11 @@ function editSpareOrderDetails(i){
   if(inline) inline.innerHTML='';
   const f=r.fields||{};
   const html = spareOrderDetailsFormHtml(f) + `<h3 class="details-section-title">All Lark Fields</h3>${renderAllLarkFieldsTable(f)}`;
-  showDetailsModal(`Internal Spare Order & Shipment Details - ${(f['DJI Case ID']||f['Company Name']||'Open')}`, html);
+  showDetailsModal(`Internal Spare Order details - ${(f['DJI Case ID']||f['Company Name']||'Open')}`, html);
 }
 function spareOrderDetailsFormHtml(f){
   const meta=S.spareOrderDetailsMeta||{};
-  return `<div class="subpanel"><h3>${S.spareOrderDetailsEdit?'Edit':'New'} Internal Spare Order & Shipment Details</h3><div class="grid3">
+  return `<div class="subpanel"><h3>${S.spareOrderDetailsEdit?'Edit':'New'} Internal Spare Order details</h3><div class="grid3">
     <div><label>DJI Case ID</label><input id="sodDjiCaseId" value="${esc(f['DJI Case ID']||'')}"></div>
     <div><label>Case ID Remarks</label><input id="sodCaseIdRemarks" value="${esc(f['Case ID Remarks']||'')}"></div>
     <div><label>Case Type</label>${selectHtml(meta,'sodCaseType','Case Type',f['Case Type']||'')}</div>
@@ -1307,12 +1310,57 @@ function adminCenterCards(){
     cards.push(['🛠','Internal Repair','Create and update internal repair register cases.','internalRepair','Open']);
   }
   if(isAdmin()){
-    cards.push(['📦','Internal Spare Order & Shipment Details','Admin-only spare order internal processing records.','spareOrderDetailsAdmin','Open']);
+    cards.push(['📦','Internal Spare Order details','Admin-only spare order internal processing records.','spareOrderDetailsAdmin','Open']);
   }
   if(logsPageEnabled()){
     cards.push(['🧾','Logs & Diagnostics','Check error logs and Lark table diagnostics.','logsDiagnostics','Open']);
   }
+  if(isAdmin()){
+    cards.push(['💾','Report & Backup','Weekly Lark Base backup status, SFTP settings, and backup history.','reportBackup','Open']);
+  }
   return cards;
+}
+
+
+
+function renderReportBackup(){
+  const sec=$('reportBackup');
+  if(!sec) return;
+  if(!isAdmin()){
+    sec.innerHTML=`<div class="panel"><h2>Report & Backup</h2><div class="notice">You do not have permission to access Report & Backup.</div></div>`;
+    return;
+  }
+  sec.innerHTML=`<div class="panel"><h2>Report & Backup</h2>
+    <div class="notice">Weekly backup is planned for Sunday 05:00 AM. If it fails, one retry is planned for Monday 05:00 AM. Status will be shown here.</div>
+
+    <h3>Backup Status</h3>
+    <div class="grid4">
+      <div><label>Current Status</label><input value="Not configured" disabled></div>
+      <div><label>Last Backup</label><input value="-" disabled></div>
+      <div><label>Last Successful Backup</label><input value="-" disabled></div>
+      <div><label>Next Scheduled Backup</label><input value="Sunday 05:00 AM" disabled></div>
+    </div>
+
+    <h3>SFTP Backup Settings</h3>
+    <div class="grid3">
+      <div><label>SFTP Host</label><input id="backupSftpHost" placeholder="NAS IP or hostname"></div>
+      <div><label>SFTP Port</label><input id="backupSftpPort" value="22"></div>
+      <div><label>Username</label><input id="backupSftpUser" placeholder="backup_user"></div>
+      <div><label>Password / SSH Key</label><input id="backupSftpSecret" type="password" placeholder="Enter password or key reference"></div>
+      <div><label>Remote Backup Folder</label><input id="backupSftpFolder" placeholder="/AERONEX/RMA_Backup"></div>
+      <div><label>Schedule</label><input value="Sunday 05:00 AM, retry Monday 05:00 AM" disabled></div>
+    </div>
+    <p class="muted">SFTP backend is not connected in this UI patch. These fields are prepared for the next backend implementation.</p>
+    <button class="btn-light" onclick="msg('backupMsg','SFTP test backend not implemented yet')">Test SFTP Connection</button>
+    <button class="btn-light" onclick="msg('backupMsg','Backup backend not implemented yet')">Backup Now</button>
+    <button onclick="msg('backupMsg','Settings backend not implemented yet')">Save Settings</button>
+    <div id="backupMsg" class="msg"></div>
+
+    <h3>Backup History</h3>
+    <div class="table-wrap"><table><thead><tr><th>Date</th><th>Status</th><th>Records</th><th>Attachments</th><th>Destination</th><th>Error</th></tr></thead><tbody>
+      <tr><td colspan="6" class="muted">No backup history available yet.</td></tr>
+    </tbody></table></div>
+  </div>`;
 }
 
 function renderAdminCenter(){
@@ -1324,7 +1372,7 @@ function renderAdminCenter(){
   }
   const cards=adminCenterCards();
   sec.innerHTML=`<div class="panel"><h2>Admin Center</h2><div class="notice">Role-based admin and technician tools.</div>
-    <div class="cards">
+    <div class="cards admin-center-cards">
       ${cards.map(c=>`<div class="card"><div class="ico">${c[0]}</div><h3>${c[1]}</h3><p>${c[2]}</p><a href="#" onclick="show('${c[3]}')">${c[4]} →</a></div>`).join('') || '<div class="notice">No tools available for this role.</div>'}
     </div>
   </div>`;
@@ -1798,28 +1846,9 @@ function showDetailsModal(title, html){
   el.addEventListener('click', function(e){ if(e.target===el) closeDetailsModal(); });
   document.body.appendChild(el);
 }
-function formatLarkDateDisplayValue(v){
-  if(v===undefined || v===null || v==='') return '';
-  const s=String(v).trim();
-  if(!/^\d{10,13}$/.test(s)) return '';
-  try{
-    const n=Number(s);
-    const ms=s.length===10 ? n*1000 : n;
-    const d=new Date(ms);
-    if(isNaN(d.getTime())) return '';
-    const dd=String(d.getDate()).padStart(2,'0');
-    const mm=String(d.getMonth()+1).padStart(2,'0');
-    const yy=d.getFullYear();
-    return `${dd}-${mm}-${yy}`;
-  }catch(e){return ''}
-}
-function detailsFieldValue(v, fieldName){
+function detailsFieldValue(v){
   if(v===undefined || v===null || v==='') return '-';
-  if(Array.isArray(v)) return v.map(x=>detailsFieldValue(x, fieldName)).join('<br>');
-  if((fieldName||'').toLowerCase().includes('date')){
-    const d=formatLarkDateDisplayValue(v);
-    if(d) return esc(d);
-  }
+  if(Array.isArray(v)) return v.map(detailsFieldValue).join('<br>');
   if(typeof v==='object'){
     const link = v.link || v.url || v.href || v.file_url || v.tmp_url;
     const name = v.text || v.name || v.filename || v.value || v.title || 'Open';
@@ -1831,7 +1860,7 @@ function detailsFieldValue(v, fieldName){
 function renderAllLarkFieldsTable(fields){
   const entries=Object.entries(fields||{});
   if(!entries.length) return '<div class="notice">No fields available.</div>';
-  return `<div class="details-all-fields-wrap"><table class="details-all-fields"><tbody>${entries.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${detailsFieldValue(v,k)}</td></tr>`).join('')}</tbody></table></div>`;
+  return `<div class="details-all-fields-wrap"><table class="details-all-fields"><tbody>${entries.map(([k,v])=>`<tr><th>${esc(k)}</th><td>${detailsFieldValue(v)}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function kv(label, value){
   return `<div class="kv"><b>${esc(label)}</b><div>${detailsFieldValue(value)}</div></div>`;
@@ -1873,7 +1902,7 @@ function openSpareOrderDetails(i){
   const adminEdit = canEdit ? `
     <div class="panel">
       <h3>Admin Spare Order Update</h3>
-      <div class="notice">Admin can update the spare order processing fields here. Internal Spare Order & Shipment Details remains a separate Admin Center page and is not linked automatically.</div>
+      <div class="notice">Admin can update the spare order processing fields here. Internal Spare Order details remains a separate Admin Center page and is not linked automatically.</div>
       <div class="grid3">
         <div><label>Shipment Destination</label><select id="soShipDestination">${shipmentDestinationOptions(spareOrderDestinationValue(f))}</select></div>
         <div><label>Shipment Tracking No</label><input id="soShipTracking" value="${esc(spareOrderTrackingValue(f)||'')}"></div>
