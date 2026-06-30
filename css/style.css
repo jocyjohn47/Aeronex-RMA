@@ -222,3 +222,27 @@ td{
   word-break:break-word !important;
   overflow-wrap:anywhere !important;
 }
+
+
+/* =========================
+   AERONEX BRANDING UPDATE
+========================= */
+.login-logo-img{
+  width:360px !important;
+  max-width:88% !important;
+  height:auto !important;
+  display:block !important;
+  margin:0 auto 22px !important;
+}
+.brand{
+  min-width:260px;
+}
+.brand-logo-img{
+  height:42px;
+  max-width:200px;
+  object-fit:contain;
+  display:block;
+}
+.admin-center-cards{
+  grid-template-columns:repeat(auto-fit, minmax(240px, 260px));
+}
