@@ -1316,7 +1316,7 @@ function adminCenterCards(){
     cards.push(['🧾','Logs & Diagnostics','Check error logs and Lark table diagnostics.','logsDiagnostics','Open']);
   }
   if(isAdmin()){
-    cards.push(['💾','Report & Backup','Weekly Lark Base backup status, SFTP settings, and backup history.','reportBackup','Open']);
+    cards.push(['💾','Report & Backup','Daily Lark Base backup status, SFTP settings, retention, and backup history.','reportBackup','Open']);
   }
   return cards;
 }
@@ -1331,15 +1331,24 @@ function renderReportBackup(){
     return;
   }
   sec.innerHTML=`<div class="panel"><h2>Report & Backup</h2>
-    <div class="notice">Weekly backup is planned for Sunday 05:00 AM. If it fails, one retry is planned for Monday 05:00 AM. Status will be shown here.</div>
+    <div class="notice">Automatic backup is planned every day at 04:00 AM. The system will keep only the latest 3 successful backups. Status, failures, and manual backup results will be shown here.</div>
 
     <h3>Backup Status</h3>
     <div class="grid4">
       <div><label>Current Status</label><input value="Not configured" disabled></div>
       <div><label>Last Backup</label><input value="-" disabled></div>
       <div><label>Last Successful Backup</label><input value="-" disabled></div>
-      <div><label>Next Scheduled Backup</label><input value="Sunday 05:00 AM" disabled></div>
+      <div><label>Next Scheduled Backup</label><input value="Daily 04:00 AM" disabled></div>
     </div>
+
+    <h3>Backup Policy</h3>
+    <div class="grid4">
+      <div><label>Schedule</label><input value="Every day at 04:00 AM" disabled></div>
+      <div><label>Backup Type</label><input value="Full backup" disabled></div>
+      <div><label>Retention</label><input value="Keep latest 3 successful backups" disabled></div>
+      <div><label>Storage</label><input value="SFTP NAS only" disabled></div>
+    </div>
+    <p class="muted">Old backups will be deleted only after the new backup completes successfully and passes verification.</p>
 
     <h3>SFTP Backup Settings</h3>
     <div class="grid3">
@@ -1347,8 +1356,8 @@ function renderReportBackup(){
       <div><label>SFTP Port</label><input id="backupSftpPort" value="22"></div>
       <div><label>Username</label><input id="backupSftpUser" placeholder="backup_user"></div>
       <div><label>Password / SSH Key</label><input id="backupSftpSecret" type="password" placeholder="Enter password or key reference"></div>
-      <div><label>Remote Backup Folder</label><input id="backupSftpFolder" placeholder="/AERONEX/RMA_Backup"></div>
-      <div><label>Schedule</label><input value="Sunday 05:00 AM, retry Monday 05:00 AM" disabled></div>
+      <div><label>Remote Backup Folder</label><input id="backupSftpFolder" placeholder="/AERONEX_RMA_Backup"></div>
+      <div><label>Backup Contents</label><input value="All tables, attachments, CSV, Excel, JSON" disabled></div>
     </div>
     <p class="muted">SFTP backend is not connected in this UI patch. These fields are prepared for the next backend implementation.</p>
     <button class="btn-light" onclick="msg('backupMsg','SFTP test backend not implemented yet')">Test SFTP Connection</button>
@@ -1357,8 +1366,8 @@ function renderReportBackup(){
     <div id="backupMsg" class="msg"></div>
 
     <h3>Backup History</h3>
-    <div class="table-wrap"><table><thead><tr><th>Date</th><th>Status</th><th>Records</th><th>Attachments</th><th>Destination</th><th>Error</th></tr></thead><tbody>
-      <tr><td colspan="6" class="muted">No backup history available yet.</td></tr>
+    <div class="table-wrap"><table><thead><tr><th>Date</th><th>Status</th><th>Records</th><th>Attachments</th><th>Size</th><th>Destination</th><th>Error</th></tr></thead><tbody>
+      <tr><td colspan="7" class="muted">No backup history available yet. After backend implementation, this table will show the latest 3 retained backups and any failed attempts.</td></tr>
     </tbody></table></div>
   </div>`;
 }
