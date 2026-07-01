@@ -847,7 +847,7 @@ function selectedOptionsValue(id){
   return el.value || '';
 }
 function selectHtml(meta, id, fieldName, current){
-  const multi=isMetaMulti(meta, fieldName) && fieldName !== 'Order Type';
+  const multi=isMetaMulti(meta, fieldName) && !['Order Type','Issue Type'].includes(fieldName);
   return `<select id="${id}" ${multi?'multiple size="4"':''}>${metaOptions(meta, fieldName, current)}</select>`;
 }
 function internalRepairFieldsForCountry(country){
