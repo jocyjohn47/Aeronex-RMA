@@ -818,13 +818,15 @@ function larkTimestampToDate(v){
   return null;
 }
 function formatDisplayDate(v){
+  const pad=n=>String(n).padStart(2,'0');
+  const fmt=d=>`${pad(d.getDate())}-${pad(d.getMonth()+1)}-${d.getFullYear()}`;
   const d=larkTimestampToDate(v);
-  if(d) return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  if(d) return fmt(d);
   const s=String(v||'').trim();
   const m=s.match(/(\d{4})-(\d{2})-(\d{2})/);
   if(m){
     const d2=new Date(Number(m[1]),Number(m[2])-1,Number(m[3]));
-    if(!isNaN(d2.getTime())) return d2.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+    if(!isNaN(d2.getTime())) return fmt(d2);
   }
   return s;
 }
@@ -1057,7 +1059,7 @@ function renderSpareOrderDetailsAdmin(){
   const rows=S.spareOrderDetailsRows||[];
   sec.innerHTML=`<div class="panel"><h2>Internal Spare Order details</h2><div class="notice">Admin-only table for DJI/internal spare order, shipment and document records. <button class="btn-light" onclick="loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin)">Refresh</button> <button class="act" onclick="newSpareOrderDetails()">New Internal Spare Order</button></div><div id="spareOrderDetailsForm"></div>
   <div class="table-wrap"><table><thead><tr><th>DJI Case ID</th><th>Company</th><th>Case Type</th><th>Billing</th><th>Order Type</th><th>Created</th><th>Closed</th><th>Document</th><th>Action</th></tr></thead><tbody>
-  ${rows.map((r,i)=>{const f=r.fields||{};return `<tr><td>${esc(f['DJI Case ID']||'')}</td><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Case Type']||'')}</td><td>${esc(f['Billing Company']||'')}</td><td>${esc(Array.isArray(f['Order Type'])?f['Order Type'].join(', '):(f['Order Type']||''))}</td><td>${esc(dateInputValue(f['Case Creation Date']))}</td><td>${esc(dateInputValue(f['Case Close Date']))}</td><td>${detailsFieldValue(f['Document Upload'])}</td><td><button class="btn-light" onclick="editSpareOrderDetails(${i})">Open</button></td></tr>`}).join('')}</tbody></table></div></div>`;
+  ${rows.map((r,i)=>{const f=r.fields||{};return `<tr><td>${esc(f['DJI Case ID']||'')}</td><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Case Type']||'')}</td><td>${esc(f['Billing Company']||'')}</td><td>${esc(Array.isArray(f['Order Type'])?f['Order Type'].join(', '):(f['Order Type']||''))}</td><td>${esc(formatDisplayDate(f['Case Creation Date']))}</td><td>${esc(formatDisplayDate(f['Case Close Date']))}</td><td>${detailsFieldValue(f['Document Upload'])}</td><td><button class="btn-light" onclick="editSpareOrderDetails(${i})">Open</button></td></tr>`}).join('')}</tbody></table></div></div>`;
   renderSpareOrderDetailsForm(S.spareOrderDetailsEdit?.fields||{});
 }
 function newSpareOrderDetails(){S.spareOrderDetailsEdit=null;renderSpareOrderDetailsForm({});}
@@ -1081,6 +1083,7 @@ function spareOrderDetailsFormHtml(f){
     <div><label>Type of Case</label><input id="sodTypeOfCase" value="${esc(f['Type of Case']||'')}"></div>
     <div><label>Billing Company</label>${selectHtml(meta,'sodBillingCompany','Billing Company',f['Billing Company']||'')}</div>
     <div><label>Order Type</label>${selectHtml(meta,'sodOrderType','Order Type',Array.isArray(f['Order Type'])?f['Order Type'].join(','):(f['Order Type']||''))}</div>
+    <div><label>DJI Cost</label><input id="sodDjiCost" type="number" step="0.01" value="${esc(f['DJI Cost']||'')}"></div>
     <div><label>Case Creation Date</label><input id="sodCreationDate" type="date" value="${esc(dateInputValue(f['Case Creation Date']))}"></div>
     <div><label>Case Close Date</label><input id="sodCloseDate" type="date" value="${esc(dateInputValue(f['Case Close Date']))}"></div>
     <div><label>Shipper Name</label>${selectHtml(meta,'sodShipper','Shipper Name',f['Shipper Name']||'')}</div>
@@ -1181,6 +1184,7 @@ async function saveSpareOrderDetails(){
       'Type of Case':get('sodTypeOfCase','Type of Case'),
       'Billing Company':getSel('sodBillingCompany','Billing Company'),
       'Order Type':getSel('sodOrderType','Order Type'),
+      'DJI Cost':get('sodDjiCost','DJI Cost'),
       'Case Creation Date':get('sodCreationDate','Case Creation Date'),
       'Case Close Date':get('sodCloseDate','Case Close Date'),
       'Shipper Name':getSel('sodShipper','Shipper Name'),
@@ -1912,6 +1916,7 @@ function openSpareOrderDetails(i){
       </div>
       <div class="grid3">
         <div><label>DJI Cost</label><input id="soDjiCost" value="${esc(f['DJI Cost']||'')}"></div>
+        <div><label>Invoice Amount</label><input id="soInvoiceAmount" value="${esc(f['Invoice Amount']||'')}"></div>
         <div><label>Shipment Cost ( AED )</label><input id="soShipmentCostAed" value="${esc(f['Shipment Cost ( AED )']||'')}"></div>
         <div><label>DJI Case No</label><input id="soDjiCaseNo" value="${esc(spareOrderDjiCaseValue(f)||'')}"></div>
         <div><label>Dealer CN Upload</label><input id="soDealerCnFile" type="file" onchange="uploadSpareOrderDealerCn(currentSpareOrderDetailIndex)"></div>
@@ -1945,6 +1950,7 @@ async function saveSpareOrderInternal(i){
       spareSource:($('soSpareSource')?.value||'').trim(),
       finalNotes:($('soFinalNotes')?.value||'').trim(),
       djiCost:($('soDjiCost')?.value||'').trim(),
+      invoiceAmount:($('soInvoiceAmount')?.value||'').trim(),
       shipmentCostAed:($('soShipmentCostAed')?.value||'').trim(),
       djiCaseNo:($('soDjiCaseNo')?.value||'').trim()
     };
