@@ -669,7 +669,8 @@ function logTableConfigs(env) {
     { key:"REPAIR_KSA_TABLE_ID", name:"Repair Case KSA", tableId:env.REPAIR_KSA_TABLE_ID || env.REPAIR_CASE_KSA_TABLE_ID || "" },
     { key:"INTERNAL_REPAIR_UAE_TABLE_ID", name:"Internal Repair Register - UAE & Other Region", tableId:env.INTERNAL_REPAIR_UAE_TABLE_ID || "" },
     { key:"INTERNAL_REPAIR_KSA_TABLE_ID", name:"Internal Repair Register - KSA", tableId:env.INTERNAL_REPAIR_KSA_TABLE_ID || "" },
-    { key:"SPARE_ORDER_DETAILS_TABLE_ID", name:"Spare Order Details", tableId:env.SPARE_ORDER_DETAILS_TABLE_ID || "" },
+    { key:"SPARE_ORDER_DETAILS_TABLE_ID", name:"Internal Spare Order details", tableId:env.SPARE_ORDER_DETAILS_TABLE_ID || "" },
+    { key:"CONTRACT_DOCUMENT_INTERNAL_TABLE_ID", name:"Contract & Document - Internal", tableId:env.CONTRACT_DOCUMENT_INTERNAL_TABLE_ID || env.INTERNAL_CONTRACT_DOCUMENT_TABLE_ID || env.CONTRACT_DOCUMENT_TABLE_ID || "" },
     { key:"DEALER_REPAIR_CASE_TABLE_ID", name:"Dealer Repair Case", tableId:env.DEALER_REPAIR_CASE_TABLE_ID || "" },
     { key:"WARRANTY_STATUS_TABLE_ID", name:"Warranty Status", tableId:env.WARRANTY_STATUS_TABLE_ID || "" },
     { key:"SOFTWARE_STATUS_TABLE_ID", name:"Software Status", tableId:env.SOFTWARE_STATUS_TABLE_ID || "" },
@@ -696,21 +697,31 @@ function diagnosticFieldOptions(f) {
 }
 
 async function getTableFieldsForDiagnostics(env, tableId) {
-  const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields`);
-  return (data.data?.items || []).map(f => {
+  const token = await larkToken(env);
+  const items = [];
+  let pageToken = "";
+  do {
+    const qs = new URLSearchParams({ page_size: "20" });
+    if (pageToken) qs.set("page_token", pageToken);
+    const res = await fetch(`https://open.larksuite.com/open-apis/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields?${qs}`, {
+      headers: { authorization: `Bearer ${token}` }
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.code) throw new Error("Lark API error: " + JSON.stringify(data));
+    items.push(...(data.data?.items || []));
+    pageToken = data.data?.page_token || "";
+  } while (pageToken);
+  return items.map(f => {
     const options = diagnosticFieldOptions(f);
     return {
+      field_id: f.field_id || "",
       field_name: f.field_name,
       type: f.type,
+      is_primary: !!f.is_primary,
       options,
       optionCount: options.length
     };
   });
-}
-
-async function countRecordsForDiagnostics(env, tableId) {
-  const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/records?page_size=1`);
-  return data.data?.total ?? data.data?.items?.length ?? 0;
 }
 
 function expectedFieldsForDiagnostics(tableName) {
@@ -759,7 +770,7 @@ async function buildLarkTableDiagnostic(env, tableCfg) {
     out.fields = fields;
     out.fieldCount = fields.length;
     out.missingExpectedFields = missingExpectedFields(expectedFieldsForDiagnostics(tableCfg.name), fields);
-    out.recordCount = await countRecordsForDiagnostics(env, tableCfg.tableId);
+    out.recordCount = null;
     out.permission = "OK";
   } catch (e) {
     out.permission = "ERROR";
@@ -1118,17 +1129,17 @@ async function handle(req, env) {
     if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
 
     const selected = norm(url.searchParams.get("table"));
+    if (!selected || selected === "ALL") return json({ error:"Select one Lark table. All Tables is disabled to avoid Cloudflare subrequest limits." }, 400);
     const configs = logTableConfigs(env);
-    const chosen = !selected || selected === "ALL"
-      ? configs
-      : configs.filter(x => x.key === selected || x.name === selected);
+    const chosen = configs.find(x => x.key === selected || x.name === selected || x.tableId === selected);
+    if (!chosen) return json({ error:"Unknown Lark table selection", table:selected }, 400);
 
-    const tables = [];
-    for (const cfg of chosen) tables.push(await buildLarkTableDiagnostic(env, cfg));
+    const tables = [await buildLarkTableDiagnostic(env, chosen)];
 
     return json({
       ok: tables.every(t => t.permission === "OK" || t.permission === "NOT_CONFIGURED"),
       generatedAt: new Date().toISOString(),
+      totalTables: tables.length,
       tables
     });
   }
