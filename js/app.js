@@ -889,11 +889,13 @@ function internalRepairFieldsForCountry(country){
 }
 async function loadInternalRepairMeta(){
   const country=internalRepairCountryQuery();
-  const d=await api('/api/admin-module-meta?module=internalRepair&country='+encodeURIComponent(country)+'&role='+encodeURIComponent(S.user.role||'')+'&userCountry='+encodeURIComponent(userCountryText()||country));
+  const base='/api/admin-module-meta?module=internalRepair&country='+encodeURIComponent(country)+'&role='+encodeURIComponent(S.user.role||'')+'&userCountry='+encodeURIComponent(userCountryText()||country);
+  const rowsPart=await api(base+'&part=rows');
+  const fieldsPart=await api(base+'&part=fields');
+  const d={...rowsPart,fields:fieldsPart.fields||[],rows:rowsPart.rows||[]};
   S.internalRepairMeta=d;
-  S.dealers=d.dealers||S.dealers||[];
-  if(Array.isArray(d.spares) && d.spares.length) S.spares=d.spares;
-  S.repairSourceRows=d.repairs||[];
+  S.dealers=[];
+  S.repairSourceRows=[];
   S.internalRepairRows=d.rows||[];
   return d;
 }
@@ -1071,8 +1073,14 @@ async function saveInternalRepair(){
 }
 
 async function loadSpareOrderDetailsMeta(){
-  const d=await api('/api/admin-module-meta?module=spareOrderDetails&role='+encodeURIComponent(S.user.role||''));
-  S.spareOrderDetailsMeta=d; S.dealers=d.dealers||S.dealers||[]; S.spareOrderDetailsRows=d.rows||[]; return d;
+  const base='/api/admin-module-meta?module=spareOrderDetails&role='+encodeURIComponent(S.user.role||'');
+  const rowsPart=await api(base+'&part=rows');
+  const fieldsPart=await api(base+'&part=fields');
+  const d={...rowsPart,fields:fieldsPart.fields||[],rows:rowsPart.rows||[]};
+  S.spareOrderDetailsMeta=d;
+  S.dealers=[];
+  S.spareOrderDetailsRows=d.rows||[];
+  return d;
 }
 function renderSpareOrderDetailsError(e){
   const sec=$('spareOrderDetailsAdmin'); if(!sec)return;
