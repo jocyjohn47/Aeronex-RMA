@@ -643,10 +643,11 @@ function reportsPageEnabled(){
 }
 
 function renderLogsDiagnosticsTableOptions(){
-  const list = S.logTableOptions || [];
-  const dynamic = list.map(x=>`<option value="${esc(x.key)}">${esc(x.name)}</option>`).join('');
-  return `<option value="ALL">All Tables</option>${dynamic}`;
+  const list = Array.isArray(S.logTableOptions) ? S.logTableOptions : [];
+  if(!list.length) return `<option value="" disabled selected>Loading Lark tables...</option>`;
+  return list.map((x,i)=>`<option value="${esc(x.key)}" ${i===0?'selected':''}>${esc(x.name)}</option>`).join('');
 }
+
 
 async function loadLogsDiagnosticsTableOptions(){
   try{
@@ -693,30 +694,20 @@ function setLogsOutput(data){
 async function generateLarkDiagnostics(){
   try{
     msg('logsMsg','Generating Lark diagnostics...');
-    const table=($('diagTableSelect')?.value||'ALL');
-    if(table === 'ALL'){
-      if(!Array.isArray(S.logTableOptions) || !S.logTableOptions.length){
-        await loadLogsDiagnosticsTableOptions();
-      }
-      const options = Array.isArray(S.logTableOptions) ? S.logTableOptions : [];
-      const combined={ok:true,generatedAt:new Date().toISOString(),totalTables:options.length,tables:[]};
-      for(const opt of options){
-        const key = opt.key || opt.tableId || '';
-        if(!key) continue;
-        const d=await api('/api/logs-diagnostics/tables?role='+encodeURIComponent(S.user.role||'')+'&table='+encodeURIComponent(key));
-        combined.ok = combined.ok && !!d.ok;
-        combined.tables.push(...(d.tables||[]));
-        setLogsOutput(combined);
-      }
-      combined.note='Complete';
-      setLogsOutput(combined);
-    }else{
-      const d=await api('/api/logs-diagnostics/tables?role='+encodeURIComponent(S.user.role||'')+'&table='+encodeURIComponent(table));
-      setLogsOutput(d);
+    if(!Array.isArray(S.logTableOptions) || !S.logTableOptions.length){
+      await loadLogsDiagnosticsTableOptions();
     }
+    const table=($('diagTableSelect')?.value||'').trim();
+    if(!table){
+      msg('logsMsg','Select one Lark table first. Diagnostics reads one table per request.');
+      return;
+    }
+    const d=await api('/api/logs-diagnostics/tables?role='+encodeURIComponent(S.user.role||'')+'&table='+encodeURIComponent(table));
+    setLogsOutput(d);
     msg('logsMsg','Diagnostics generated');
   }catch(e){ msg('logsMsg',e.message); }
 }
+
 
 async function generateEnvironmentDiagnostics(){
   try{
