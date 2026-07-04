@@ -1354,6 +1354,46 @@ function reportsEnabled(){
   return v==='yes'||v==='true'||v==='1';
 }
 
+
+const REPORT_BACKUP_REPORTS = [
+  { key:'users', label:'User & Company Details', table:'User & Company Details' },
+  { key:'spareParts', label:'Spare Part List', table:'Spare Part List' },
+  { key:'spareUae', label:'Spare Orders - UAE & Other Region', table:'Spare Part Order Details - UAE & Other Region' },
+  { key:'spareKsa', label:'Spare Orders - KSA', table:'Spare Part Order Details - KSA' },
+  { key:'repairUae', label:'Repair Cases - UAE & Other Region', table:'Repair Case Details - UAE & Other Region' },
+  { key:'repairKsa', label:'Repair Cases - KSA', table:'Repair Case Details - KSA' },
+  { key:'internalRepairUae', label:'Internal Repair - UAE & Other Region', table:'Internal Repair Register - UAE & Other Region' },
+  { key:'internalRepairKsa', label:'Internal Repair - KSA', table:'Internal Repair Register - KSA' },
+  { key:'internalSpare', label:'Internal Spare Order Details', table:'Internal Spare Order details' },
+  { key:'dealerRepair', label:'Dealer Repair Case', table:'Dealer Repair Case' },
+  { key:'warranty', label:'Warranty Status', table:'Warranty Status' },
+  { key:'software', label:'Software Status', table:'Software Status' },
+  { key:'flycart', label:'Flycart Credit Use', table:'Flycart Credit Use' },
+  { key:'portalNotes', label:'Portal Notes', table:'Portal Note' },
+  { key:'contracts', label:'Contract & Document - Internal', table:'Contract & Document - Internal' }
+];
+
+function reportBackupReportOptions(){
+  return `<option value="">Select a report</option>` + REPORT_BACKUP_REPORTS.map(r=>`<option value="${esc(r.key)}">${esc(r.label)}</option>`).join('');
+}
+
+function selectedReportBackupReport(){
+  const key = $('reportBackupReportSelect')?.value || '';
+  return REPORT_BACKUP_REPORTS.find(r=>r.key===key) || null;
+}
+
+function previewReportBackupReport(){
+  const r = selectedReportBackupReport();
+  if(!r){ msg('reportBackupReportMsg','Choose a report first.'); return; }
+  msg('reportBackupReportMsg',`Selected: ${r.label}. Excel export backend can be connected to table: ${r.table}.`);
+}
+
+function downloadReportBackupExcel(){
+  const r = selectedReportBackupReport();
+  if(!r){ msg('reportBackupReportMsg','Choose a report first.'); return; }
+  msg('reportBackupReportMsg','Excel download endpoint is not enabled yet for this report. Report UI is ready; backend export will be connected per table.');
+}
+
 function renderReportBackup(){
   const sec=$('reportBackup');
   if(!sec) return;
@@ -1362,37 +1402,72 @@ function renderReportBackup(){
     return;
   }
   sec.innerHTML=`<div class="panel"><h2>Report & Backup</h2>
-    <div class="notice">Automatic backup is planned every day at 04:00 AM. Retention will keep only the latest 3 successful backups. SFTP/NAS backend is prepared as placeholder only in this patch.</div>
-    <h3>Backup Status</h3>
-    <div class="grid4">
-      <div><label>Status</label><input value="Not configured" disabled></div>
-      <div><label>Last Backup Time</label><input value="-" disabled></div>
-      <div><label>Backup Duration</label><input value="-" disabled></div>
-      <div><label>NAS Connection Status</label><input value="Not tested" disabled></div>
-      <div><label>Total Records</label><input value="-" disabled></div>
-      <div><label>Total Attachments</label><input value="-" disabled></div>
-      <div><label>Backup Size</label><input value="-" disabled></div>
-      <div><label>Retention</label><input value="Latest 3 successful backups" disabled></div>
+    <div class="notice">Automatic backup is planned every day at 04:00 AM. Retention will keep only the latest 3 successful backups. NAS/SFTP backup backend is prepared as placeholder only in this patch.</div>
+
+    <div class="panel" style="box-shadow:none;margin:16px 0 18px 0;padding:20px;border:1px solid #dbe3ef">
+      <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:18px">
+        <div style="font-size:32px;background:#eaf1ff;border-radius:14px;padding:12px;line-height:1">💾</div>
+        <div style="flex:1">
+          <h2 style="margin:0 0 6px 0">Backup</h2>
+          <div class="muted">Configure and manage system backup to NAS. Monitor status, connection, and last 3 backup history.</div>
+        </div>
+      </div>
+      <div class="grid4">
+        <div><label>Status</label><input value="Not configured" disabled></div>
+        <div><label>Last Backup Time</label><input value="-" disabled></div>
+        <div><label>Backup Duration</label><input value="-" disabled></div>
+        <div><label>NAS Connection Status</label><input value="Not tested" disabled></div>
+        <div><label>Total Records</label><input value="-" disabled></div>
+        <div><label>Total Attachments</label><input value="-" disabled></div>
+        <div><label>Backup Size</label><input value="-" disabled></div>
+        <div><label>Retention</label><input value="Latest 3 successful backups" disabled></div>
+      </div>
+      <h3>Backup Settings</h3>
+      <div class="grid3">
+        <div><label>NAS Protocol</label><select id="backupNasProtocol"><option value="sftp">SFTP / SSH</option><option value="smb">SMB / CIFS</option><option value="nfs">NFS</option><option value="webdav">WebDAV / HTTPS</option></select></div>
+        <div><label>NAS Host</label><input id="backupNasHost" placeholder="NAS IP or hostname"></div>
+        <div><label>Port</label><input id="backupNasPort" value="22"></div>
+        <div><label>Username</label><input id="backupNasUser" placeholder="backup_user"></div>
+        <div><label>Password / SSH Key</label><input id="backupNasSecret" type="password" placeholder="Password or key reference"></div>
+        <div><label>Remote Folder</label><input id="backupNasFolder" placeholder="/AERONEX_RMA_Backup"></div>
+        <div><label>Schedule</label><input value="Daily at 04:00 AM" disabled></div>
+        <div><label>Contents</label><input value="Tables, attachments, XLSX, CSV, JSON, manifest" disabled></div>
+        <div><label>Verification</label><input value="Manifest + latest successful backup only" disabled></div>
+      </div>
+      <p>
+        <button onclick="msg('backupMsg','Backup backend placeholder only. NAS protocol field is ready for SFTP/SMB/NFS/WebDAV settings.')">Backup Now</button>
+        <button class="btn-light" onclick="msg('backupMsg','NAS connection test placeholder only. Selected protocol: '+($('backupNasProtocol')?.value||'sftp'))">Test NAS Connection</button>
+        <button class="btn-light" onclick="msg('backupMsg','Backup settings placeholder only. No settings saved yet.')">Save Settings</button>
+        <span id="backupMsg" class="msg"></span>
+      </p>
+      <h3>Last 3 Backup History</h3>
+      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Status</th><th>Records</th><th>Attachments</th><th>Size</th><th>Destination</th><th>Error</th></tr></thead><tbody><tr><td colspan="7" class="muted">No backup history yet.</td></tr></tbody></table></div>
+      <h3>Backup Log Viewer</h3>
+      <pre style="white-space:pre-wrap;background:#f6f8fb;border:1px solid #dbe3ef;border-radius:10px;padding:12px;max-height:220px;overflow:auto">No logs yet.</pre>
     </div>
-    <h3>Backup Settings</h3>
-    <div class="grid3">
-      <div><label>SFTP Host</label><input id="backupSftpHost" placeholder="NAS IP or hostname"></div>
-      <div><label>SFTP Port</label><input id="backupSftpPort" value="22"></div>
-      <div><label>Username</label><input id="backupSftpUser" placeholder="backup_user"></div>
-      <div><label>Password / SSH Key</label><input id="backupSftpSecret" type="password" placeholder="Password or key reference"></div>
-      <div><label>Remote Folder</label><input id="backupSftpFolder" placeholder="/AERONEX_RMA_Backup"></div>
-      <div><label>Contents</label><input value="Tables, attachments, XLSX, CSV, JSON, manifest" disabled></div>
+
+    <div class="panel" style="box-shadow:none;margin:0;padding:20px;border:1px solid #dbe3ef">
+      <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:18px">
+        <div style="font-size:32px;background:#eafff3;border-radius:14px;padding:12px;line-height:1">📊</div>
+        <div style="flex:1">
+          <h2 style="margin:0 0 6px 0">Reports</h2>
+          <div class="muted">Generate and download module reports in Excel format.</div>
+        </div>
+      </div>
+      <div class="grid4">
+        <div><label>Select Report</label><select id="reportBackupReportSelect">${reportBackupReportOptions()}</select></div>
+        <div><label>Date From</label><input id="reportBackupDateFrom" type="date"></div>
+        <div><label>Date To</label><input id="reportBackupDateTo" type="date"></div>
+        <div><label>Status</label><input id="reportBackupStatus" placeholder="All Status"></div>
+        <div><label>Company</label><input id="reportBackupCompany" placeholder="All Companies"></div>
+        <div><label>Case ID / DJI Case ID</label><input id="reportBackupCaseId" placeholder="Optional"></div>
+      </div>
+      <p>
+        <button onclick="downloadReportBackupExcel()">Download Excel</button>
+        <button class="btn-light" onclick="previewReportBackupReport()">Preview Selection</button>
+        <span id="reportBackupReportMsg" class="msg"></span>
+      </p>
     </div>
-    <p>
-      <button class="btn-light" onclick="msg('backupMsg','SFTP test backend placeholder only')">Test SFTP Connection</button>
-      <button class="btn-light" onclick="msg('backupMsg','Backup backend placeholder only')">Backup Now</button>
-      <button onclick="msg('backupMsg','Settings backend placeholder only')">Save Settings</button>
-      <span id="backupMsg" class="msg"></span>
-    </p>
-    <h3>Last 3 Backup History</h3>
-    <div class="table-wrap"><table><thead><tr><th>Date</th><th>Status</th><th>Records</th><th>Attachments</th><th>Size</th><th>Destination</th><th>Error</th></tr></thead><tbody><tr><td colspan="7" class="muted">No backup history yet.</td></tr></tbody></table></div>
-    <h3>Backup Log Viewer</h3>
-    <pre style="white-space:pre-wrap;background:#f6f8fb;border:1px solid #dbe3ef;border-radius:10px;padding:12px;max-height:260px;overflow:auto">No logs yet.</pre>
   </div>`;
 }
 
