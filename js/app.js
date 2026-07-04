@@ -633,13 +633,16 @@ function logsPageEnabled(){ return currentUserIsAdminTech(); }
 
 function renderLogsDiagnosticsTableOptions(){
   const list = [
-    ['ALL','All Tables'],
     ['USER_TABLE_ID','User & Company Details'],
-    ['SPARE_TABLE_ID','Spare Part List'],
+    ['SPARE_LIST_TABLE_ID','Spare Part List'],
     ['ORDER_UAE_TABLE_ID','Spare Order UAE'],
     ['ORDER_KSA_TABLE_ID','Spare Order KSA'],
     ['REPAIR_UAE_TABLE_ID','Repair Case UAE'],
     ['REPAIR_KSA_TABLE_ID','Repair Case KSA'],
+    ['INTERNAL_REPAIR_UAE_TABLE_ID','Internal Repair Register - UAE & Other Region'],
+    ['INTERNAL_REPAIR_KSA_TABLE_ID','Internal Repair Register - KSA'],
+    ['SPARE_ORDER_DETAILS_TABLE_ID','Internal Spare Order details'],
+    ['CONTRACT_DOCUMENT_INTERNAL_TABLE_ID','Contract & Document - Internal'],
     ['DEALER_REPAIR_CASE_TABLE_ID','Dealer Repair Case'],
     ['WARRANTY_STATUS_TABLE_ID','Warranty Status'],
     ['SOFTWARE_STATUS_TABLE_ID','Software Status'],
@@ -682,7 +685,7 @@ function setLogsOutput(data){
 async function generateLarkDiagnostics(){
   try{
     msg('logsMsg','Generating Lark diagnostics...');
-    const table=($('diagTableSelect')?.value||'ALL');
+    const table=($('diagTableSelect')?.value||'USER_TABLE_ID');
     const d=await api('/api/logs-diagnostics/tables?role='+encodeURIComponent(S.user.role||'')+'&table='+encodeURIComponent(table));
     setLogsOutput(d);
     msg('logsMsg','Diagnostics generated');
