@@ -709,19 +709,13 @@ async function getTableFieldsForDiagnostics(env, tableId) {
   });
 }
 
-
-async function getTableFieldsForDiagnosticsFull(env, tableId) {
-  const token = await larkToken(env);
-  const items = [];
+async function getFullTableFieldsForDiagnostics(env, tableId) {
+  let items = [];
   let pageToken = "";
   do {
-    const qs = new URLSearchParams({ page_size: "20" });
+    const qs = new URLSearchParams({ page_size: "50" });
     if (pageToken) qs.set("page_token", pageToken);
-    const res = await fetch(`https://open.larksuite.com/open-apis/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields?${qs}`, {
-      headers: { authorization: `Bearer ${token}` }
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || data.code) throw new Error("Lark API error: " + JSON.stringify(data));
+    const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields?${qs}`);
     items.push(...(data.data?.items || []));
     pageToken = data.data?.page_token || "";
   } while (pageToken);
@@ -785,7 +779,7 @@ async function buildLarkTableDiagnostic(env, tableCfg) {
   };
   if (!tableCfg.tableId) return out;
   try {
-    const fields = await getTableFieldsForDiagnosticsFull(env, tableCfg.tableId);
+    const fields = await getFullTableFieldsForDiagnostics(env, tableCfg.tableId);
     out.fields = fields;
     out.fieldCount = fields.length;
     out.missingExpectedFields = missingExpectedFields(expectedFieldsForDiagnostics(tableCfg.name), fields);
@@ -1148,10 +1142,9 @@ async function handle(req, env) {
     if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
 
     const selected = norm(url.searchParams.get("table"));
-    if (!selected || selected === "ALL") return json({ error:"Select one Lark table. All Tables is disabled to avoid Cloudflare subrequest limits." }, 400);
     const configs = logTableConfigs(env);
     const chosen = configs.find(x => x.key === selected || x.name === selected || x.tableId === selected);
-    if (!chosen) return json({ error:"Unknown Lark table selection", table:selected }, 400);
+    if (!chosen) return json({ error:"Select one Lark table", table:selected }, 400);
 
     const tables = [await buildLarkTableDiagnostic(env, chosen)];
 
