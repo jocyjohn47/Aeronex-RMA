@@ -684,7 +684,7 @@ function logAccessAllowed(role) {
          r.includes("tech");
 }
 
-function logTableConfigs(env) {
+function configuredLogTableConfigs(env) {
   return [
     { key:"USER_TABLE_ID", name:"User & Company Details", tableId:env.USER_TABLE_ID || "" },
     { key:"SPARE_LIST_TABLE_ID", name:"Spare Part List", tableId:env.SPARE_LIST_TABLE_ID || "" },
@@ -701,6 +701,49 @@ function logTableConfigs(env) {
     { key:"FLYCART_CREDIT_USE_TABLE_ID", name:"Flycart Credit Use", tableId:env.FLYCART_CREDIT_USE_TABLE_ID || "" },
     { key:"PORTAL_NOTES_TABLE_ID", name:"Portal Notes", tableId:env.PORTAL_NOTES_TABLE_ID || "" }
   ];
+}
+
+async function listLarkTablesForDiagnostics(env) {
+  const items = [];
+  let pageToken = "";
+  let guard = 0;
+  do {
+    const qs = new URLSearchParams({ page_size:"100" });
+    if (pageToken) qs.set("page_token", pageToken);
+    const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables?${qs}`);
+    items.push(...(data.data?.items || []));
+    pageToken = data.data?.page_token || "";
+  } while (pageToken && ++guard < 20);
+  return items;
+}
+
+async function logTableConfigs(env) {
+  const configured = configuredLogTableConfigs(env);
+  const byId = new Map(configured.filter(x => x.tableId).map(x => [x.tableId, x]));
+  const byName = new Map(configured.map(x => [lower(x.name), x]));
+  const larkTables = await listLarkTablesForDiagnostics(env);
+  const out = [];
+  const seen = new Set();
+
+  for (const t of larkTables) {
+    const tableId = t.table_id || t.tableId || "";
+    const name = t.name || t.table_name || t.tableName || tableId;
+    const known = byId.get(tableId) || byName.get(lower(name)) || null;
+    out.push({
+      key: known?.key || tableId,
+      name,
+      tableId,
+      configured: true,
+      source: known ? "env+lark" : "lark"
+    });
+    if (tableId) seen.add(tableId);
+  }
+
+  for (const cfg of configured) {
+    if (cfg.tableId && !seen.has(cfg.tableId)) out.push({ ...cfg, configured: true, source:"env" });
+    else if (!cfg.tableId) out.push({ ...cfg, configured: false, source:"env" });
+  }
+  return out;
 }
 
 function diagnosticFieldOptions(f) {
@@ -1144,12 +1187,12 @@ async function handle(req, env) {
     if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
 
     const selected = norm(url.searchParams.get("table"));
-    const configs = logTableConfigs(env);
+    const configs = await logTableConfigs(env);
     const includeRecordCount = norm(url.searchParams.get("count")) === "1" || lower(url.searchParams.get("count")) === "true";
     const allSelected = !selected || selected === "ALL";
     let chosen = allSelected
       ? configs
-      : configs.filter(x => x.key === selected || x.name === selected);
+      : configs.filter(x => x.key === selected || x.name === selected || x.tableId === selected);
 
     // Cloudflare limits subrequests per Worker invocation. For ALL table diagnostics,
     // read in safe batches. Client can call again with nextCursor until done.
@@ -1178,14 +1221,15 @@ async function handle(req, env) {
   if (p === "/api/logs-diagnostics/table-options") {
     const role = norm(url.searchParams.get("role"));
     if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
-    return json({ tables: logTableConfigs(env).map(x => ({ key:x.key, name:x.name, configured:!!x.tableId })) });
+    const configs = await logTableConfigs(env);
+    return json({ tables: configs.map(x => ({ key:x.key, name:x.name, tableId:x.tableId, configured:!!x.tableId, source:x.source || "env" })) });
   }
 
   if (p === "/api/logs-diagnostics/environment") {
     const role = norm(url.searchParams.get("role"));
     if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
 
-    const configs = logTableConfigs(env);
+    const configs = await logTableConfigs(env);
     return json({
       ok: true,
       generatedAt: new Date().toISOString(),
