@@ -831,6 +831,26 @@ function reportCellText(v) {
   return norm(v);
 }
 
+function isReportDateHeader(h) {
+  const k = lower(h || "");
+  return k.includes("date") || k === "created" || k === "created at" || k.includes("shipping date");
+}
+
+function reportDateText(v) {
+  const ms = reportDateMs(v);
+  if (ms === null) return reportCellText(v);
+  const d = new Date(ms);
+  if (isNaN(d.getTime())) return reportCellText(v);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+}
+
+function reportCellForHeader(header, value) {
+  return isReportDateHeader(header) ? reportDateText(value) : reportCellText(value);
+}
+
 function reportEsc(v) {
   return String(v ?? "").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
 }
@@ -911,7 +931,7 @@ function reportWorkbookBytes(label, rows, filters) {
     ["Record Count", String(rows.length)]
   ].map(r => `<tr><th>${reportEsc(r[0])}</th><td>${reportEsc(r[1])}</td></tr>`).join("");
   const head = safeHeaders.map(h => `<th>${reportEsc(h)}</th>`).join("");
-  const body = rows.length ? rows.map(r => `<tr>${safeHeaders.map(h => `<td>${reportEsc(reportCellText((r.fields || {})[h]))}</td>`).join("")}</tr>`).join("") : `<tr><td>No matching records</td></tr>`;
+  const body = rows.length ? rows.map(r => `<tr>${safeHeaders.map(h => `<td>${reportEsc(reportCellForHeader(h, (r.fields || {})[h]))}</td>`).join("")}</tr>`).join("") : `<tr><td>No matching records</td></tr>`;
   return `<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif}table{border-collapse:collapse;margin-bottom:18px}th,td{border:1px solid #999;padding:6px;mso-number-format:'\\@'}th{background:#d9eaf7;font-weight:bold}.meta th{background:#eef3fb;text-align:left}</style></head><body><h2>${reportEsc(label)}</h2><table class="meta">${filterRows}</table><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></body></html>`;
 }
 
@@ -1901,7 +1921,7 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     if (fieldTypes["Specialized"]) fields["Specialized"] = b.specialized || "";
     if (fieldTypes["Spare Source"]) fields["Spare Source"] = b.spareSource || "";
     if (fieldTypes["Final Notes"]) fields["Final Notes"] = b.finalNotes || "";
-    if (fieldTypes["DJI Cost"]) fields["DJI Cost"] = b.djiCost || "";
+    if (fieldTypes["Invoice Amount"]) fields["Invoice Amount"] = b.invoiceAmount || "";
     if (fieldTypes["Shipment Cost ( AED )"]) fields["Shipment Cost ( AED )"] = b.shipmentCostAed || "";
     if (fieldTypes["DJI Case NO"]) fields["DJI Case NO"] = b.djiCaseNo || "";
     else if (fieldTypes["DJI case NO"]) fields["DJI case NO"] = b.djiCaseNo || "";
