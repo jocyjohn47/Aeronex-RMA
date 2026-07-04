@@ -690,7 +690,7 @@ async function logTableConfigs(env) {
   const tables = [];
   let pageToken = "";
   do {
-    const qs = new URLSearchParams({ page_size: "100" });
+    const qs = new URLSearchParams({ page_size: "20" });
     if (pageToken) qs.set("page_token", pageToken);
     const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables?${qs}`);
     for (const item of (data.data?.items || [])) {
@@ -706,6 +706,7 @@ async function logTableConfigs(env) {
       });
     }
     pageToken = data.data?.page_token || data.data?.pageToken || "";
+    if (data.data?.has_more === false || data.data?.hasMore === false) pageToken = "";
   } while (pageToken);
   return tables;
 }
