@@ -695,16 +695,19 @@ async function generateLarkDiagnostics(){
     msg('logsMsg','Generating Lark diagnostics...');
     const table=($('diagTableSelect')?.value||'ALL');
     if(table === 'ALL'){
-      const combined={ok:true,generatedAt:new Date().toISOString(),tables:[]};
-      let cursor=0;
-      do{
-        const d=await api('/api/logs-diagnostics/tables?role='+encodeURIComponent(S.user.role||'')+'&table=ALL&cursor='+encodeURIComponent(cursor));
+      if(!Array.isArray(S.logTableOptions) || !S.logTableOptions.length){
+        await loadLogsDiagnosticsTableOptions();
+      }
+      const options = Array.isArray(S.logTableOptions) ? S.logTableOptions : [];
+      const combined={ok:true,generatedAt:new Date().toISOString(),totalTables:options.length,tables:[]};
+      for(const opt of options){
+        const key = opt.key || opt.tableId || '';
+        if(!key) continue;
+        const d=await api('/api/logs-diagnostics/tables?role='+encodeURIComponent(S.user.role||'')+'&table='+encodeURIComponent(key));
         combined.ok = combined.ok && !!d.ok;
-        combined.totalTables = d.totalTables;
         combined.tables.push(...(d.tables||[]));
         setLogsOutput(combined);
-        cursor = d.nextCursor;
-      }while(cursor !== null && cursor !== undefined);
+      }
       combined.note='Complete';
       setLogsOutput(combined);
     }else{
