@@ -48,6 +48,8 @@ function publicUser(r) {
 }
 
 let __larkTenantToken = "";
+let __tenantTokenCache = { token: "", expiresAt: 0 };
+
 async function larkToken(env) {
   // Cache token inside one Worker invocation. Without this, diagnostics can
   // spend one extra subrequest per Lark call and hit Cloudflare's subrequest limit.
@@ -116,14 +118,21 @@ async function listRecords(env, tableId) {
 async function listTableFields(env, tableId) {
   if (!tableId) return [];
   const items = [];
+  const seenTokens = new Set();
   let pageToken = "";
-  do {
-    const qs = new URLSearchParams({ page_size: "100" });
+  let guard = 0;
+  while (guard++ < 20) {
+    const qs = new URLSearchParams({ page_size: "50" });
     if (pageToken) qs.set("page_token", pageToken);
     const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields?${qs}`);
     items.push(...(data.data?.items || []));
-    pageToken = data.data?.page_token || "";
-  } while (pageToken);
+
+    const nextToken = data.data?.page_token || "";
+    const hasMore = data.data?.has_more === true || !!nextToken;
+    if (!hasMore || !nextToken || seenTokens.has(nextToken)) break;
+    seenTokens.add(nextToken);
+    pageToken = nextToken;
+  }
   return items;
 }
 
@@ -1145,7 +1154,7 @@ async function handle(req, env) {
     // Cloudflare limits subrequests per Worker invocation. For ALL table diagnostics,
     // read in safe batches. Client can call again with nextCursor until done.
     let cursor = Math.max(0, Number(url.searchParams.get("cursor") || "0") || 0);
-    let limit = Math.max(1, Math.min(3, Number(url.searchParams.get("limit") || (allSelected ? "2" : "1")) || 1));
+    let limit = Math.max(1, Math.min(1, Number(url.searchParams.get("limit") || "1") || 1));
     const totalTables = chosen.length;
     if (allSelected) chosen = chosen.slice(cursor, cursor + limit);
     else { cursor = 0; limit = chosen.length || 1; }
