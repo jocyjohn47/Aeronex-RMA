@@ -710,12 +710,21 @@ async function getTableFieldsForDiagnostics(env, tableId) {
 }
 
 async function getFullTableFieldsForDiagnostics(env, tableId) {
+  // Diagnostics only: direct minimal Lark calls. Do not use larkFetch here,
+  // because larkFetch writes error logs and can add extra Worker subrequests.
+  const token = await larkToken(env);
   let items = [];
   let pageToken = "";
   do {
-    const qs = new URLSearchParams({ page_size: "50" });
+    const qs = new URLSearchParams({ page_size: "20" });
     if (pageToken) qs.set("page_token", pageToken);
-    const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields?${qs}`);
+    const res = await fetch(`https://open.larksuite.com/open-apis/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields?${qs}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.code) {
+      throw new Error(data.msg || data.error?.message || `Lark field read failed: ${res.status}`);
+    }
     items.push(...(data.data?.items || []));
     pageToken = data.data?.page_token || "";
   } while (pageToken);
