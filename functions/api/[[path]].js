@@ -47,13 +47,7 @@ function publicUser(r) {
   };
 }
 
-let __larkTenantToken = "";
-let __tenantTokenCache = { token: "", expiresAt: 0 };
-
 async function larkToken(env) {
-  // Cache token inside one Worker invocation. Without this, diagnostics can
-  // spend one extra subrequest per Lark call and hit Cloudflare's subrequest limit.
-  if (__larkTenantToken) return __larkTenantToken;
   const res = await fetch("https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -61,8 +55,7 @@ async function larkToken(env) {
   });
   const data = await res.json();
   if (!data.tenant_access_token) throw new Error("Lark token error: " + JSON.stringify(data));
-  __larkTenantToken = data.tenant_access_token;
-  return __larkTenantToken;
+  return data.tenant_access_token;
 }
 
 async function larkFetch(env, path, init = {}) {
@@ -115,37 +108,19 @@ async function listRecords(env, tableId) {
   return rows;
 }
 
-async function listTableFields(env, tableId) {
-  if (!tableId) return [];
-  const items = [];
-  const seenTokens = new Set();
-  let pageToken = "";
-  let guard = 0;
-  while (guard++ < 20) {
-    const qs = new URLSearchParams({ page_size: "50" });
-    if (pageToken) qs.set("page_token", pageToken);
-    const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields?${qs}`);
-    items.push(...(data.data?.items || []));
-
-    const nextToken = data.data?.page_token || "";
-    const hasMore = data.data?.has_more === true || !!nextToken;
-    if (!hasMore || !nextToken || seenTokens.has(nextToken)) break;
-    seenTokens.add(nextToken);
-    pageToken = nextToken;
-  }
-  return items;
-}
-
 async function getFieldTypes(env, tableId) {
+  if (!tableId) return {};
+  const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields`);
   const out = {};
-  for (const f of await listTableFields(env, tableId)) out[f.field_name] = f.type;
+  for (const f of data.data?.items || []) out[f.field_name] = f.type;
   return out;
 }
 
 
 async function getFieldMetaByName(env, tableId) {
+  const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields`);
   const out = {};
-  for (const f of await listTableFields(env, tableId)) out[f.field_name] = f;
+  for (const f of data.data?.items || []) out[f.field_name] = f;
   return out;
 }
 
@@ -684,66 +659,65 @@ function logAccessAllowed(role) {
          r.includes("tech");
 }
 
-function configuredLogTableConfigs(env) {
-  return [
-    { key:"USER_TABLE_ID", name:"User & Company Details", tableId:env.USER_TABLE_ID || "" },
-    { key:"SPARE_LIST_TABLE_ID", name:"Spare Part List", tableId:env.SPARE_LIST_TABLE_ID || "" },
-    { key:"ORDER_UAE_TABLE_ID", name:"Spare Order UAE", tableId:env.ORDER_UAE_TABLE_ID || env.SPARE_ORDER_UAE_TABLE_ID || "" },
-    { key:"ORDER_KSA_TABLE_ID", name:"Spare Order KSA", tableId:env.ORDER_KSA_TABLE_ID || env.SPARE_ORDER_KSA_TABLE_ID || "" },
-    { key:"REPAIR_UAE_TABLE_ID", name:"Repair Case UAE", tableId:env.REPAIR_UAE_TABLE_ID || env.REPAIR_CASE_UAE_TABLE_ID || "" },
-    { key:"REPAIR_KSA_TABLE_ID", name:"Repair Case KSA", tableId:env.REPAIR_KSA_TABLE_ID || env.REPAIR_CASE_KSA_TABLE_ID || "" },
-    { key:"INTERNAL_REPAIR_UAE_TABLE_ID", name:"Internal Repair Register - UAE & Other Region", tableId:env.INTERNAL_REPAIR_UAE_TABLE_ID || "" },
-    { key:"INTERNAL_REPAIR_KSA_TABLE_ID", name:"Internal Repair Register - KSA", tableId:env.INTERNAL_REPAIR_KSA_TABLE_ID || "" },
-    { key:"SPARE_ORDER_DETAILS_TABLE_ID", name:"Spare Order Details", tableId:env.SPARE_ORDER_DETAILS_TABLE_ID || "" },
-    { key:"DEALER_REPAIR_CASE_TABLE_ID", name:"Dealer Repair Case", tableId:env.DEALER_REPAIR_CASE_TABLE_ID || "" },
-    { key:"WARRANTY_STATUS_TABLE_ID", name:"Warranty Status", tableId:env.WARRANTY_STATUS_TABLE_ID || "" },
-    { key:"SOFTWARE_STATUS_TABLE_ID", name:"Software Status", tableId:env.SOFTWARE_STATUS_TABLE_ID || "" },
-    { key:"FLYCART_CREDIT_USE_TABLE_ID", name:"Flycart Credit Use", tableId:env.FLYCART_CREDIT_USE_TABLE_ID || "" },
-    { key:"PORTAL_NOTES_TABLE_ID", name:"Portal Notes", tableId:env.PORTAL_NOTES_TABLE_ID || "" }
+function configuredTableKeyById(env) {
+  const pairs = [
+    ["USER_TABLE_ID", env.USER_TABLE_ID],
+    ["SPARE_LIST_TABLE_ID", env.SPARE_LIST_TABLE_ID],
+    ["ORDER_UAE_TABLE_ID", env.ORDER_UAE_TABLE_ID || env.SPARE_ORDER_UAE_TABLE_ID],
+    ["ORDER_KSA_TABLE_ID", env.ORDER_KSA_TABLE_ID || env.SPARE_ORDER_KSA_TABLE_ID],
+    ["REPAIR_UAE_TABLE_ID", env.REPAIR_UAE_TABLE_ID || env.REPAIR_CASE_UAE_TABLE_ID],
+    ["REPAIR_KSA_TABLE_ID", env.REPAIR_KSA_TABLE_ID || env.REPAIR_CASE_KSA_TABLE_ID],
+    ["INTERNAL_REPAIR_UAE_TABLE_ID", env.INTERNAL_REPAIR_UAE_TABLE_ID],
+    ["INTERNAL_REPAIR_KSA_TABLE_ID", env.INTERNAL_REPAIR_KSA_TABLE_ID],
+    ["SPARE_ORDER_DETAILS_TABLE_ID", env.SPARE_ORDER_DETAILS_TABLE_ID],
+    ["DEALER_REPAIR_CASE_TABLE_ID", env.DEALER_REPAIR_CASE_TABLE_ID],
+    ["WARRANTY_STATUS_TABLE_ID", env.WARRANTY_STATUS_TABLE_ID],
+    ["SOFTWARE_STATUS_TABLE_ID", env.SOFTWARE_STATUS_TABLE_ID],
+    ["FLYCART_CREDIT_USE_TABLE_ID", env.FLYCART_CREDIT_USE_TABLE_ID],
+    ["PORTAL_NOTES_TABLE_ID", env.PORTAL_NOTES_TABLE_ID]
   ];
-}
-
-async function listLarkTablesForDiagnostics(env) {
-  const items = [];
-  let pageToken = "";
-  let guard = 0;
-  do {
-    const qs = new URLSearchParams({ page_size:"100" });
-    if (pageToken) qs.set("page_token", pageToken);
-    const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables?${qs}`);
-    items.push(...(data.data?.items || []));
-    pageToken = data.data?.page_token || "";
-  } while (pageToken && ++guard < 20);
-  return items;
+  const out = {};
+  for (const [key, id] of pairs) if (id) out[String(id)] = key;
+  return out;
 }
 
 async function logTableConfigs(env) {
-  const configured = configuredLogTableConfigs(env);
-  const byId = new Map(configured.filter(x => x.tableId).map(x => [x.tableId, x]));
-  const byName = new Map(configured.map(x => [lower(x.name), x]));
-  const larkTables = await listLarkTablesForDiagnostics(env);
-  const out = [];
-  const seen = new Set();
+  const known = configuredTableKeyById(env);
+  const tables = [];
+  let pageToken = "";
+  do {
+    const qs = new URLSearchParams({ page_size: "100" });
+    if (pageToken) qs.set("page_token", pageToken);
+    const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables?${qs}`);
+    for (const item of (data.data?.items || [])) {
+      const tableId = item.table_id || item.tableId || item.id || "";
+      const name = item.name || item.table_name || item.tableName || tableId;
+      if (!tableId) continue;
+      tables.push({
+        key: tableId,
+        envKey: known[String(tableId)] || "",
+        name,
+        tableId,
+        configured: true
+      });
+    }
+    pageToken = data.data?.page_token || data.data?.pageToken || "";
+  } while (pageToken);
+  return tables;
+}
 
-  for (const t of larkTables) {
-    const tableId = t.table_id || t.tableId || "";
-    const name = t.name || t.table_name || t.tableName || tableId;
-    const known = byId.get(tableId) || byName.get(lower(name)) || null;
-    out.push({
-      key: known?.key || tableId,
-      name,
-      tableId,
-      configured: true,
-      source: known ? "env+lark" : "lark"
-    });
-    if (tableId) seen.add(tableId);
-  }
-
-  for (const cfg of configured) {
-    if (cfg.tableId && !seen.has(cfg.tableId)) out.push({ ...cfg, configured: true, source:"env" });
-    else if (!cfg.tableId) out.push({ ...cfg, configured: false, source:"env" });
-  }
-  return out;
+function findDiagnosticTableConfig(configs, selected) {
+  const s = norm(selected);
+  if (!s || s === "ALL") return null;
+  const sl = lower(s);
+  return configs.find(x =>
+    x.tableId === s ||
+    x.key === s ||
+    x.envKey === s ||
+    x.name === s ||
+    lower(x.name) === sl ||
+    lower(x.envKey) === sl
+  ) || null;
 }
 
 function diagnosticFieldOptions(f) {
@@ -764,10 +738,19 @@ function diagnosticFieldOptions(f) {
 }
 
 async function getTableFieldsForDiagnostics(env, tableId) {
-  return (await listTableFields(env, tableId)).map(f => {
+  const all = [];
+  let pageToken = "";
+  do {
+    const qs = new URLSearchParams({ page_size: "100" });
+    if (pageToken) qs.set("page_token", pageToken);
+    const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields?${qs}`);
+    all.push(...(data.data?.items || []));
+    pageToken = data.data?.page_token || data.data?.pageToken || "";
+  } while (pageToken);
+  return all.map(f => {
     const options = diagnosticFieldOptions(f);
     return {
-      field_id: f.field_id || "",
+      field_id: f.field_id || f.id || "",
       field_name: f.field_name,
       type: f.type,
       is_primary: !!f.is_primary,
@@ -809,10 +792,10 @@ function missingExpectedFields(expected, fields) {
   return (expected || []).filter(x => !existing.has(lower(x)));
 }
 
-async function buildLarkTableDiagnostic(env, tableCfg, opts = {}) {
+async function buildLarkTableDiagnostic(env, tableCfg) {
   const out = {
     tableName: tableCfg.name,
-    envKey: tableCfg.key,
+    envKey: tableCfg.envKey || tableCfg.key || "",
     tableId: tableCfg.tableId || "",
     configured: !!tableCfg.tableId,
     permission: "NOT_CONFIGURED",
@@ -828,7 +811,6 @@ async function buildLarkTableDiagnostic(env, tableCfg, opts = {}) {
     out.fields = fields;
     out.fieldCount = fields.length;
     out.missingExpectedFields = missingExpectedFields(expectedFieldsForDiagnostics(tableCfg.name), fields);
-    if (opts.includeRecordCount) out.recordCount = await countRecordsForDiagnostics(env, tableCfg.tableId);
     out.permission = "OK";
   } catch (e) {
     out.permission = "ERROR";
@@ -1187,33 +1169,28 @@ async function handle(req, env) {
     if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
 
     const selected = norm(url.searchParams.get("table"));
+    const cursor = Math.max(0, Number(url.searchParams.get("cursor") || 0) || 0);
     const configs = await logTableConfigs(env);
-    const includeRecordCount = norm(url.searchParams.get("count")) === "1" || lower(url.searchParams.get("count")) === "true";
-    const allSelected = !selected || selected === "ALL";
-    let chosen = allSelected
-      ? configs
-      : configs.filter(x => x.key === selected || x.name === selected || x.tableId === selected);
-
-    // Cloudflare limits subrequests per Worker invocation. For ALL table diagnostics,
-    // read in safe batches. Client can call again with nextCursor until done.
-    let cursor = Math.max(0, Number(url.searchParams.get("cursor") || "0") || 0);
-    let limit = Math.max(1, Math.min(1, Number(url.searchParams.get("limit") || "1") || 1));
-    const totalTables = chosen.length;
-    if (allSelected) chosen = chosen.slice(cursor, cursor + limit);
-    else { cursor = 0; limit = chosen.length || 1; }
+    const picked = findDiagnosticTableConfig(configs, selected);
+    let chosen = [];
+    let nextCursor = null;
+    if (!selected || selected === "ALL") {
+      if (configs[cursor]) chosen = [configs[cursor]];
+      nextCursor = cursor + 1 < configs.length ? cursor + 1 : null;
+    } else if (picked) {
+      chosen = [picked];
+    }
 
     const tables = [];
-    for (const cfg of chosen) tables.push(await buildLarkTableDiagnostic(env, cfg, { includeRecordCount }));
-    const nextCursor = allSelected && cursor + chosen.length < totalTables ? cursor + chosen.length : null;
+    for (const cfg of chosen) tables.push(await buildLarkTableDiagnostic(env, cfg));
 
     return json({
       ok: tables.every(t => t.permission === "OK" || t.permission === "NOT_CONFIGURED"),
       generatedAt: new Date().toISOString(),
       cursor,
       nextCursor,
-      totalTables,
-      includeRecordCount,
-      note: nextCursor !== null ? "More tables available. Call this endpoint again with cursor=" + nextCursor : "Complete",
+      totalTables: configs.length,
+      note: nextCursor === null ? "Complete" : `More tables available. Call this endpoint again with cursor=${nextCursor}`,
       tables
     });
   }
@@ -1222,7 +1199,7 @@ async function handle(req, env) {
     const role = norm(url.searchParams.get("role"));
     if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
     const configs = await logTableConfigs(env);
-    return json({ tables: configs.map(x => ({ key:x.key, name:x.name, tableId:x.tableId, configured:!!x.tableId, source:x.source || "env" })) });
+    return json({ tables: configs.map(x => ({ key:x.tableId, envKey:x.envKey || "", name:x.name, configured:!!x.tableId })) });
   }
 
   if (p === "/api/logs-diagnostics/environment") {
