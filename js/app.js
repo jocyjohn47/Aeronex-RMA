@@ -446,7 +446,7 @@ function ensureAeronexLogoStyles(){
 }
 
 function layout(){ensureAeronexLogoStyles();let n=S.user?.displayName||S.user?.username||'User';document.body.innerHTML=`<header class="topbar"><div class="brand"><img class="brand-logo-img" src="img/aeronex_rma_logo_new.png" alt="AERONEX RMA Portal" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div class=&quot;brand-title&quot;>AERO NEX</div><div class=&quot;brand-sub&quot;>RMA & Spare Order Portal</div>')"></div><nav class="nav">
-<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${adminCenterEnabled()?`<a data-sec="adminCenter" href="#" onclick="show('adminCenter')">🧰 Admin Center</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','flycartCredit','dealers','adminCenter','internalRepair','spareOrderDetailsAdmin','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
+<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${adminCenterEnabled()?`<a data-sec="adminCenter" href="#" onclick="show('adminCenter')">🧰 Admin Center</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','flycartCredit','dealers','adminCenter','reportBackup','internalRepair','spareOrderDetailsAdmin','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
 
 async function ensureSpareListLoaded(){
   if(Array.isArray(S.spares) && S.spares.length) return S.spares;
@@ -473,7 +473,7 @@ function show(sec){
         try{renderDealerRepairCase()}catch(err){console.error('renderDealerRepairCase failed',err)}
       });
   }
-  if(sec==='warrantySoftwareStatus'){try{renderWarrantySoftwareStatus()}catch(e){console.error('renderWarrantySoftwareStatus failed',e)}}if(sec==='flycartCredit'){loadFlycartCredit().then(renderFlycartCredit).catch(e=>{console.error('flycartCredit failed',e);try{renderFlycartCredit()}catch(err){}})}if(sec==='logsDiagnostics'){try{renderLogsDiagnostics()}catch(e){console.error('renderLogsDiagnostics failed',e)}}if(sec==='adminCenter'){try{renderAdminCenter()}catch(e){console.error('renderAdminCenter failed',e)}}if(sec==='internalRepair'){loadInternalRepairMeta().then(renderInternalRepair).catch(e=>{console.error('internalRepair failed',e);try{renderInternalRepairError(e)}catch(_){}})}if(sec==='spareOrderDetailsAdmin'){loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin).catch(e=>{console.error('spareOrderDetails failed',e);try{renderSpareOrderDetailsError(e)}catch(_){}})}scrollTo(0,0)
+  if(sec==='warrantySoftwareStatus'){try{renderWarrantySoftwareStatus()}catch(e){console.error('renderWarrantySoftwareStatus failed',e)}}if(sec==='flycartCredit'){loadFlycartCredit().then(renderFlycartCredit).catch(e=>{console.error('flycartCredit failed',e);try{renderFlycartCredit()}catch(err){}})}if(sec==='logsDiagnostics'){try{renderLogsDiagnostics()}catch(e){console.error('renderLogsDiagnostics failed',e)}}if(sec==='adminCenter'){try{renderAdminCenter()}catch(e){console.error('renderAdminCenter failed',e)}}if(sec==='reportBackup'){try{renderReportBackup()}catch(e){console.error('renderReportBackup failed',e)}}if(sec==='internalRepair'){loadInternalRepairMeta().then(renderInternalRepair).catch(e=>{console.error('internalRepair failed',e);try{renderInternalRepairError(e)}catch(_){}})}if(sec==='spareOrderDetailsAdmin'){loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin).catch(e=>{console.error('spareOrderDetails failed',e);try{renderSpareOrderDetailsError(e)}catch(_){}})}scrollTo(0,0)
 }
 
 function dealerRepairCaseEnabled(){
@@ -685,7 +685,7 @@ function setLogsOutput(data){
 async function generateLarkDiagnostics(){
   try{
     msg('logsMsg','Generating Lark diagnostics...');
-    const table=($('diagTableSelect')?.value||'USER_TABLE_ID');
+    const table=($('diagTableSelect')?.value||'');
     const d=await api('/api/logs-diagnostics/tables?role='+encodeURIComponent(S.user.role||'')+'&table='+encodeURIComponent(table));
     setLogsOutput(d);
     msg('logsMsg','Diagnostics generated');
@@ -967,6 +967,7 @@ function internalRepairFormHtml(src, isPopup){
       <div><label>Unit Consumed</label><input id="irUnitConsumed" value="${esc(f['Unit Consumed']||'')}"></div>
       <div><label>Material Consumed</label><input id="irMaterialConsumed" value="${esc(f[n.material]||'')}"></div>
       <div><label>DJI Invoice</label><input id="irDjiInvoice" value="${esc(f['DJI Invoice']||'')}"></div>
+      <div><label>Total Invoice</label><input id="irTotalInvoice" value="${esc(f['Total Invoice']||'')}"></div>
       <div><label>DJI Repair Status</label>${fieldMetaByName(meta)[n.djiStatus]?.optionCount?selectHtml(meta,'irDjiStatus',n.djiStatus,f[n.djiStatus]||''):`<input id="irDjiStatus" value="${esc(f[n.djiStatus]||'')}">`}</div>
       <div><label>Case Status</label>${selectHtml(meta,'irCaseStatus','Case Status',f['Case Status']||'')}</div>
     </div>
@@ -1028,6 +1029,7 @@ async function saveInternalRepair(){
       'Unit Consumed':val('irUnitConsumed'),
       [n.material]:val('irMaterialConsumed'),
       'DJI Invoice':val('irDjiInvoice'),
+      'Total Invoice':val('irTotalInvoice'),
       [n.djiStatus]:selectedOptionsValue('irDjiStatus')||val('irDjiStatus'),
       'Case Status':selectedOptionsValue('irCaseStatus'),
       [n.remark]:val('irRemark')
@@ -1084,6 +1086,7 @@ function spareOrderDetailsFormHtml(f){
     <div><label>Type of Case</label><input id="sodTypeOfCase" value="${esc(f['Type of Case']||'')}"></div>
     <div><label>Billing Company</label>${selectHtml(meta,'sodBillingCompany','Billing Company',f['Billing Company']||'')}</div>
     <div><label>Order Type</label>${selectHtml(meta,'sodOrderType','Order Type',Array.isArray(f['Order Type'])?f['Order Type'].join(','):(f['Order Type']||''))}</div>
+    <div><label>DJI Cost</label><input id="sodDjiCost" value="${esc(f['DJI Cost']||'')}"></div>
     <div><label>Case Creation Date</label><input id="sodCreationDate" type="date" value="${esc(dateInputValue(f['Case Creation Date']))}"></div>
     <div><label>Case Close Date</label><input id="sodCloseDate" type="date" value="${esc(dateInputValue(f['Case Close Date']))}"></div>
     <div><label>Shipper Name</label>${selectHtml(meta,'sodShipper','Shipper Name',f['Shipper Name']||'')}</div>
@@ -1096,7 +1099,7 @@ function spareOrderDetailsFormHtml(f){
   <div class="panel">
     <h3>Document Upload</h3>
     <div class="notice"><b>Current document:</b> ${detailsFieldValue(f['Document Upload'])}</div>
-    <div class="row"><input id="sodDocumentUploadFile" type="file" multiple multiple><button class="btn-light" onclick="uploadSpareOrderDetailsDocument()">Upload Document(s)</button></div>
+    <div class="row"><input id="sodDocumentUploadFile" type="file" multiple><button class="btn-light" onclick="uploadSpareOrderDetailsDocument()">Upload Document(s)</button></div>
     <div id="sodDocumentMsg" class="msg"></div>
   </div>
   <p><button class="act" onclick="saveSpareOrderDetails()">Save Internal Spare Order</button> <span id="spareOrderDetailsMsg" class="msg"></span></p></div>`;
@@ -1118,8 +1121,14 @@ async function uploadSpareOrderDetailsDocument(){
       box.textContent=text;
     }
   };
-  if(!r || !r.record_id) return setUploadMsg('Upload Failed: save or open an Internal Spare Order record first','upload-fail');
+  let recordId = r && r.record_id ? r.record_id : '';
   if(!files.length) return setUploadMsg('Upload Failed: select document file','upload-fail');
+  if(!recordId){
+    setUploadMsg('Saving record before upload...','upload-wait');
+    const saved = await saveSpareOrderDetails({silent:true, keepForm:true});
+    recordId = saved && saved.record_id ? saved.record_id : '';
+    if(!recordId) return setUploadMsg('Upload Failed: unable to create Internal Spare Order record first','upload-fail');
+  }
   try{
     setUploadMsg('Uploading... Please wait','upload-wait');
     const uploaded=[];
@@ -1134,12 +1143,12 @@ async function uploadSpareOrderDetailsDocument(){
     }
     await api('/api/upload-spare-order-details-document',{method:'POST',body:JSON.stringify({
       role:S.user.role||'',
-      record_id:r.record_id,
+      record_id:recordId,
       files:uploaded
     })});
     setUploadMsg(`Upload Success: ${files.length} document(s) uploaded to Lark`,'upload-ok');
     await loadSpareOrderDetailsMeta();
-    const idx=(S.spareOrderDetailsRows||[]).findIndex(x=>x.record_id===r.record_id);
+    const idx=(S.spareOrderDetailsRows||[]).findIndex(x=>x.record_id===recordId);
     if(idx>=0){
       setTimeout(()=>editSpareOrderDetails(idx),700);
     }else{
@@ -1169,8 +1178,9 @@ function scopedSelectedOptionsValue(id){
   return el.value || '';
 }
 
-async function saveSpareOrderDetails(){
-  if(!isAdmin()) return msg('spareOrderDetailsMsg','Admin only');
+async function saveSpareOrderDetails(opts){
+  opts = opts || {};
+  if(!isAdmin()){ if(!opts.silent) msg('spareOrderDetailsMsg','Admin only'); return null; }
   try{
     const editingId=S.spareOrderDetailsEdit?.record_id||'';
     const base=(S.spareOrderDetailsEdit&&S.spareOrderDetailsEdit.fields)||{};
@@ -1184,6 +1194,7 @@ async function saveSpareOrderDetails(){
       'Type of Case':get('sodTypeOfCase','Type of Case'),
       'Billing Company':getSel('sodBillingCompany','Billing Company'),
       'Order Type':getSel('sodOrderType','Order Type'),
+      'DJI Cost':get('sodDjiCost','DJI Cost'),
       'Case Creation Date':get('sodCreationDate','Case Creation Date'),
       'Case Close Date':get('sodCloseDate','Case Close Date'),
       'Shipper Name':getSel('sodShipper','Shipper Name'),
@@ -1194,8 +1205,14 @@ async function saveSpareOrderDetails(){
       'Remarks':get('sodRemarks','Remarks')
     };
     const res=await api('/api/save-spare-order-details',{method:'POST',body:JSON.stringify({role:S.user.role||'',record_id:editingId,fields})});
-    msg('spareOrderDetailsMsg',res&&res.partial?'Saved partially. Some fields were skipped.':'Saved successfully');
+    if(!opts.silent) msg('spareOrderDetailsMsg',res&&res.partial?'Saved partially. Some fields were skipped.':'Saved successfully');
     await loadSpareOrderDetailsMeta();
+    if(res && res.record && (res.record.record_id || res.record.id)){
+      S.spareOrderDetailsEdit = { record_id: res.record.record_id || res.record.id, fields };
+    }
+    if(opts.keepForm){
+      return { record_id: S.spareOrderDetailsEdit?.record_id || editingId };
+    }
     if(document.getElementById('detailsModalOverlay') && editingId){
       const idx=(S.spareOrderDetailsRows||[]).findIndex(x=>x.record_id===editingId);
       if(idx>=0) setTimeout(()=>editSpareOrderDetails(idx),500);
@@ -1203,7 +1220,8 @@ async function saveSpareOrderDetails(){
       S.spareOrderDetailsEdit=null;
       renderSpareOrderDetailsAdmin();
     }
-  }catch(e){msg('spareOrderDetailsMsg','Save Failed: '+(e.message||'Unknown error'))}
+    return { record_id: S.spareOrderDetailsEdit?.record_id || editingId };
+  }catch(e){ if(!opts.silent) msg('spareOrderDetailsMsg','Save Failed: '+(e.message||'Unknown error')); else throw e; return null; }
 }
 
 
@@ -1330,6 +1348,54 @@ function adminCenterEnabled(){
   return isAdmin() || currentUserIsAdminTech();
 }
 
+function reportsEnabled(){
+  const f=S.user?.fields||{};
+  const v=String(f['Reports']||S.user?.Reports||S.user?.reports||'').trim().toLowerCase();
+  return v==='yes'||v==='true'||v==='1';
+}
+
+function renderReportBackup(){
+  const sec=$('reportBackup');
+  if(!sec) return;
+  if(!reportsEnabled()){
+    sec.innerHTML=`<div class="panel"><h2>Report & Backup</h2><div class="notice">You do not have permission to access Report & Backup.</div></div>`;
+    return;
+  }
+  sec.innerHTML=`<div class="panel"><h2>Report & Backup</h2>
+    <div class="notice">Automatic backup is planned every day at 04:00 AM. Retention will keep only the latest 3 successful backups. SFTP/NAS backend is prepared as placeholder only in this patch.</div>
+    <h3>Backup Status</h3>
+    <div class="grid4">
+      <div><label>Status</label><input value="Not configured" disabled></div>
+      <div><label>Last Backup Time</label><input value="-" disabled></div>
+      <div><label>Backup Duration</label><input value="-" disabled></div>
+      <div><label>NAS Connection Status</label><input value="Not tested" disabled></div>
+      <div><label>Total Records</label><input value="-" disabled></div>
+      <div><label>Total Attachments</label><input value="-" disabled></div>
+      <div><label>Backup Size</label><input value="-" disabled></div>
+      <div><label>Retention</label><input value="Latest 3 successful backups" disabled></div>
+    </div>
+    <h3>Backup Settings</h3>
+    <div class="grid3">
+      <div><label>SFTP Host</label><input id="backupSftpHost" placeholder="NAS IP or hostname"></div>
+      <div><label>SFTP Port</label><input id="backupSftpPort" value="22"></div>
+      <div><label>Username</label><input id="backupSftpUser" placeholder="backup_user"></div>
+      <div><label>Password / SSH Key</label><input id="backupSftpSecret" type="password" placeholder="Password or key reference"></div>
+      <div><label>Remote Folder</label><input id="backupSftpFolder" placeholder="/AERONEX_RMA_Backup"></div>
+      <div><label>Contents</label><input value="Tables, attachments, XLSX, CSV, JSON, manifest" disabled></div>
+    </div>
+    <p>
+      <button class="btn-light" onclick="msg('backupMsg','SFTP test backend placeholder only')">Test SFTP Connection</button>
+      <button class="btn-light" onclick="msg('backupMsg','Backup backend placeholder only')">Backup Now</button>
+      <button onclick="msg('backupMsg','Settings backend placeholder only')">Save Settings</button>
+      <span id="backupMsg" class="msg"></span>
+    </p>
+    <h3>Last 3 Backup History</h3>
+    <div class="table-wrap"><table><thead><tr><th>Date</th><th>Status</th><th>Records</th><th>Attachments</th><th>Size</th><th>Destination</th><th>Error</th></tr></thead><tbody><tr><td colspan="7" class="muted">No backup history yet.</td></tr></tbody></table></div>
+    <h3>Backup Log Viewer</h3>
+    <pre style="white-space:pre-wrap;background:#f6f8fb;border:1px solid #dbe3ef;border-radius:10px;padding:12px;max-height:260px;overflow:auto">No logs yet.</pre>
+  </div>`;
+}
+
 function adminCenterCards(){
   const cards = [];
   if(isAdmin()) cards.push(['⚙','Admin','User and system administration.','admin','Open']);
@@ -1347,6 +1413,9 @@ function adminCenterCards(){
   }
   if(logsPageEnabled()){
     cards.push(['🧾','Logs & Diagnostics','Check error logs and Lark table diagnostics.','logsDiagnostics','Open']);
+  }
+  if(reportsEnabled()){
+    cards.push(['💾','Report & Backup','Daily backup status, SFTP settings, retention, and backup history.','reportBackup','Open']);
   }
   return cards;
 }
