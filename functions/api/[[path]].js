@@ -710,25 +710,18 @@ async function getTableFieldsForDiagnostics(env, tableId) {
 }
 
 async function getFullTableFieldsForDiagnostics(env, tableId) {
-  // Diagnostics only: direct minimal Lark calls. Do not use larkFetch here,
-  // because larkFetch writes error logs and can add extra Worker subrequests.
+  // Diagnostics only. Single selected table, single field-list request.
+  // Do not use shared larkFetch / admin-module-meta / record reads here.
   const token = await larkToken(env);
-  let items = [];
-  let pageToken = "";
-  do {
-    const qs = new URLSearchParams({ page_size: "20" });
-    if (pageToken) qs.set("page_token", pageToken);
-    const res = await fetch(`https://open.larksuite.com/open-apis/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields?${qs}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || data.code) {
-      throw new Error(data.msg || data.error?.message || `Lark field read failed: ${res.status}`);
-    }
-    items.push(...(data.data?.items || []));
-    pageToken = data.data?.page_token || "";
-  } while (pageToken);
-  return items.map(f => {
+  const qs = new URLSearchParams({ page_size: "100" });
+  const res = await fetch(`https://open.larksuite.com/open-apis/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields?${qs}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.code) {
+    throw new Error(data.msg || data.error?.message || `Lark field read failed: ${res.status}`);
+  }
+  return (data.data?.items || []).map(f => {
     const options = diagnosticFieldOptions(f);
     return {
       field_id: f.field_id || "",
