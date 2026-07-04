@@ -1713,7 +1713,6 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     if (fieldTypes["Spare Source"]) fields["Spare Source"] = b.spareSource || "";
     if (fieldTypes["Final Notes"]) fields["Final Notes"] = b.finalNotes || "";
     if (fieldTypes["DJI Cost"]) fields["DJI Cost"] = b.djiCost || "";
-    if (fieldTypes["Invoice Amount"]) fields["Invoice Amount"] = b.invoiceAmount || "";
     if (fieldTypes["Shipment Cost ( AED )"]) fields["Shipment Cost ( AED )"] = b.shipmentCostAed || "";
     if (fieldTypes["DJI Case NO"]) fields["DJI Case NO"] = b.djiCaseNo || "";
     else if (fieldTypes["DJI case NO"]) fields["DJI case NO"] = b.djiCaseNo || "";
