@@ -1108,7 +1108,7 @@ function renderSpareOrderDetailsForm(f){
 
 async function uploadSpareOrderDetailsDocument(){
   if(!isAdmin()) return alert('Admin only');
-  let r=S.spareOrderDetailsEdit;
+  const r=S.spareOrderDetailsEdit;
   const inp=scopedEl('sodDocumentUploadFile');
   const files=inp&&inp.files ? Array.from(inp.files) : [];
   const box=scopedEl('sodDocumentMsg');
@@ -1118,19 +1118,9 @@ async function uploadSpareOrderDetailsDocument(){
       box.textContent=text;
     }
   };
+  if(!r || !r.record_id) return setUploadMsg('Upload Failed: save or open an Internal Spare Order record first','upload-fail');
   if(!files.length) return setUploadMsg('Upload Failed: select document file','upload-fail');
   try{
-    if(!r || !r.record_id){
-      setUploadMsg('Saving new record before upload...','upload-wait');
-      const fields=spareOrderDetailsFieldsFromForm();
-      const saved=await api('/api/save-spare-order-details',{method:'POST',body:JSON.stringify({role:S.user.role||'',record_id:'',fields})});
-      const created=saved&&saved.record;
-      const createdRecord=(created&&created.record)||created||{};
-      const recordId=createdRecord.record_id||createdRecord.id||'';
-      if(!recordId) throw new Error('Record saved but record_id was not returned');
-      r={record_id:recordId,fields};
-      S.spareOrderDetailsEdit=r;
-    }
     setUploadMsg('Uploading... Please wait','upload-wait');
     const uploaded=[];
     for(const file of files){
@@ -1179,56 +1169,40 @@ function scopedSelectedOptionsValue(id){
   return el.value || '';
 }
 
-function spareOrderDetailsFieldsFromForm(){
-  const get=id=>scopedVal(id) || '';
-  const getSel=id=>scopedSelectedOptionsValue(id) || '';
-  return {
-    'DJI Case ID':get('sodDjiCaseId'),
-    'Case ID Remarks':get('sodCaseIdRemarks'),
-    'Case Type':getSel('sodCaseType'),
-    'Company Name':get('sodCompanyName'),
-    'Type of Case':get('sodTypeOfCase'),
-    'Billing Company':getSel('sodBillingCompany'),
-    'Order Type':getSel('sodOrderType'),
-    'DJI Cost':get('sodDjiCost'),
-    'Case Creation Date':get('sodCreationDate'),
-    'Case Close Date':get('sodCloseDate'),
-    'Shipper Name':getSel('sodShipper'),
-    'Shiping Tracking No-Sending':get('sodSendTrack'),
-    'Shipment Cost - Sent to DJI':get('sodSendCost'),
-    'Shiping Tracking No -Receiving':get('sodRecvTrack'),
-    'Shipment Cost - Receive from DJI':get('sodRecvCost'),
-    'Remarks':get('sodRemarks')
-  };
-}
-
 async function saveSpareOrderDetails(){
   if(!isAdmin()) return msg('spareOrderDetailsMsg','Admin only');
   try{
     const editingId=S.spareOrderDetailsEdit?.record_id||'';
-    const fields=spareOrderDetailsFieldsFromForm();
+    const base=(S.spareOrderDetailsEdit&&S.spareOrderDetailsEdit.fields)||{};
+    const get=(id, name)=>scopedVal(id) || '';
+    const getSel=(id, name)=>scopedSelectedOptionsValue(id) || '';
+    const fields={
+      'DJI Case ID':get('sodDjiCaseId','DJI Case ID'),
+      'Case ID Remarks':get('sodCaseIdRemarks','Case ID Remarks'),
+      'Case Type':getSel('sodCaseType','Case Type'),
+      'Company Name':get('sodCompanyName','Company Name'),
+      'Type of Case':get('sodTypeOfCase','Type of Case'),
+      'Billing Company':getSel('sodBillingCompany','Billing Company'),
+      'Order Type':getSel('sodOrderType','Order Type'),
+      'DJI Cost':get('sodDjiCost','DJI Cost'),
+      'Case Creation Date':get('sodCreationDate','Case Creation Date'),
+      'Case Close Date':get('sodCloseDate','Case Close Date'),
+      'Shipper Name':getSel('sodShipper','Shipper Name'),
+      'Shiping Tracking No-Sending':get('sodSendTrack','Shiping Tracking No-Sending'),
+      'Shipment Cost - Sent to DJI':get('sodSendCost','Shipment Cost - Sent to DJI'),
+      'Shiping Tracking No -Receiving':get('sodRecvTrack','Shiping Tracking No -Receiving'),
+      'Shipment Cost - Receive from DJI':get('sodRecvCost','Shipment Cost - Receive from DJI'),
+      'Remarks':get('sodRemarks','Remarks')
+    };
     const res=await api('/api/save-spare-order-details',{method:'POST',body:JSON.stringify({role:S.user.role||'',record_id:editingId,fields})});
     msg('spareOrderDetailsMsg',res&&res.partial?'Saved partially. Some fields were skipped.':'Saved successfully');
     await loadSpareOrderDetailsMeta();
     if(document.getElementById('detailsModalOverlay') && editingId){
       const idx=(S.spareOrderDetailsRows||[]).findIndex(x=>x.record_id===editingId);
       if(idx>=0) setTimeout(()=>editSpareOrderDetails(idx),500);
-    }else if(editingId){
-      const idx=(S.spareOrderDetailsRows||[]).findIndex(x=>x.record_id===editingId);
-      if(idx>=0) S.spareOrderDetailsEdit=S.spareOrderDetailsRows[idx];
-      renderSpareOrderDetailsAdmin();
     }else{
-      const created=res&&res.record;
-      const createdRecord=(created&&created.record)||created||{};
-      const recordId=createdRecord.record_id||createdRecord.id||'';
-      if(recordId){
-        const idx=(S.spareOrderDetailsRows||[]).findIndex(x=>x.record_id===recordId);
-        S.spareOrderDetailsEdit=idx>=0?S.spareOrderDetailsRows[idx]:{record_id:recordId,fields};
-        renderSpareOrderDetailsForm((S.spareOrderDetailsEdit&&S.spareOrderDetailsEdit.fields)||fields);
-      }else{
-        S.spareOrderDetailsEdit=null;
-        renderSpareOrderDetailsAdmin();
-      }
+      S.spareOrderDetailsEdit=null;
+      renderSpareOrderDetailsAdmin();
     }
   }catch(e){msg('spareOrderDetailsMsg','Save Failed: '+(e.message||'Unknown error'))}
 }
@@ -1941,6 +1915,7 @@ function openSpareOrderDetails(i){
         <div><label>Spare Source</label><select id="soSpareSource">${spareSourceOptions(spareOrderSpareSourceValue(f))}</select></div>
       </div>
       <div class="grid3">
+        <div><label>DJI Cost</label><input id="soDjiCost" value="${esc(f['DJI Cost']||'')}"></div>
         <div><label>Invoice Amount</label><input id="soInvoiceAmount" value="${esc(f['Invoice Amount']||'')}"></div>
         <div><label>Shipment Cost ( AED )</label><input id="soShipmentCostAed" value="${esc(f['Shipment Cost ( AED )']||'')}"></div>
         <div><label>DJI Case No</label><input id="soDjiCaseNo" value="${esc(spareOrderDjiCaseValue(f)||'')}"></div>
@@ -1974,6 +1949,7 @@ async function saveSpareOrderInternal(i){
       specialized:($('soSpecialized')?.value||'').trim(),
       spareSource:($('soSpareSource')?.value||'').trim(),
       finalNotes:($('soFinalNotes')?.value||'').trim(),
+      djiCost:($('soDjiCost')?.value||'').trim(),
       invoiceAmount:($('soInvoiceAmount')?.value||'').trim(),
       shipmentCostAed:($('soShipmentCostAed')?.value||'').trim(),
       djiCaseNo:($('soDjiCaseNo')?.value||'').trim()
