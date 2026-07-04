@@ -1382,16 +1382,55 @@ function selectedReportBackupReport(){
   return REPORT_BACKUP_REPORTS.find(r=>r.key===key) || null;
 }
 
-function previewReportBackupReport(){
+function reportBackupQuery(){
+  const r = selectedReportBackupReport();
+  const qs = new URLSearchParams({
+    report: r?.key || '',
+    role: S.user?.role || '',
+    dateFrom: $('reportBackupDateFrom')?.value || '',
+    dateTo: $('reportBackupDateTo')?.value || '',
+    company: $('reportBackupCompany')?.value || '',
+    status: $('reportBackupStatus')?.value || '',
+    caseId: $('reportBackupCaseId')?.value || ''
+  });
+  return qs;
+}
+
+async function previewReportBackupReport(){
   const r = selectedReportBackupReport();
   if(!r){ msg('reportBackupReportMsg','Choose a report first.'); return; }
-  msg('reportBackupReportMsg',`Selected: ${r.label}. Excel export backend can be connected to table: ${r.table}.`);
+  try{
+    const data = await api('/api/report-backup/preview?' + reportBackupQuery().toString());
+    msg('reportBackupReportMsg', `${data.count || 0} matching records found for ${data.label || r.label}.`, true);
+  }catch(e){msg('reportBackupReportMsg', e.message)}
 }
 
 function downloadReportBackupExcel(){
   const r = selectedReportBackupReport();
   if(!r){ msg('reportBackupReportMsg','Choose a report first.'); return; }
-  msg('reportBackupReportMsg','Excel download endpoint is not enabled yet for this report. Report UI is ready; backend export will be connected per table.');
+  window.open('/api/report-backup/download?' + reportBackupQuery().toString(), '_blank', 'noopener');
+  msg('reportBackupReportMsg','Excel download started.', true);
+}
+
+function reportBackupSettingsPayload(){
+  return {
+    protocol: $('backupNasProtocol')?.value || 'sftp',
+    host: $('backupNasHost')?.value || '',
+    port: $('backupNasPort')?.value || '',
+    username: $('backupNasUser')?.value || '',
+    secret: $('backupNasSecret')?.value || '',
+    remoteFolder: $('backupNasFolder')?.value || ''
+  };
+}
+
+async function saveReportBackupSettings(){
+  try{const d=await api('/api/report-backup/settings?role='+encodeURIComponent(S.user?.role||''),{method:'POST',body:JSON.stringify(reportBackupSettingsPayload())});msg('backupMsg','Backup settings saved.',true)}catch(e){msg('backupMsg',e.message)}
+}
+async function testReportBackupNas(){
+  try{const d=await api('/api/report-backup/test-nas?role='+encodeURIComponent(S.user?.role||''),{method:'POST',body:JSON.stringify(reportBackupSettingsPayload())});msg('backupMsg',(d.status||'Test completed')+(d.note?' - '+d.note:''),!!d.ok)}catch(e){msg('backupMsg',e.message)}
+}
+async function runReportBackupNow(){
+  try{const d=await api('/api/report-backup/backup-now?role='+encodeURIComponent(S.user?.role||''),{method:'POST',body:JSON.stringify({})});msg('backupMsg',(d.status||'Backup requested')+(d.error?' - '+d.error:''),!!d.ok)}catch(e){msg('backupMsg',e.message)}
 }
 
 function renderReportBackup(){
@@ -1402,14 +1441,37 @@ function renderReportBackup(){
     return;
   }
   sec.innerHTML=`<div class="panel"><h2>Report & Backup</h2>
-    <div class="notice">Automatic backup is planned every day at 04:00 AM. Retention will keep only the latest 3 successful backups. NAS/SFTP backup backend is prepared as placeholder only in this patch.</div>
+    <div class="notice">Reports export directly from Lark tables. Backup is planned every day at 04:00 AM with retention for the latest 3 successful backups.</div>
 
     <div class="panel" style="box-shadow:none;margin:16px 0 18px 0;padding:20px;border:1px solid #dbe3ef">
+      <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:18px">
+        <div style="font-size:32px;background:#eafff3;border-radius:14px;padding:12px;line-height:1">📊</div>
+        <div style="flex:1">
+          <h2 style="margin:0 0 6px 0">Reports</h2>
+          <div class="muted">Generate and download module reports in Excel format.</div>
+        </div>
+      </div>
+      <div class="grid4">
+        <div><label>Select Report</label><select id="reportBackupReportSelect">${reportBackupReportOptions()}</select></div>
+        <div><label>Date From</label><input id="reportBackupDateFrom" type="date"></div>
+        <div><label>Date To</label><input id="reportBackupDateTo" type="date"></div>
+        <div><label>Status</label><input id="reportBackupStatus" placeholder="All Status"></div>
+        <div><label>Company</label><input id="reportBackupCompany" placeholder="All Companies"></div>
+        <div><label>Case ID / DJI Case ID</label><input id="reportBackupCaseId" placeholder="Optional"></div>
+      </div>
+      <p>
+        <button onclick="downloadReportBackupExcel()">Download Excel</button>
+        <button class="btn-light" onclick="previewReportBackupReport()">Preview Selection</button>
+        <span id="reportBackupReportMsg" class="msg"></span>
+      </p>
+    </div>
+
+    <div class="panel" style="box-shadow:none;margin:0;padding:20px;border:1px solid #dbe3ef">
       <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:18px">
         <div style="font-size:32px;background:#eaf1ff;border-radius:14px;padding:12px;line-height:1">💾</div>
         <div style="flex:1">
           <h2 style="margin:0 0 6px 0">Backup</h2>
-          <div class="muted">Configure and manage system backup to NAS. Monitor status, connection, and last 3 backup history.</div>
+          <div class="muted">Configure NAS backup destination and monitor backup status.</div>
         </div>
       </div>
       <div class="grid4">
@@ -1435,38 +1497,15 @@ function renderReportBackup(){
         <div><label>Verification</label><input value="Manifest + latest successful backup only" disabled></div>
       </div>
       <p>
-        <button onclick="msg('backupMsg','Backup backend placeholder only. NAS protocol field is ready for SFTP/SMB/NFS/WebDAV settings.')">Backup Now</button>
-        <button class="btn-light" onclick="msg('backupMsg','NAS connection test placeholder only. Selected protocol: '+($('backupNasProtocol')?.value||'sftp'))">Test NAS Connection</button>
-        <button class="btn-light" onclick="msg('backupMsg','Backup settings placeholder only. No settings saved yet.')">Save Settings</button>
+        <button onclick="runReportBackupNow()">Backup Now</button>
+        <button class="btn-light" onclick="testReportBackupNas()">Test NAS Connection</button>
+        <button class="btn-light" onclick="saveReportBackupSettings()">Save Settings</button>
         <span id="backupMsg" class="msg"></span>
       </p>
       <h3>Last 3 Backup History</h3>
       <div class="table-wrap"><table><thead><tr><th>Date</th><th>Status</th><th>Records</th><th>Attachments</th><th>Size</th><th>Destination</th><th>Error</th></tr></thead><tbody><tr><td colspan="7" class="muted">No backup history yet.</td></tr></tbody></table></div>
       <h3>Backup Log Viewer</h3>
       <pre style="white-space:pre-wrap;background:#f6f8fb;border:1px solid #dbe3ef;border-radius:10px;padding:12px;max-height:220px;overflow:auto">No logs yet.</pre>
-    </div>
-
-    <div class="panel" style="box-shadow:none;margin:0;padding:20px;border:1px solid #dbe3ef">
-      <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:18px">
-        <div style="font-size:32px;background:#eafff3;border-radius:14px;padding:12px;line-height:1">📊</div>
-        <div style="flex:1">
-          <h2 style="margin:0 0 6px 0">Reports</h2>
-          <div class="muted">Generate and download module reports in Excel format.</div>
-        </div>
-      </div>
-      <div class="grid4">
-        <div><label>Select Report</label><select id="reportBackupReportSelect">${reportBackupReportOptions()}</select></div>
-        <div><label>Date From</label><input id="reportBackupDateFrom" type="date"></div>
-        <div><label>Date To</label><input id="reportBackupDateTo" type="date"></div>
-        <div><label>Status</label><input id="reportBackupStatus" placeholder="All Status"></div>
-        <div><label>Company</label><input id="reportBackupCompany" placeholder="All Companies"></div>
-        <div><label>Case ID / DJI Case ID</label><input id="reportBackupCaseId" placeholder="Optional"></div>
-      </div>
-      <p>
-        <button onclick="downloadReportBackupExcel()">Download Excel</button>
-        <button class="btn-light" onclick="previewReportBackupReport()">Preview Selection</button>
-        <span id="reportBackupReportMsg" class="msg"></span>
-      </p>
     </div>
   </div>`;
 }
