@@ -204,10 +204,6 @@ function normalizeLarkOptionValue(v, type) {
     return String(v).split(",").map(x => x.trim()).filter(Boolean);
   }
   if (type === 5) return toLarkDateTimeValue(v);
-  if (type === 2) {
-    const n = typeof v === "number" ? v : Number(String(v).replace(/,/g, "").trim());
-    return Number.isFinite(n) ? n : "";
-  }
   return v;
 }
 
