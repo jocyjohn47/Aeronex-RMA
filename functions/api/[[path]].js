@@ -697,6 +697,20 @@ function diagnosticFieldOptions(f) {
 }
 
 async function getTableFieldsForDiagnostics(env, tableId) {
+  const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields`);
+  return (data.data?.items || []).map(f => {
+    const options = diagnosticFieldOptions(f);
+    return {
+      field_name: f.field_name,
+      type: f.type,
+      options,
+      optionCount: options.length
+    };
+  });
+}
+
+
+async function getTableFieldsForDiagnosticsFull(env, tableId) {
   const token = await larkToken(env);
   const items = [];
   let pageToken = "";
@@ -722,6 +736,11 @@ async function getTableFieldsForDiagnostics(env, tableId) {
       optionCount: options.length
     };
   });
+}
+
+async function countRecordsForDiagnostics(env, tableId) {
+  const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/records?page_size=1`);
+  return data.data?.total ?? data.data?.items?.length ?? 0;
 }
 
 function expectedFieldsForDiagnostics(tableName) {
@@ -766,7 +785,7 @@ async function buildLarkTableDiagnostic(env, tableCfg) {
   };
   if (!tableCfg.tableId) return out;
   try {
-    const fields = await getTableFieldsForDiagnostics(env, tableCfg.tableId);
+    const fields = await getTableFieldsForDiagnosticsFull(env, tableCfg.tableId);
     out.fields = fields;
     out.fieldCount = fields.length;
     out.missingExpectedFields = missingExpectedFields(expectedFieldsForDiagnostics(tableCfg.name), fields);
