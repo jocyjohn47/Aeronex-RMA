@@ -446,7 +446,7 @@ function ensureAeronexLogoStyles(){
 }
 
 function layout(){ensureAeronexLogoStyles();let n=S.user?.displayName||S.user?.username||'User';document.body.innerHTML=`<header class="topbar"><div class="brand"><img class="brand-logo-img" src="img/aeronex_rma_logo_new.png" alt="AERONEX RMA Portal" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div class=&quot;brand-title&quot;>AERO NEX</div><div class=&quot;brand-sub&quot;>RMA & Spare Order Portal</div>')"></div><nav class="nav">
-<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${adminCenterEnabled()?`<a data-sec="adminCenter" href="#" onclick="show('adminCenter')">🧰 Admin Center</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','flycartCredit','reportBackup','dealers','adminCenter','internalRepair','spareOrderDetailsAdmin','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
+<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${adminCenterEnabled()?`<a data-sec="adminCenter" href="#" onclick="show('adminCenter')">🧰 Admin Center</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','flycartCredit','dealers','adminCenter','internalRepair','spareOrderDetailsAdmin','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
 
 async function ensureSpareListLoaded(){
   if(Array.isArray(S.spares) && S.spares.length) return S.spares;
@@ -473,7 +473,7 @@ function show(sec){
         try{renderDealerRepairCase()}catch(err){console.error('renderDealerRepairCase failed',err)}
       });
   }
-  if(sec==='warrantySoftwareStatus'){try{renderWarrantySoftwareStatus()}catch(e){console.error('renderWarrantySoftwareStatus failed',e)}}if(sec==='flycartCredit'){loadFlycartCredit().then(renderFlycartCredit).catch(e=>{console.error('flycartCredit failed',e);try{renderFlycartCredit()}catch(err){}})}if(sec==='logsDiagnostics'){try{renderLogsDiagnostics()}catch(e){console.error('renderLogsDiagnostics failed',e)}}if(sec==='reportBackup'){try{renderReportBackup()}catch(e){console.error('renderReportBackup failed',e)}}if(sec==='adminCenter'){try{renderAdminCenter()}catch(e){console.error('renderAdminCenter failed',e)}}if(sec==='internalRepair'){loadInternalRepairMeta().then(renderInternalRepair).catch(e=>{console.error('internalRepair failed',e);try{renderInternalRepairError(e)}catch(_){}})}if(sec==='spareOrderDetailsAdmin'){loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin).catch(e=>{console.error('spareOrderDetails failed',e);try{renderSpareOrderDetailsError(e)}catch(_){}})}scrollTo(0,0)
+  if(sec==='warrantySoftwareStatus'){try{renderWarrantySoftwareStatus()}catch(e){console.error('renderWarrantySoftwareStatus failed',e)}}if(sec==='flycartCredit'){loadFlycartCredit().then(renderFlycartCredit).catch(e=>{console.error('flycartCredit failed',e);try{renderFlycartCredit()}catch(err){}})}if(sec==='logsDiagnostics'){try{renderLogsDiagnostics()}catch(e){console.error('renderLogsDiagnostics failed',e)}}if(sec==='adminCenter'){try{renderAdminCenter()}catch(e){console.error('renderAdminCenter failed',e)}}if(sec==='internalRepair'){loadInternalRepairMeta().then(renderInternalRepair).catch(e=>{console.error('internalRepair failed',e);try{renderInternalRepairError(e)}catch(_){}})}if(sec==='spareOrderDetailsAdmin'){loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin).catch(e=>{console.error('spareOrderDetails failed',e);try{renderSpareOrderDetailsError(e)}catch(_){}})}scrollTo(0,0)
 }
 
 function dealerRepairCaseEnabled(){
@@ -558,7 +558,7 @@ function renderDealerRepairCase(){
   S.drcParts=S.drcParts||[];const company=dealerRepairCompany();
   $('dealerRepairCase').innerHTML=`<div class="panel"><h2>Dealer Repair Case</h2><div class="notice">Create and track dealer repair cases. Closed cases cannot be edited.</div>
   <div class="grid3"><div><label>Company Name</label><input value="${esc(company)}" disabled></div><div><label>Model No *</label><input id="drcModel"></div><div><label>Serial No *</label><input id="drcSerial"></div></div>
-  <div class="grid3"><div><label>Activation Date / Invoice Date</label><input id="drcActivation" type="date"></div><div><label>Technician Name</label><input id="drcTech"></div><div><label>Repair Type</label><select id="drcRepairType"><option>Local Repair</option><option>Sent to DJI / Aeronex</option></select></div></div>
+  <div class="grid3"><div><label>Activation Date / Invoice Date</label><input id="drcActivation" type="date"></div><div><label>Technician Name</label><input id="drcTech"></div><div><label>Repair Type</label><select id="drcRepairType"><option>Local Repair</option><option>DJI / Aeronex Repair</option></select></div></div>
   <label>Device Issue</label><textarea id="drcIssue"></textarea><label>Technician Note</label><textarea id="drcNote"></textarea>
   <label>Upload Repair Data</label><input id="drcUploadLink" placeholder="Google Drive link"><div class="muted">Upload the Google Drive Link (Include Issue Photos/Videos, Flight Logs or Crash Logs, After Repair Photos/Videos.)</div>
   <h3>Material Replaced</h3>
@@ -590,7 +590,7 @@ function formatWarrantySoftwareDate(v){
     const ms=n>1000000000000?n:n*1000;
     const d=new Date(ms);
     if(!isNaN(d.getTime())){
-      return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
+      return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
     }
   }
   return s;
@@ -630,11 +630,6 @@ function renderWarrantySoftwareStatus(){
 
 
 function logsPageEnabled(){ return currentUserIsAdminTech(); }
-function reportsPageEnabled(){
-  const f=S.user?.fields||{};
-  const v=String(f['Reports']||S.user?.Reports||S.user?.reports||'').trim().toLowerCase();
-  return isAdmin() || v==='yes' || v==='true' || v==='1';
-}
 
 function renderLogsDiagnosticsTableOptions(){
   const list = [
@@ -842,10 +837,7 @@ function isDateFieldName(name){
 function dateInputValue(v){
   if(!v) return '';
   const d=larkTimestampToDate(v);
-  if(d){
-    const pad=n=>String(n).padStart(2,'0');
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-  }
+  if(d) return d.toISOString().slice(0,10);
   const s=String(v);
   const m=s.match(/\d{4}-\d{2}-\d{2}/);
   return m?m[0]:s;
@@ -1383,108 +1375,7 @@ function adminCenterCards(){
   if(logsPageEnabled()){
     cards.push(['🧾','Logs & Diagnostics','Check error logs and Lark table diagnostics.','logsDiagnostics','Open']);
   }
-  if(reportsPageEnabled()){
-    cards.push(['💾','Report & Backup','Daily 04:00 backup status, SFTP settings, manual backup, retention, and history.','reportBackup','Open']);
-  }
   return cards;
-}
-
-async function loadBackupStatus(){
-  try{
-    const data=await api('/api/backup-status');
-    S.backupStatus=data||{};
-  }catch(e){
-    S.backupStatus={ok:false,error:e.message||'Backup status unavailable'};
-  }
-}
-
-function backupValue(v){ return v===undefined||v===null||v===''?'-':String(v); }
-function backupStatusText(data){
-  if(!data || data.configured===false) return 'Not configured';
-  return data.status || 'Unknown';
-}
-
-async function testBackupSftp(){
-  if(!reportsPageEnabled()) return msg('backupMsg','No permission');
-  try{
-    msg('backupMsg','Testing SFTP connection...');
-    const data=await api('/api/backup-test-sftp',{method:'POST',body:JSON.stringify({})});
-    msg('backupMsg',data.ok?'SFTP connection successful':('SFTP test failed: '+(data.error||'Unknown error')));
-    await renderReportBackup();
-  }catch(e){ msg('backupMsg','SFTP test failed: '+(e.message||'Unknown error')); }
-}
-
-async function runBackupNow(){
-  if(!reportsPageEnabled()) return msg('backupMsg','No permission');
-  try{
-    msg('backupMsg','Starting backup...');
-    const data=await api('/api/backup-now',{method:'POST',body:JSON.stringify({})});
-    msg('backupMsg',data.ok?'Backup completed successfully':('Backup failed: '+(data.error||'Unknown error')));
-    await renderReportBackup();
-  }catch(e){ msg('backupMsg','Backup failed: '+(e.message||'Unknown error')); }
-}
-
-async function saveBackupSettings(){
-  if(!reportsPageEnabled()) return msg('backupMsg','No permission');
-  const settings={
-    host:scopedVal('backupSftpHost'),
-    port:scopedVal('backupSftpPort')||'22',
-    username:scopedVal('backupSftpUser'),
-    remoteFolder:scopedVal('backupSftpFolder')||'/AERONEX_RMA_Backup'
-  };
-  try{
-    const data=await api('/api/backup-settings',{method:'POST',body:JSON.stringify({settings})});
-    msg('backupMsg',data.ok?'Backup settings saved':'Save failed: '+(data.error||'Unknown error'));
-    await renderReportBackup();
-  }catch(e){ msg('backupMsg','Save failed: '+(e.message||'Unknown error')); }
-}
-
-async function renderReportBackup(){
-  const sec=$('reportBackup');
-  if(!sec) return;
-  if(!reportsPageEnabled()){
-    sec.innerHTML=`<div class="panel"><h2>Report & Backup</h2><div class="notice">You do not have permission to access Report & Backup.</div></div>`;
-    return;
-  }
-  sec.innerHTML=`<div class="panel"><h2>Report & Backup</h2><div class="notice">Loading backup status...</div></div>`;
-  await loadBackupStatus();
-  const data=S.backupStatus||{};
-  const settings=data.settings||{};
-  const history=Array.isArray(data.history)?data.history.slice(0,3):[];
-  sec.innerHTML=`<div class="panel"><h2>Report & Backup</h2>
-    <div class="notice">Automatic backup schedule: daily at 04:00 AM. Destination: SFTP NAS only. Retention: keep latest 3 successful backups; delete old backup only after new backup succeeds and passes verification.</div>
-    <h3>Backup Status</h3>
-    <div class="grid4">
-      <div><label>Status</label><input value="${esc(backupStatusText(data))}" disabled></div>
-      <div><label>Last Backup Time</label><input value="${esc(backupValue(data.lastBackupTime))}" disabled></div>
-      <div><label>Backup Duration</label><input value="${esc(backupValue(data.duration))}" disabled></div>
-      <div><label>NAS Connection Status</label><input value="${esc(backupValue(data.nasStatus || (data.configured===false?'Not configured':'-')))}" disabled></div>
-    </div>
-    <div class="grid4">
-      <div><label>Total Records</label><input value="${esc(backupValue(data.totalRecords))}" disabled></div>
-      <div><label>Total Attachments</label><input value="${esc(backupValue(data.totalAttachments))}" disabled></div>
-      <div><label>Backup Size</label><input value="${esc(backupValue(data.backupSize))}" disabled></div>
-      <div><label>Next Scheduled Backup</label><input value="Daily 04:00 AM" disabled></div>
-    </div>
-    ${data.error?`<div class="notice warn"><b>Failure reason:</b> ${esc(data.error)}</div>`:''}
-    <h3>Backup Settings</h3>
-    <div class="grid3">
-      <div><label>SFTP Host</label><input id="backupSftpHost" value="${esc(settings.host||'')}" placeholder="NAS IP or hostname"></div>
-      <div><label>SFTP Port</label><input id="backupSftpPort" value="${esc(settings.port||'22')}"></div>
-      <div><label>Username</label><input id="backupSftpUser" value="${esc(settings.username||'')}"></div>
-      <div><label>Remote Backup Folder</label><input id="backupSftpFolder" value="${esc(settings.remoteFolder||'/AERONEX_RMA_Backup')}"></div>
-      <div><label>Backup Format</label><input value="Excel, CSV, JSON, manifest, metadata" disabled></div>
-      <div><label>Folder Structure</label><input value="Base, Cases, Attachments, Metadata" disabled></div>
-    </div>
-    <div class="row"><button class="btn-light" onclick="testBackupSftp()">Test SFTP Connection</button><button class="btn-light" onclick="runBackupNow()">Backup Now</button><button onclick="saveBackupSettings()">Save Settings</button></div>
-    <div id="backupMsg" class="msg"></div>
-    <h3>Last 3 Backup History</h3>
-    <div class="table-wrap"><table><thead><tr><th>Time</th><th>Status</th><th>Records</th><th>Attachments</th><th>Size</th><th>Destination</th><th>Error</th></tr></thead><tbody>
-      ${history.length?history.map(x=>`<tr><td>${esc(backupValue(x.time))}</td><td>${esc(backupValue(x.status))}</td><td>${esc(backupValue(x.records))}</td><td>${esc(backupValue(x.attachments))}</td><td>${esc(backupValue(x.size))}</td><td>${esc(backupValue(x.destination))}</td><td>${esc(backupValue(x.error))}</td></tr>`).join(''):'<tr><td colspan="7" class="muted">No backup history available yet.</td></tr>'}
-    </tbody></table></div>
-    <h3>Backup Log Viewer</h3>
-    <pre style="white-space:pre-wrap;background:#f8fafc;border:1px solid #dbe3ef;border-radius:10px;padding:12px;max-height:260px;overflow:auto">${esc(data.log||'No backup log available yet.')}</pre>
-  </div>`;
 }
 
 function renderAdminCenter(){
@@ -2154,7 +2045,7 @@ function renderRepairCreate(){
     <div class="grid3"><div><label>${isKsaForm?'Dealer Name':'Company Name'}</label><input id="rcCompany" value="${esc(uf('Company Name','AERO NEX'))}"></div><div><label>${isKsaForm?'Dealer Contact':'Contact Name'}</label><input id="rcContact" value="${esc(uf('Contact Person',''))}"></div><div><label>Contact Email</label><input id="rcEmail" value="${esc(uf('Username ( Email )',S.user.username))}"></div></div>
     <label>${isKsaForm?'Dealer Address':'Receiver Address'} *</label><input id="rcAddress" value="${esc(dealerAddress())}">
     <div class="grid4"><div><label>Country *</label><select id="rcCountry"><option>UAE & Other Region</option><option>KSA - SAUDI ARABIA</option></select></div><div><label>Model No *</label><input id="rcModel"></div><div><label>Serial No *</label><input id="rcSerial"></div><div><label>${isKsaForm?'Date Of Activation':'Date of Purchase / Activation'} *</label><input id="rcDate" type="date"></div></div>
-    ${isKsaForm?`<div class="grid3"><div><label>Warranty Status</label><select id="rcWarranty"><option>YES</option><option>NO</option><option>UNKNOWN</option></select></div><div><label>GACA Document</label><input id="gacaDocument" type="file"></div><div><label>Log for Drone and RC Link</label><input id="logFileLink" placeholder="Paste log link"></div></div><label>Issue Video and Pictures Link</label><input id="issueMediaLink" placeholder="Paste video/picture link"><label>Issue Description *</label><textarea id="rcDetails"></textarea>`:`<label>Details Of Issue *</label><textarea id="rcDetails"></textarea><div class="grid3"><div><label>Upload all required details link</label><input id="requiredDetailsLink" placeholder="Paste link here"></div><div><label>Log File Link</label><input id="logFileLink" placeholder="Paste log file link here"></div><div><label>Notes</label><input id="rcRemarks"></div></div>`}
+    ${isKsaForm?`<div class="grid3"><div><label>Warranty Status</label><select id="rcWarranty"><option>Under Warranty</option><option>Out of Warranty</option><option>Unknown</option></select></div><div><label>GACA Document</label><input id="gacaDocument" type="file"></div><div><label>Log for Drone and RC Link</label><input id="logFileLink" placeholder="Paste log link"></div></div><label>Issue Video and Pictures Link</label><input id="issueMediaLink" placeholder="Paste video/picture link"><label>Issue Description *</label><textarea id="rcDetails"></textarea>`:`<label>Details Of Issue *</label><textarea id="rcDetails"></textarea><div class="grid3"><div><label>Upload all required details link</label><input id="requiredDetailsLink" placeholder="Paste link here"></div><div><label>Log File Link</label><input id="logFileLink" placeholder="Paste log file link here"></div><div><label>Notes</label><input id="rcRemarks"></div></div>`}
     ${isKsaForm?`<div class="grid3"><div><label>Notes</label><input id="rcRemarks"></div><div><label>Notes</label><input id="rcNotes"></div><div></div></div>`:`<label>Notes</label><input id="rcNotes">`}
     <button onclick="submitRepair()">Submit Repair Case</button><div id="repairMsg" class="msg"></div>${renderPageNote(window.AERONEX_REPAIR_CASE_NOTE)}</div>`;
   $('rcCountry').value=selectedCountry().includes('KSA')?'KSA - SAUDI ARABIA':'UAE & Other Region';
@@ -2216,7 +2107,7 @@ async function submitRepair(){
   }
 }
 function renderRepairStatus(){
-  $('repairStatus').innerHTML=`<div class="panel"><h2>Repair Status <button class="btn-light" onclick="refreshRepairs()">Refresh</button></h2><div class="table-wrap"><table><thead><tr><th>Repair Case No</th><th>Dealer / Company</th><th>Model No</th><th>Serial No</th><th>Date</th><th>Status</th><th>Log Link</th><th>Issue Media / Required Details</th><th>Remarks</th><th>Notes</th><th>Case Close Comment</th></tr></thead><tbody>${(Array.isArray(S.repairs)?S.repairs:[]).map(r=>{let f=r.fields||{};return `<tr><td>${internalRepairCaseLink(r)}</td><td>${esc(f['Company Name']||f['Dealer Name']||'')}</td><td>${esc(f['Model No']||'')}</td><td>${esc(f['Serial No']||'')}</td><td>${esc(formatDisplayDate(f['Date of Purchase / Activation date']||f['Date Of Activation']||''))}</td><td>${statusCell(r,'repair')}</td><td>${linkCell(f['Log File']||f['Log for Drone and RC'])}</td><td>${linkCell(f['Upload all the required details']||f['Issue Video and Pictures'])}</td><td>${esc(f['Remarks']||'')}</td><td>${esc(f['Notes']||'')}</td><td>${esc(f['Case Close Comment']||'')}</td></tr>`}).join('')}</tbody></table></div></div>`;
+  $('repairStatus').innerHTML=`<div class="panel"><h2>Repair Status <button class="btn-light" onclick="refreshRepairs()">Refresh</button></h2><div class="table-wrap"><table><thead><tr><th>Repair Case No</th><th>Dealer / Company</th><th>Model No</th><th>Serial No</th><th>Date</th><th>Status</th><th>Log Link</th><th>Issue Media / Required Details</th><th>Remarks</th><th>Notes</th><th>Case Close Comment</th></tr></thead><tbody>${(Array.isArray(S.repairs)?S.repairs:[]).map(r=>{let f=r.fields||{};return `<tr><td>${internalRepairCaseLink(r)}</td><td>${esc(f['Company Name']||f['Dealer Name']||'')}</td><td>${esc(f['Model No']||'')}</td><td>${esc(f['Serial No']||'')}</td><td>${new Date(Number(f['Date of Purchase / Activation date']||f['Date Of Activation']||'')).toLocaleDateString('en-GB')}</td><td>${statusCell(r,'repair')}</td><td>${linkCell(f['Log File']||f['Log for Drone and RC'])}</td><td>${linkCell(f['Upload all the required details']||f['Issue Video and Pictures'])}</td><td>${esc(f['Remarks']||'')}</td><td>${esc(f['Notes']||'')}</td><td>${esc(f['Case Close Comment']||'')}</td></tr>`}).join('')}</tbody></table></div></div>`;
 }
 function linkCell(v){if(!v)return '-'; if(typeof v==='object'&&v.link)return `<a href="${esc(v.link)}" target="_blank">Open</a>`; return `<a href="${esc(v)}" target="_blank">Open</a>`;}
 function renderDealers(){
