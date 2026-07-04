@@ -1486,36 +1486,37 @@ async function handle(req, env) {
 
     let tableId = "";
     let tableName = "";
-    let rows = [];
+    let loadRows = null;
     if (module === "internalrepair" || module === "internal-repair") {
       tableId = internalRepairTable(env, country);
       tableName = lower(country).includes("ksa") ? "Internal Repair Register - KSA" : "Internal Repair Register - UAE & Other Region";
-      rows = await listInternalRepairRows(env, country);
+      loadRows = () => listInternalRepairRows(env, country);
     } else if (module === "spareorderdetails" || module === "spare-order-details") {
       if (!flycartAdminOnly(role)) return json({ error:"Forbidden" }, 403);
       tableId = env.SPARE_ORDER_DETAILS_TABLE_ID;
       tableName = "Internal Spare Order details";
-      rows = await listSpareOrderDetailsRows(env);
+      loadRows = () => listSpareOrderDetailsRows(env);
     } else {
       return json({ error:"Unknown module" }, 400);
     }
 
     if (!tableId) return json({ error:"Module table id not configured", module, country }, 400);
 
-    // Production safety: avoid loading rows and field metadata in the same
-    // Worker invocation. The frontend calls this endpoint separately with
-    // part=rows and part=fields, keeping each request below Cloudflare's
-    // subrequest limit.
+    // Production safety: each call does only one heavy Lark operation.
+    // part=rows loads records only. part=fields loads field metadata only.
+    // This avoids Cloudflare subrequest limits for Internal Repair and
+    // Internal Spare Order Details.
     if (part === "rows") {
+      const rows = loadRows ? await loadRows() : [];
       return json({ ok:true, module, country, tableId, tableName, fields:[], rows, dealers:[], repairs:[], spares:[] });
     }
 
-    const fields = await getTableFieldsForDiagnostics(env, tableId);
     if (part === "fields") {
+      const fields = await getTableFieldsForDiagnostics(env, tableId);
       return json({ ok:true, module, country, tableId, tableName, fields, rows:[], dealers:[], repairs:[], spares:[] });
     }
 
-    return json({ ok:true, module, country, tableId, tableName, fields, rows, dealers:[], repairs:[], spares:[] });
+    return json({ error:"Missing part. Use part=rows or part=fields." }, 400);
   }
 
   if (p === "/api/save-internal-repair" && req.method === "POST") {
