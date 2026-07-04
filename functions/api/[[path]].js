@@ -690,7 +690,7 @@ async function logTableConfigs(env) {
   const tables = [];
   let pageToken = "";
   do {
-    const qs = new URLSearchParams({ page_size: "20" });
+    const qs = new URLSearchParams({ page_size: "100" });
     if (pageToken) qs.set("page_token", pageToken);
     const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables?${qs}`);
     for (const item of (data.data?.items || [])) {
@@ -706,7 +706,6 @@ async function logTableConfigs(env) {
       });
     }
     pageToken = data.data?.page_token || data.data?.pageToken || "";
-    if (data.data?.has_more === false || data.data?.hasMore === false) pageToken = "";
   } while (pageToken);
   return tables;
 }
@@ -1247,40 +1246,35 @@ async function handle(req, env) {
     const role = norm(url.searchParams.get("role"));
     if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
 
+    // Production safe mode: read ONE selected table only.
+    // Do not fetch the Lark table list here. The browser should call
+    // /api/logs-diagnostics/table-options once, then call this endpoint
+    // separately for each table_id. This avoids Cloudflare subrequest limits.
     const selected = norm(url.searchParams.get("table"));
-    const cursor = Math.max(0, Number(url.searchParams.get("cursor") || 0) || 0);
-    let chosen = [];
-    let nextCursor = null;
-    let totalTables = null;
-
-    // Production-safe path: when frontend passes a real Lark table ID, do not read the
-    // whole table list again. This keeps each Worker request to only this table's fields.
-    if (selected && selected !== "ALL" && selected.startsWith("tbl")) {
-      chosen = [{ key: selected, envKey: configuredTableKeyById(env)[selected] || "", name: selected, tableId: selected, configured: true }];
-      totalTables = 1;
-    } else {
-      const configs = await logTableConfigs(env);
-      totalTables = configs.length;
-      const picked = findDiagnosticTableConfig(configs, selected);
-      if (!selected || selected === "ALL") {
-        if (configs[cursor]) chosen = [configs[cursor]];
-        nextCursor = cursor + 1 < configs.length ? cursor + 1 : null;
-      } else if (picked) {
-        chosen = [picked];
-      }
+    if (!selected || selected === "ALL") {
+      return json({
+        ok: false,
+        generatedAt: new Date().toISOString(),
+        totalTables: null,
+        tables: [],
+        error: "Select one table. Use /api/logs-diagnostics/table-options to get table IDs, then call /api/logs-diagnostics/tables?table=<table_id>."
+      }, 400);
     }
 
-    const tables = [];
-    for (const cfg of chosen) tables.push(await buildLarkTableDiagnostic(env, cfg));
+    const cfg = {
+      key: selected,
+      envKey: "",
+      name: selected,
+      tableId: selected,
+      configured: true
+    };
+    const table = await buildLarkTableDiagnostic(env, cfg);
 
     return json({
-      ok: tables.every(t => t.permission === "OK" || t.permission === "NOT_CONFIGURED"),
+      ok: table.permission === "OK" || table.permission === "NOT_CONFIGURED",
       generatedAt: new Date().toISOString(),
-      cursor,
-      nextCursor,
-      totalTables,
-      note: nextCursor === null ? "Complete" : `More tables available. Call this endpoint again with cursor=${nextCursor}`,
-      tables
+      totalTables: 1,
+      tables: [table]
     });
   }
 
