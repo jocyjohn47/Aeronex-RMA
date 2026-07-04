@@ -48,6 +48,7 @@ function publicUser(r) {
 }
 
 async function larkToken(env) {
+  if (env.__aeronex_lark_token) return env.__aeronex_lark_token;
   const res = await fetch("https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -55,7 +56,8 @@ async function larkToken(env) {
   });
   const data = await res.json();
   if (!data.tenant_access_token) throw new Error("Lark token error: " + JSON.stringify(data));
-  return data.tenant_access_token;
+  env.__aeronex_lark_token = data.tenant_access_token;
+  return env.__aeronex_lark_token;
 }
 
 async function larkFetch(env, path, init = {}) {
@@ -797,52 +799,6 @@ function missingExpectedFields(expected, fields) {
   return (expected || []).filter(x => !existing.has(lower(x)));
 }
 
-
-async function larkTenantAccessTokenForDiagnostics(env) {
-  if (env.__DIAG_LARK_TOKEN) return env.__DIAG_LARK_TOKEN;
-  const res = await fetch("https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ app_id: env.LARK_APP_ID, app_secret: env.LARK_APP_SECRET })
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!data.tenant_access_token) throw new Error("Lark token error: " + JSON.stringify(data));
-  env.__DIAG_LARK_TOKEN = data.tenant_access_token;
-  return data.tenant_access_token;
-}
-
-async function getTableFieldsForDiagnosticsDirect(env, tableId) {
-  const token = await larkTenantAccessTokenForDiagnostics(env);
-  const all = [];
-  let pageToken = "";
-  let guard = 0;
-  do {
-    const qs = new URLSearchParams({ page_size: "20" });
-    if (pageToken) qs.set("page_token", pageToken);
-    const res = await fetch("https://open.larksuite.com/open-apis" + `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields?${qs}`, {
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json; charset=utf-8" }
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || data.code) throw new Error("Lark API error: " + JSON.stringify(data));
-    all.push(...(data.data?.items || []));
-    pageToken = data.data?.page_token || data.data?.pageToken || "";
-    if (data.data?.has_more === false || data.data?.hasMore === false) pageToken = "";
-    guard++;
-    if (guard > 20) throw new Error("Field pagination stopped after 20 pages to prevent Worker subrequest overflow");
-  } while (pageToken);
-  return all.map(f => {
-    const options = diagnosticFieldOptions(f);
-    return {
-      field_id: f.field_id || f.id || "",
-      field_name: f.field_name,
-      type: f.type,
-      is_primary: !!f.is_primary,
-      options,
-      optionCount: options.length
-    };
-  });
-}
-
 async function buildLarkTableDiagnostic(env, tableCfg) {
   const out = {
     tableName: tableCfg.name,
@@ -858,10 +814,7 @@ async function buildLarkTableDiagnostic(env, tableCfg) {
   };
   if (!tableCfg.tableId) return out;
   try {
-    // Diagnostics must be one selected table only and must not call the shared larkFetch()
-    // helper, because that helper writes error logs and can add subrequests during failures.
-    // This direct reader makes only: token request + field-page request(s).
-    const fields = await getTableFieldsForDiagnosticsDirect(env, tableCfg.tableId);
+    const fields = await getTableFieldsForDiagnostics(env, tableCfg.tableId);
     out.fields = fields;
     out.fieldCount = fields.length;
     out.missingExpectedFields = missingExpectedFields(expectedFieldsForDiagnostics(tableCfg.name), fields);
@@ -1526,6 +1479,7 @@ async function handle(req, env) {
     const role = norm(url.searchParams.get("role"));
     if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
     const module = lower(url.searchParams.get("module"));
+    const part = lower(url.searchParams.get("part") || "all");
     const requestedCountry = norm(url.searchParams.get("country") || "UAE & Other Region");
     const userCountry = norm(url.searchParams.get("userCountry") || "");
     const country = scopedModuleCountry(role, requestedCountry, userCountry);
@@ -1547,13 +1501,21 @@ async function handle(req, env) {
     }
 
     if (!tableId) return json({ error:"Module table id not configured", module, country }, 400);
+
+    // Production safety: avoid loading rows and field metadata in the same
+    // Worker invocation. The frontend calls this endpoint separately with
+    // part=rows and part=fields, keeping each request below Cloudflare's
+    // subrequest limit.
+    if (part === "rows") {
+      return json({ ok:true, module, country, tableId, tableName, fields:[], rows, dealers:[], repairs:[], spares:[] });
+    }
+
     const fields = await getTableFieldsForDiagnostics(env, tableId);
-    const dealers = env.USER_TABLE_ID ? await listRecords(env, env.USER_TABLE_ID) : [];
-    const repairs = (module === "internalrepair" || module === "internal-repair")
-      ? await listRecords(env, repairTable(env, country))
-      : [];
-    const spares = [];
-    return json({ ok:true, module, country, tableId, tableName, fields, rows, dealers, repairs, spares });
+    if (part === "fields") {
+      return json({ ok:true, module, country, tableId, tableName, fields, rows:[], dealers:[], repairs:[], spares:[] });
+    }
+
+    return json({ ok:true, module, country, tableId, tableName, fields, rows, dealers:[], repairs:[], spares:[] });
   }
 
   if (p === "/api/save-internal-repair" && req.method === "POST") {
