@@ -1249,15 +1249,25 @@ async function handle(req, env) {
 
     const selected = norm(url.searchParams.get("table"));
     const cursor = Math.max(0, Number(url.searchParams.get("cursor") || 0) || 0);
-    const configs = await logTableConfigs(env);
-    const picked = findDiagnosticTableConfig(configs, selected);
     let chosen = [];
     let nextCursor = null;
-    if (!selected || selected === "ALL") {
-      if (configs[cursor]) chosen = [configs[cursor]];
-      nextCursor = cursor + 1 < configs.length ? cursor + 1 : null;
-    } else if (picked) {
-      chosen = [picked];
+    let totalTables = null;
+
+    // Production-safe path: when frontend passes a real Lark table ID, do not read the
+    // whole table list again. This keeps each Worker request to only this table's fields.
+    if (selected && selected !== "ALL" && selected.startsWith("tbl")) {
+      chosen = [{ key: selected, envKey: configuredTableKeyById(env)[selected] || "", name: selected, tableId: selected, configured: true }];
+      totalTables = 1;
+    } else {
+      const configs = await logTableConfigs(env);
+      totalTables = configs.length;
+      const picked = findDiagnosticTableConfig(configs, selected);
+      if (!selected || selected === "ALL") {
+        if (configs[cursor]) chosen = [configs[cursor]];
+        nextCursor = cursor + 1 < configs.length ? cursor + 1 : null;
+      } else if (picked) {
+        chosen = [picked];
+      }
     }
 
     const tables = [];
@@ -1268,7 +1278,7 @@ async function handle(req, env) {
       generatedAt: new Date().toISOString(),
       cursor,
       nextCursor,
-      totalTables: configs.length,
+      totalTables,
       note: nextCursor === null ? "Complete" : `More tables available. Call this endpoint again with cursor=${nextCursor}`,
       tables
     });
