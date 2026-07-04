@@ -794,6 +794,170 @@ async function buildLarkTableDiagnostic(env, tableCfg) {
   return out;
 }
 
+
+
+function reportBackupTableConfigs(env) {
+  return {
+    users: { label:"User & Company Details", tableId:env.USER_TABLE_ID || "" },
+    spareParts: { label:"Spare Part List", tableId:env.SPARE_LIST_TABLE_ID || "" },
+    spareUae: { label:"Spare Orders - UAE & Other Region", tableId:env.ORDER_UAE_TABLE_ID || env.SPARE_ORDER_UAE_TABLE_ID || "" },
+    spareKsa: { label:"Spare Orders - KSA", tableId:env.ORDER_KSA_TABLE_ID || env.SPARE_ORDER_KSA_TABLE_ID || "" },
+    repairUae: { label:"Repair Cases - UAE & Other Region", tableId:env.REPAIR_UAE_TABLE_ID || env.REPAIR_CASE_UAE_TABLE_ID || "" },
+    repairKsa: { label:"Repair Cases - KSA", tableId:env.REPAIR_KSA_TABLE_ID || env.REPAIR_CASE_KSA_TABLE_ID || "" },
+    internalRepairUae: { label:"Internal Repair Register - UAE & Other Region", tableId:env.INTERNAL_REPAIR_UAE_TABLE_ID || "" },
+    internalRepairKsa: { label:"Internal Repair Register - KSA", tableId:env.INTERNAL_REPAIR_KSA_TABLE_ID || "" },
+    internalSpare: { label:"Internal Spare Order details", tableId:env.SPARE_ORDER_DETAILS_TABLE_ID || "" },
+    dealerRepair: { label:"Dealer Repair Case", tableId:env.DEALER_REPAIR_CASE_TABLE_ID || "" },
+    warranty: { label:"Warranty Status", tableId:env.WARRANTY_STATUS_TABLE_ID || "" },
+    software: { label:"Software Status", tableId:env.SOFTWARE_STATUS_TABLE_ID || "" },
+    flycart: { label:"Flycart Credit Use", tableId:env.FLYCART_CREDIT_USE_TABLE_ID || "" },
+    portalNotes: { label:"Portal Notes", tableId:env.PORTAL_NOTES_TABLE_ID || "" },
+    contracts: { label:"Contract & Document - Internal", tableId:env.CONTRACT_DOCUMENT_INTERNAL_TABLE_ID || env.INTERNAL_CONTRACT_DOCUMENT_TABLE_ID || env.CONTRACT_DOCUMENT_TABLE_ID || "" }
+  };
+}
+
+function reportBackupAccessAllowed(role) {
+  const r = lower(role);
+  return r.includes("admin") || r.includes("technician") || r.includes("tech");
+}
+
+function reportCellText(v) {
+  if (v === undefined || v === null) return "";
+  if (Array.isArray(v)) return v.map(reportCellText).filter(Boolean).join(", ");
+  if (typeof v === "object") {
+    if (v.link || v.url) return norm(v.text || v.name || v.link || v.url || "");
+    return norm(v.text || v.name || v.value || v.title || JSON.stringify(v));
+  }
+  return norm(v);
+}
+
+function reportEsc(v) {
+  return String(v ?? "").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+}
+
+function reportDateMs(v) {
+  const s = reportCellText(v);
+  if (!s) return null;
+  const n = Number(s);
+  if (Number.isFinite(n)) {
+    const ms = n > 1000000000000 ? n : n * 1000;
+    return Number.isFinite(ms) ? ms : null;
+  }
+  const parts = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+  if (parts) {
+    const d = new Date(Number(parts[3]), Number(parts[2]) - 1, Number(parts[1]));
+    return isNaN(d.getTime()) ? null : d.getTime();
+  }
+  const t = Date.parse(s);
+  return Number.isFinite(t) ? t : null;
+}
+
+function reportRowDateMs(fields) {
+  const names = ["Date Created","Case created","Case Created","Case Creation Date","Case Close Date","Date of Purchase / Activation date","Shipping Date","Date","Created","Created At"];
+  for (const n of names) {
+    const ms = reportDateMs(fields[n]);
+    if (ms !== null) return ms;
+  }
+  return null;
+}
+
+function reportMatchesFilters(row, filters) {
+  const f = row.fields || {};
+  const company = lower(filters.company);
+  if (company) {
+    const txt = lower(reportCellText(firstField(f, ["Company Name","Dealer Name","Customer Name","Company"])));
+    if (!txt.includes(company)) return false;
+  }
+  const status = lower(filters.status);
+  if (status) {
+    const txt = lower(reportCellText(firstField(f, ["Status","Case Status","Repair Status","DJI Repair Status","DJI Repair status"])));
+    if (!txt.includes(status)) return false;
+  }
+  const caseId = lower(filters.caseId);
+  if (caseId) {
+    const hay = lower(Object.values(f).map(reportCellText).join(" "));
+    if (!hay.includes(caseId)) return false;
+  }
+  const fromMs = filters.dateFrom ? Date.parse(filters.dateFrom + "T00:00:00") : null;
+  const toMs = filters.dateTo ? Date.parse(filters.dateTo + "T23:59:59") : null;
+  if (fromMs || toMs) {
+    const ms = reportRowDateMs(f);
+    if (ms === null) return false;
+    if (fromMs && ms < fromMs) return false;
+    if (toMs && ms > toMs) return false;
+  }
+  return true;
+}
+
+async function reportBackupRows(env, tableId, filters) {
+  const rows = await listRecords(env, tableId);
+  return rows.filter(r => reportMatchesFilters(r, filters));
+}
+
+function reportWorkbookBytes(label, rows, filters) {
+  const headers = [];
+  for (const r of rows) {
+    for (const k of Object.keys(r.fields || {})) if (!headers.includes(k)) headers.push(k);
+  }
+  const safeHeaders = headers.length ? headers : ["No data"];
+  const filterRows = [
+    ["Report", label],
+    ["Generated At", new Date().toISOString()],
+    ["Date From", filters.dateFrom || ""],
+    ["Date To", filters.dateTo || ""],
+    ["Company", filters.company || ""],
+    ["Status", filters.status || ""],
+    ["Case ID / DJI Case ID", filters.caseId || ""],
+    ["Record Count", String(rows.length)]
+  ].map(r => `<tr><th>${reportEsc(r[0])}</th><td>${reportEsc(r[1])}</td></tr>`).join("");
+  const head = safeHeaders.map(h => `<th>${reportEsc(h)}</th>`).join("");
+  const body = rows.length ? rows.map(r => `<tr>${safeHeaders.map(h => `<td>${reportEsc(reportCellText((r.fields || {})[h]))}</td>`).join("")}</tr>`).join("") : `<tr><td>No matching records</td></tr>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif}table{border-collapse:collapse;margin-bottom:18px}th,td{border:1px solid #999;padding:6px;mso-number-format:'\\@'}th{background:#d9eaf7;font-weight:bold}.meta th{background:#eef3fb;text-align:left}</style></head><body><h2>${reportEsc(label)}</h2><table class="meta">${filterRows}</table><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></body></html>`;
+}
+
+async function getBackupSettings(env) {
+  if (!env.LOGS_BUCKET) return {};
+  const obj = await env.LOGS_BUCKET.get("backup/settings.json");
+  if (!obj) return {};
+  try { return JSON.parse(await obj.text()); } catch { return {}; }
+}
+
+async function saveBackupSettings(env, settings) {
+  if (!env.LOGS_BUCKET) throw new Error("LOGS_BUCKET binding missing. Cannot save backup settings.");
+  const safe = {
+    protocol: norm(settings.protocol || "sftp"),
+    host: norm(settings.host),
+    port: norm(settings.port),
+    username: norm(settings.username),
+    remoteFolder: norm(settings.remoteFolder),
+    schedule: "04:00 daily",
+    retention: 3,
+    updatedAt: new Date().toISOString()
+  };
+  await env.LOGS_BUCKET.put("backup/settings.json", JSON.stringify(safe, null, 2), { httpMetadata: { contentType:"application/json" } });
+  return safe;
+}
+
+async function appendBackupHistory(env, entry) {
+  if (!env.LOGS_BUCKET) return;
+  const key = `backup/history/${new Date().toISOString().replace(/[:.]/g,"-")}.json`;
+  await env.LOGS_BUCKET.put(key, JSON.stringify(entry, null, 2), { httpMetadata: { contentType:"application/json" } });
+}
+
+async function listBackupHistory(env) {
+  if (!env.LOGS_BUCKET) return [];
+  const listed = await env.LOGS_BUCKET.list({ prefix:"backup/history/", limit:20 });
+  const objs = (listed.objects || []).sort((a,b)=>String(b.uploaded||"").localeCompare(String(a.uploaded||""))).slice(0,3);
+  const out = [];
+  for (const obj of objs) {
+    try {
+      const r = await env.LOGS_BUCKET.get(obj.key);
+      out.push(JSON.parse(await r.text()));
+    } catch {}
+  }
+  return out;
+}
+
 async function writeErrorLog(env, entry) {
   try {
     if (!env.LOGS_BUCKET) return { ok:false, skipped:"LOGS_BUCKET not bound" };
@@ -1781,6 +1945,108 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     if (!q || q.includes("uae")) rows.push(...(await listRecords(env, env.SPARE_ORDER_UAE_TABLE_ID)).map(r => withSpareMeta(env, env.SPARE_ORDER_UAE_TABLE_ID, r)));
     if (!q || q.includes("ksa")) rows.push(...(await listRecords(env, env.SPARE_ORDER_KSA_TABLE_ID)).map(r => withSpareMeta(env, env.SPARE_ORDER_KSA_TABLE_ID, r)));
     return new Response(spareOrdersReportBytes(rows), { headers: { "content-type":"application/vnd.ms-excel; charset=utf-8", "content-disposition":`attachment; filename="spare-orders-report.xls"` } });
+  }
+
+
+  if (p === "/api/report-backup/reports") {
+    const role = norm(url.searchParams.get("role") || req.headers.get("x-user-role"));
+    if (!reportBackupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    const cfg = reportBackupTableConfigs(env);
+    return json({ reports: Object.entries(cfg).map(([key, v]) => ({ key, label:v.label, configured:!!v.tableId })) });
+  }
+
+  if (p === "/api/report-backup/preview") {
+    const role = norm(url.searchParams.get("role") || req.headers.get("x-user-role"));
+    if (!reportBackupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    const key = norm(url.searchParams.get("report"));
+    const cfg = reportBackupTableConfigs(env)[key];
+    if (!cfg || !cfg.tableId) return json({ error:"Report/table not configured" }, 400);
+    const filters = {
+      dateFrom: norm(url.searchParams.get("dateFrom")),
+      dateTo: norm(url.searchParams.get("dateTo")),
+      company: norm(url.searchParams.get("company")),
+      status: norm(url.searchParams.get("status")),
+      caseId: norm(url.searchParams.get("caseId"))
+    };
+    const rows = await reportBackupRows(env, cfg.tableId, filters);
+    return json({ ok:true, report:key, label:cfg.label, count:rows.length });
+  }
+
+  if (p === "/api/report-backup/download") {
+    const role = norm(url.searchParams.get("role") || req.headers.get("x-user-role"));
+    if (!reportBackupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    const key = norm(url.searchParams.get("report"));
+    const cfg = reportBackupTableConfigs(env)[key];
+    if (!cfg || !cfg.tableId) return json({ error:"Report/table not configured" }, 400);
+    const filters = {
+      dateFrom: norm(url.searchParams.get("dateFrom")),
+      dateTo: norm(url.searchParams.get("dateTo")),
+      company: norm(url.searchParams.get("company")),
+      status: norm(url.searchParams.get("status")),
+      caseId: norm(url.searchParams.get("caseId"))
+    };
+    const rows = await reportBackupRows(env, cfg.tableId, filters);
+    const file = `${key}-report-${new Date().toISOString().slice(0,10)}.xls`;
+    return new Response(reportWorkbookBytes(cfg.label, rows, filters), {
+      headers: { "content-type":"application/vnd.ms-excel; charset=utf-8", "content-disposition":`attachment; filename="${file}"` }
+    });
+  }
+
+  if (p === "/api/report-backup/status") {
+    const role = norm(url.searchParams.get("role") || req.headers.get("x-user-role"));
+    if (!reportBackupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    const settings = await getBackupSettings(env);
+    const history = await listBackupHistory(env);
+    return json({
+      ok:true,
+      status: history[0]?.status || "Not configured",
+      lastBackupTime: history[0]?.date || "-",
+      backupDuration: history[0]?.duration || "-",
+      totalRecords: history[0]?.records || "-",
+      totalAttachments: history[0]?.attachments || "-",
+      backupSize: history[0]?.size || "-",
+      nasConnectionStatus: settings.host ? "Configured" : "Not configured",
+      retention: "Latest 3 successful backups",
+      settings,
+      history
+    });
+  }
+
+  if (p === "/api/report-backup/settings" && req.method === "POST") {
+    const role = norm(url.searchParams.get("role") || req.headers.get("x-user-role"));
+    if (!reportBackupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    const b = await readBody(req);
+    const saved = await saveBackupSettings(env, b || {});
+    return json({ ok:true, settings:saved });
+  }
+
+  if (p === "/api/report-backup/test-nas" && req.method === "POST") {
+    const role = norm(url.searchParams.get("role") || req.headers.get("x-user-role"));
+    if (!reportBackupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    const b = await readBody(req);
+    const protocol = lower(b.protocol || "sftp");
+    const host = norm(b.host);
+    if (!host) return json({ ok:false, status:"Failed", error:"NAS host is required" }, 400);
+    if (protocol === "webdav") {
+      const target = host.startsWith("http") ? host : `https://${host}`;
+      try {
+        const r = await fetch(target, { method:"OPTIONS" });
+        return json({ ok:r.ok, status:r.ok ? "Connected" : "Failed", protocol, httpStatus:r.status });
+      } catch (e) {
+        return json({ ok:false, status:"Failed", protocol, error:e.message || String(e) }, 200);
+      }
+    }
+    return json({ ok:true, status:"Configured", protocol, note:"Protocol saved. Live SFTP/SMB/NFS transfer requires deployment-specific connector support; this endpoint validates settings without touching working portal modules." });
+  }
+
+  if (p === "/api/report-backup/backup-now" && req.method === "POST") {
+    const role = norm(url.searchParams.get("role") || req.headers.get("x-user-role"));
+    if (!reportBackupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    const settings = await getBackupSettings(env);
+    if (!settings.host) return json({ ok:false, status:"Failed", error:"Backup settings are not configured" }, 400);
+    const entry = { date:new Date().toISOString(), status:"Queued", records:"-", attachments:"-", size:"-", destination:`${settings.protocol || "sftp"}://${settings.host}${settings.remoteFolder || ""}`, error:"Export-to-NAS worker not enabled yet" };
+    await appendBackupHistory(env, entry);
+    return json({ ok:true, ...entry });
   }
 
   if (p === "/api/update-status" && req.method === "POST") {
