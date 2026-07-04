@@ -47,7 +47,11 @@ function publicUser(r) {
   };
 }
 
+let __larkTenantToken = "";
 async function larkToken(env) {
+  // Cache token inside one Worker invocation. Without this, diagnostics can
+  // spend one extra subrequest per Lark call and hit Cloudflare's subrequest limit.
+  if (__larkTenantToken) return __larkTenantToken;
   const res = await fetch("https://open.larksuite.com/open-apis/auth/v3/tenant_access_token/internal", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -55,7 +59,8 @@ async function larkToken(env) {
   });
   const data = await res.json();
   if (!data.tenant_access_token) throw new Error("Lark token error: " + JSON.stringify(data));
-  return data.tenant_access_token;
+  __larkTenantToken = data.tenant_access_token;
+  return __larkTenantToken;
 }
 
 async function larkFetch(env, path, init = {}) {
@@ -752,7 +757,7 @@ function missingExpectedFields(expected, fields) {
   return (expected || []).filter(x => !existing.has(lower(x)));
 }
 
-async function buildLarkTableDiagnostic(env, tableCfg) {
+async function buildLarkTableDiagnostic(env, tableCfg, opts = {}) {
   const out = {
     tableName: tableCfg.name,
     envKey: tableCfg.key,
@@ -771,7 +776,7 @@ async function buildLarkTableDiagnostic(env, tableCfg) {
     out.fields = fields;
     out.fieldCount = fields.length;
     out.missingExpectedFields = missingExpectedFields(expectedFieldsForDiagnostics(tableCfg.name), fields);
-    out.recordCount = await countRecordsForDiagnostics(env, tableCfg.tableId);
+    if (opts.includeRecordCount) out.recordCount = await countRecordsForDiagnostics(env, tableCfg.tableId);
     out.permission = "OK";
   } catch (e) {
     out.permission = "ERROR";
@@ -1131,16 +1136,32 @@ async function handle(req, env) {
 
     const selected = norm(url.searchParams.get("table"));
     const configs = logTableConfigs(env);
-    const chosen = !selected || selected === "ALL"
+    const includeRecordCount = norm(url.searchParams.get("count")) === "1" || lower(url.searchParams.get("count")) === "true";
+    const allSelected = !selected || selected === "ALL";
+    let chosen = allSelected
       ? configs
       : configs.filter(x => x.key === selected || x.name === selected);
 
+    // Cloudflare limits subrequests per Worker invocation. For ALL table diagnostics,
+    // read in safe batches. Client can call again with nextCursor until done.
+    let cursor = Math.max(0, Number(url.searchParams.get("cursor") || "0") || 0);
+    let limit = Math.max(1, Math.min(3, Number(url.searchParams.get("limit") || (allSelected ? "2" : "1")) || 1));
+    const totalTables = chosen.length;
+    if (allSelected) chosen = chosen.slice(cursor, cursor + limit);
+    else { cursor = 0; limit = chosen.length || 1; }
+
     const tables = [];
-    for (const cfg of chosen) tables.push(await buildLarkTableDiagnostic(env, cfg));
+    for (const cfg of chosen) tables.push(await buildLarkTableDiagnostic(env, cfg, { includeRecordCount }));
+    const nextCursor = allSelected && cursor + chosen.length < totalTables ? cursor + chosen.length : null;
 
     return json({
       ok: tables.every(t => t.permission === "OK" || t.permission === "NOT_CONFIGURED"),
       generatedAt: new Date().toISOString(),
+      cursor,
+      nextCursor,
+      totalTables,
+      includeRecordCount,
+      note: nextCursor !== null ? "More tables available. Call this endpoint again with cursor=" + nextCursor : "Complete",
       tables
     });
   }
