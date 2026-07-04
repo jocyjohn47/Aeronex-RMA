@@ -989,6 +989,7 @@ function internalRepairFormHtml(src, isPopup){
       <div><label>Unit Consumed</label><input id="irUnitConsumed" value="${esc(f['Unit Consumed']||'')}"></div>
       <div><label>Material Consumed</label><input id="irMaterialConsumed" value="${esc(f[n.material]||'')}"></div>
       <div><label>DJI Invoice</label><input id="irDjiInvoice" value="${esc(f['DJI Invoice']||'')}"></div>
+      <div><label>Total Invoice</label><input id="irTotalInvoice" value="${esc(f['Total Invoice']||'')}"></div>
       <div><label>DJI Repair Status</label>${fieldMetaByName(meta)[n.djiStatus]?.optionCount?selectHtml(meta,'irDjiStatus',n.djiStatus,f[n.djiStatus]||''):`<input id="irDjiStatus" value="${esc(f[n.djiStatus]||'')}">`}</div>
       <div><label>Case Status</label>${selectHtml(meta,'irCaseStatus','Case Status',f['Case Status']||'')}</div>
     </div>
@@ -1050,6 +1051,7 @@ async function saveInternalRepair(){
       'Unit Consumed':val('irUnitConsumed'),
       [n.material]:val('irMaterialConsumed'),
       'DJI Invoice':val('irDjiInvoice'),
+      'Total Invoice':val('irTotalInvoice'),
       [n.djiStatus]:selectedOptionsValue('irDjiStatus')||val('irDjiStatus'),
       'Case Status':selectedOptionsValue('irCaseStatus'),
       [n.remark]:val('irRemark')
