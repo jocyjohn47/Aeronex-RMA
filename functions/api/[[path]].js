@@ -1479,44 +1479,34 @@ async function handle(req, env) {
     const role = norm(url.searchParams.get("role"));
     if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
     const module = lower(url.searchParams.get("module"));
-    const part = lower(url.searchParams.get("part") || "all");
     const requestedCountry = norm(url.searchParams.get("country") || "UAE & Other Region");
     const userCountry = norm(url.searchParams.get("userCountry") || "");
     const country = scopedModuleCountry(role, requestedCountry, userCountry);
 
     let tableId = "";
     let tableName = "";
-    let loadRows = null;
+    let rows = [];
     if (module === "internalrepair" || module === "internal-repair") {
       tableId = internalRepairTable(env, country);
       tableName = lower(country).includes("ksa") ? "Internal Repair Register - KSA" : "Internal Repair Register - UAE & Other Region";
-      loadRows = () => listInternalRepairRows(env, country);
+      rows = await listInternalRepairRows(env, country);
     } else if (module === "spareorderdetails" || module === "spare-order-details") {
       if (!flycartAdminOnly(role)) return json({ error:"Forbidden" }, 403);
       tableId = env.SPARE_ORDER_DETAILS_TABLE_ID;
       tableName = "Internal Spare Order details";
-      loadRows = () => listSpareOrderDetailsRows(env);
+      rows = await listSpareOrderDetailsRows(env);
     } else {
       return json({ error:"Unknown module" }, 400);
     }
 
     if (!tableId) return json({ error:"Module table id not configured", module, country }, 400);
-
-    // Production safety: each call does only one heavy Lark operation.
-    // part=rows loads records only. part=fields loads field metadata only.
-    // This avoids Cloudflare subrequest limits for Internal Repair and
-    // Internal Spare Order Details.
-    if (part === "rows") {
-      const rows = loadRows ? await loadRows() : [];
-      return json({ ok:true, module, country, tableId, tableName, fields:[], rows, dealers:[], repairs:[], spares:[] });
-    }
-
-    if (part === "fields") {
-      const fields = await getTableFieldsForDiagnostics(env, tableId);
-      return json({ ok:true, module, country, tableId, tableName, fields, rows:[], dealers:[], repairs:[], spares:[] });
-    }
-
-    return json({ error:"Missing part. Use part=rows or part=fields." }, 400);
+    const fields = await getTableFieldsForDiagnostics(env, tableId);
+    const dealers = env.USER_TABLE_ID ? await listRecords(env, env.USER_TABLE_ID) : [];
+    const repairs = (module === "internalrepair" || module === "internal-repair")
+      ? await listRecords(env, repairTable(env, country))
+      : [];
+    const spares = [];
+    return json({ ok:true, module, country, tableId, tableName, fields, rows, dealers, repairs, spares });
   }
 
   if (p === "/api/save-internal-repair" && req.method === "POST") {
