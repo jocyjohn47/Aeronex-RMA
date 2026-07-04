@@ -2,7 +2,7 @@ const H = {
   "content-type": "application/json; charset=utf-8",
   "access-control-allow-origin": "https://rma-spare.aeronex.ae",
   "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS",
-  "access-control-allow-headers": "content-type,x-user-role,x-user-email,x-aeronex-role,x-aeronex-reports"
+  "access-control-allow-headers": "content-type,x-user-role,x-user-email"
 };
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: H });
@@ -108,19 +108,30 @@ async function listRecords(env, tableId) {
   return rows;
 }
 
+async function listTableFields(env, tableId) {
+  if (!tableId) return [];
+  const items = [];
+  let pageToken = "";
+  do {
+    const qs = new URLSearchParams({ page_size: "100" });
+    if (pageToken) qs.set("page_token", pageToken);
+    const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields?${qs}`);
+    items.push(...(data.data?.items || []));
+    pageToken = data.data?.page_token || "";
+  } while (pageToken);
+  return items;
+}
+
 async function getFieldTypes(env, tableId) {
-  if (!tableId) return {};
-  const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields`);
   const out = {};
-  for (const f of data.data?.items || []) out[f.field_name] = f.type;
+  for (const f of await listTableFields(env, tableId)) out[f.field_name] = f.type;
   return out;
 }
 
 
 async function getFieldMetaByName(env, tableId) {
-  const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields`);
   const out = {};
-  for (const f of data.data?.items || []) out[f.field_name] = f;
+  for (const f of await listTableFields(env, tableId)) out[f.field_name] = f;
   return out;
 }
 
@@ -204,10 +215,6 @@ function normalizeLarkOptionValue(v, type) {
     return String(v).split(",").map(x => x.trim()).filter(Boolean);
   }
   if (type === 5) return toLarkDateTimeValue(v);
-  if (type === 2) {
-    const n = typeof v === "number" ? v : Number(String(v).replace(/,/g, "").trim());
-    return Number.isFinite(n) ? n : "";
-  }
   return v;
 }
 
@@ -700,12 +707,13 @@ function diagnosticFieldOptions(f) {
 }
 
 async function getTableFieldsForDiagnostics(env, tableId) {
-  const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields`);
-  return (data.data?.items || []).map(f => {
+  return (await listTableFields(env, tableId)).map(f => {
     const options = diagnosticFieldOptions(f);
     return {
+      field_id: f.field_id || "",
       field_name: f.field_name,
       type: f.type,
+      is_primary: !!f.is_primary,
       options,
       optionCount: options.length
     };
@@ -1028,50 +1036,6 @@ function flycartReportBytes(rows) {
   return new TextEncoder().encode(html);
 }
 
-
-function backupAccessAllowed(reportsValue) {
-  return lower(reportsValue) === "yes";
-}
-
-function backupReportsValue(req, url, body) {
-  return norm(
-    url.searchParams.get("reports") ||
-    req.headers.get("x-aeronex-reports") ||
-    (body && (body.reports || body.Reports)) ||
-    ""
-  );
-}
-
-function backupPermissionDenied() {
-  return json({ ok:false, error:"Permission denied: Reports must be YES." }, 403);
-}
-
-function backupSettingsFromEnv(env) {
-  return {
-    host: env.BACKUP_SFTP_HOST || "",
-    port: env.BACKUP_SFTP_PORT || "22",
-    username: env.BACKUP_SFTP_USER || "",
-    remoteFolder: env.BACKUP_SFTP_FOLDER || "/AERONEX_RMA_Backup"
-  };
-}
-
-function backupNotImplemented(message) {
-  return {
-    ok: false,
-    configured: false,
-    status: "Not configured",
-    lastBackupTime: "",
-    duration: "",
-    totalRecords: "",
-    totalAttachments: "",
-    backupSize: "",
-    nasStatus: "Not configured",
-    history: [],
-    log: "Backup backend is not fully implemented in this patch.",
-    error: message || "SFTP backup worker is not implemented yet. This patch restores the page and API endpoints without pretending backup has run."
-  };
-}
-
 async function handle(req, env) {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: H });
 
@@ -1079,36 +1043,6 @@ async function handle(req, env) {
   const p = url.pathname;
 
   if (p === "/api/health") return json({ ok: true, cloudflare_pages_functions: true });
-
-  if (p === "/api/backup-status") {
-    if (!backupAccessAllowed(backupReportsValue(req, url))) return backupPermissionDenied();
-    const settings = backupSettingsFromEnv(env);
-    const configured = !!(settings.host && settings.username && settings.remoteFolder);
-    return json({
-      ...backupNotImplemented(configured ? "Backup execution logic is not implemented yet." : "SFTP NAS settings are not configured yet."),
-      settings,
-      configured,
-      nasStatus: configured ? "Configured, not tested" : "Not configured"
-    });
-  }
-
-  if (p === "/api/backup-test-sftp" && req.method === "POST") {
-    const body = await readBody(req);
-    if (!backupAccessAllowed(backupReportsValue(req, url, body))) return backupPermissionDenied();
-    return json({ ok:false, error:"SFTP test backend is not implemented yet. Cloudflare Pages Functions need a supported SFTP/backup worker or gateway before this can make a real NAS connection." }, 501);
-  }
-
-  if (p === "/api/backup-now" && req.method === "POST") {
-    const body = await readBody(req);
-    if (!backupAccessAllowed(backupReportsValue(req, url, body))) return backupPermissionDenied();
-    return json({ ok:false, error:"Manual backup backend is not implemented yet. No backup was created and no existing backup was deleted." }, 501);
-  }
-
-  if (p === "/api/backup-settings" && req.method === "POST") {
-    const body = await readBody(req);
-    if (!backupAccessAllowed(backupReportsValue(req, url, body))) return backupPermissionDenied();
-    return json({ ok:false, error:"Persistent backup settings storage is not configured yet. Add secure environment variables or a KV/D1 settings store before saving SFTP settings." }, 501);
-  }
 
   if (p === "/api/debug-env") {
     return json({ ok: true, has: {
