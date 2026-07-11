@@ -1865,6 +1865,88 @@ Please send us an email with the Case Number for follow-up.`
   );
 }
 
+
+function piTemplateConfig(currency){
+  const c=String(currency||'USD').toUpperCase();
+  if(c==='AED') return {currency:'AED',file:'/templates/spare-order/PI_AED_Template.xlsx',sheet:'Invoice AED',date:'K3',invoice:'K4',customer:'B9',trn:'F9',address:'B10',contact:'B11',email:'B12',currencyCell:'K9',itemStart:14,itemEnd:33,codeCol:'B',modelCol:'C',qtyCol:'D',priceCol:'E'};
+  if(c==='SAR') return {currency:'SAR',file:'/templates/spare-order/PI_SAR_Template.xlsx',sheet:'Invoice SAR',date:'K3',invoice:'K4',customer:'B9',trn:'F9',address:'B10',contact:'B11',email:'B12',currencyCell:'K9',itemStart:14,itemEnd:33,codeCol:'B',modelCol:'C',qtyCol:'D',priceCol:'E'};
+  return {currency:'USD',file:'/templates/spare-order/PI_USD_Template.xlsx',sheet:'Invoice USD',date:'F3',invoice:'F4',customer:'B9',trn:'',address:'B10',contact:'B11',email:'B12',currencyCell:'F11',itemStart:14,itemEnd:33,codeCol:'C',modelCol:'B',qtyCol:'D',priceCol:'E'};
+}
+function piToday(){
+  const d=new Date();
+  return new Date(d.getFullYear(),d.getMonth(),d.getDate());
+}
+function blobToDataUrl(blob){
+  return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(r.error||new Error('Unable to read generated workbook'));r.readAsDataURL(blob)});
+}
+function safeSheetName(base,page){
+  const suffix=` - Page ${page}`;
+  return String(base||'Invoice').slice(0,31-suffix.length)+suffix;
+}
+function fillPiSheet(sheet,cfg,orderNo,orderData,items,pageIndex){
+  const pageSize=cfg.itemEnd-cfg.itemStart+1;
+  const start=pageIndex*pageSize;
+  const pageItems=items.slice(start,start+pageSize);
+  sheet.name(safeSheetName(cfg.sheet,pageIndex+1));
+  sheet.cell(cfg.date).value(piToday()).style('numberFormat','dd-mm-yyyy');
+  sheet.cell(cfg.invoice).value(orderNo);
+  sheet.cell(cfg.customer).value(orderData.companyName||'');
+  if(cfg.trn) sheet.cell(cfg.trn).value(orderData.trnNo||'');
+  sheet.cell(cfg.address).value(orderData.billingAddress||'');
+  sheet.cell(cfg.contact).value(orderData.contactName||'');
+  sheet.cell(cfg.email).value(orderData.contactEmail||'');
+  sheet.cell(cfg.currencyCell).value(cfg.currency);
+  for(let row=cfg.itemStart;row<=cfg.itemEnd;row++){
+    sheet.range(`A${row}:E${row}`).value(null);
+    const item=pageItems[row-cfg.itemStart];
+    if(!item) continue;
+    const qty=cleanPrice(item.qty||item.Qty||1)||1;
+    const unit=cleanPrice(item.unitPrice ?? item.price ?? itemUnitPrice(item,cfg.currency));
+    sheet.cell(`A${row}`).value(start+(row-cfg.itemStart)+1);
+    sheet.cell(`${cfg.codeCol}${row}`).value(item.materialCode||item['Material Code']||'');
+    sheet.cell(`${cfg.modelCol}${row}`).value(item.materialName||item['Material Name']||item.compatibleModel||item['Compatible Model']||'');
+    sheet.cell(`${cfg.qtyCol}${row}`).value(qty);
+    sheet.cell(`${cfg.priceCol}${row}`).value(unit);
+  }
+}
+async function generateAndUploadPi(orderResult,orderData,items){
+  if(!window.XlsxPopulate) throw new Error('Excel template engine is not loaded');
+  const orderNo=orderResult.orderNo;
+  const tableId=orderResult.tableId;
+  const recordId=orderResult.record_id;
+  if(!orderNo||!tableId||!recordId) throw new Error('Missing order details for PI generation');
+  const cfg=piTemplateConfig(orderData.invoiceCurrency);
+  const res=await fetch(cfg.file,{cache:'no-store'});
+  if(!res.ok) throw new Error(`PI template not found: ${cfg.file}`);
+  const workbook=await XlsxPopulate.fromDataAsync(await res.arrayBuffer());
+  const base=workbook.sheet(cfg.sheet)||workbook.sheet(0);
+  const pageSize=cfg.itemEnd-cfg.itemStart+1;
+  const pages=Math.max(1,Math.ceil(items.length/pageSize));
+  const sheets=[base];
+  for(let p=1;p<pages;p++) sheets.push(workbook.cloneSheet(base,safeSheetName(cfg.sheet,p+1)));
+  for(let p=0;p<pages;p++) fillPiSheet(sheets[p],cfg,orderNo,orderData,items,p);
+  let output=await workbook.outputAsync('arraybuffer');
+  if(window.JSZip){
+    const zip=await JSZip.loadAsync(output);
+    let contentTypes=await zip.file('[Content_Types].xml').async('string');
+    const closeTag='</Types>';
+    const sheetFiles=Object.keys(zip.files).filter(x=>/^xl\/worksheets\/sheet\d+\.xml$/.test(x));
+    for(const file of sheetFiles){
+      const part='/'+file;
+      if(!contentTypes.includes(`PartName=\"${part}\"`)){
+        contentTypes=contentTypes.replace(closeTag,`<Override PartName=\"${part}\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>${closeTag}`);
+      }
+    }
+    zip.file('[Content_Types].xml',contentTypes);
+    output=await zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  }
+  const blob=output instanceof Blob?output:new Blob([output],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const date=new Date().toISOString().slice(0,10);
+  const fileName=`${orderNo}_${date}.xlsx`;
+  const data=await blobToDataUrl(blob);
+  return api('/api/upload-generated-order-xlsx',{method:'POST',body:JSON.stringify({tableId,record_id:recordId,orderNo,file:{name:fileName,type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',data}})});
+}
+
 async function submitOrder(){
   if(SPARE_SUBMITTING) return;
   SPARE_SUBMITTING = true;
@@ -1876,9 +1958,9 @@ async function submitOrder(){
       const unit = itemUnitPrice(x, currency);
       return {...x, selectedCurrency:currency, unitPrice:unit, totalPrice:unit*qty, price:unit};
     });
-    let p={companyName:($('spareCompany')?.value||uf('Company Name','AERO NEX')),contactName:($('spareContact')?.value||uf('Contact Person','')),billingAddress:($('spareAddress')?.value||dealerAddress()),invoiceCurrency:currency,country:($('spareCountry')?.value||selectedCountry()),items:pricedItems,remarks:(($('spareNotes')&&$('spareNotes').value)||'').trim()};
+    let p={companyName:($('spareCompany')?.value||uf('Company Name','AERO NEX')),contactName:($('spareContact')?.value||uf('Contact Person','')),contactEmail:userEmail(),trnNo:uf('TRN NO','')||dealerTrn(),billingAddress:($('spareAddress')?.value||dealerAddress()),invoiceCurrency:currency,country:($('spareCountry')?.value||selectedCountry()),items:pricedItems,remarks:(($('spareNotes')&&$('spareNotes').value)||'').trim()};
     let d=await api('/api/submit-spare',{method:'POST',body:JSON.stringify(p)});
-    msg('orderMsg','Order submitted with Excel file: '+d.orderNo,true);
+    try{await generateAndUploadPi(d,p,pricedItems);msg('orderMsg','Order submitted with PI Excel file: '+d.orderNo,true)}catch(piErr){console.error('PI generation failed',piErr);msg('orderMsg','Order submitted, but PI Excel generation failed: '+(piErr.message||piErr),false)}
     submitSuccessPopup('Spare Order', d.orderNo);
     S.cart=[];
     drawCart();
