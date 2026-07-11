@@ -1789,20 +1789,9 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     let no = spareOrderNo(savedFields) || fallbackNo;
     no = assertValidSpareOrderNo(no);
 
-    // Step 3: generate Excel using the same final Lark order number and the original item list.
-    const finalFields = { ...fields, ...savedFields, "Spare Order Case": no, "Spare Order No": no };
-    const excelFileName = `${no}.xls`;
-    const excelData = htmlExcelBytes(no, finalFields, items);
-    const fileUrl = await putR2(env, getOrderFolderKey(no, "order.xls"), excelData, "application/vnd.ms-excel");
-
-    // Step 4: update Lark row with the same Order File and URL remark.
-    let orderFileUpload = null;
-    try {
-      orderFileUpload = await attachOrderExcelToLark(env, tableId, recordId, excelData, excelFileName);
-    } catch (e) {
-      orderFileUpload = { ok: false, error: e.message || String(e) };
-    }
-
+    // Step 3: do not generate the legacy HTML-based .xls file here.
+    // The browser creates the real template-based .xlsx and uploads it through
+    // /api/upload-generated-order-xlsx after this request succeeds.
     const updateFields = {};
 // Only update order number fields if they are writable. Formula/autonumber fields may ignore or reject; errors are non-fatal.
     if (fieldTypes["Spare Order Case"]) updateFields["Spare Order Case"] = no;
@@ -1811,7 +1800,7 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
       try { await updateRecord(env, tableId, recordId, updateFields); } catch (_) {}
     }
 
-    return json({ ok: true, orderNo: no, tableId, record_id: recordId, r2ExcelUrl: fileUrl, r2OrderFileUrl: fileUrl, orderFileUpload, result: result.data });
+    return json({ ok: true, orderNo: no, tableId, record_id: recordId, piGenerationRequired: true, result: result.data });
   }
 
   if ((p === "/api/create-repair" || p === "/api/repair-case") && req.method === "POST") {
@@ -2149,22 +2138,11 @@ if (p === "/api/download-order-excel") {
       "content-disposition": `attachment; filename="${xlsxName}"`
     }});
 
-    const oldKey = getOrderFolderKey(no, "order.xls");
-    const oldName = `${no}_${date}.xls`;
-    if (env.R2?.get) {
-      const oldObj = await env.R2.get(oldKey);
-      if (oldObj) return new Response(oldObj.body, { headers:{
-        "content-type": oldObj.httpMetadata?.contentType || "application/vnd.ms-excel",
-        "content-disposition": `attachment; filename="${oldName}"`
-      }});
-    }
-    const oldUrl = `${String(env.R2_PUBLIC_URL || "").replace(/\/+$/, "")}/${oldKey}`;
-    const oldRes = await fetch(oldUrl);
-    if (!oldRes.ok) return json({ error:"Order Excel file not found" }, 404);
-    return new Response(oldRes.body, { headers:{
-      "content-type": oldRes.headers.get("content-type") || "application/vnd.ms-excel",
-      "content-disposition": `attachment; filename="${oldName}"`
-    }});
+    return json({
+      error: "PI Excel file not generated yet",
+      orderNo: no,
+      expectedFile: xlsxName
+    }, 404);
   }
 
 
