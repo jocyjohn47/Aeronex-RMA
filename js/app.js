@@ -2162,32 +2162,6 @@ async function saveSpareOrderInternal(i){
     openSpareOrderDetails(i);
   }catch(e){msg('soDetailMsg',e.message)}
 }
-async function uploadSpareOrderDealerCn(i){
-  if(i===undefined || i===null || i<0) i=currentSpareOrderDetailIndex;
-  const r = (Array.isArray(S.orders) ? S.orders : [])[i];
-  const inp=$('soDealerCnFile');
-  const file=inp&&inp.files&&inp.files[0];
-  if(!r || !file) return msg('soDetailMsg','Select Dealer CN file');
-  try{
-    const data=await new Promise(resolve=>{
-      const reader=new FileReader();
-      reader.onload=()=>resolve(reader.result);
-      reader.onerror=()=>resolve(null);
-      reader.readAsDataURL(file);
-    });
-    await api('/api/upload-dealer-cn',{method:'POST',body:JSON.stringify({
-      tableId:r._table_id||r.tableId||r.table_id||'',
-      record_id:r.record_id,
-      orderNo:orderNoValue(r.fields||{}),
-      role:S.user.role||'',
-      file:{name:file.name,type:file.type||'application/octet-stream',data}
-    })});
-    msg('soDetailMsg','Dealer CN uploaded');
-    await loadOrders();
-    openSpareOrderDetails(i);
-  }catch(e){msg('soDetailMsg',e.message)}
-}
-
 function renderOrders(){
   let e=$('orderRows');
   if(!e)return;
