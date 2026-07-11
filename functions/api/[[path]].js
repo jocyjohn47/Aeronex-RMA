@@ -2103,7 +2103,8 @@ if (p === "/api/upload-generated-order-xlsx" && req.method === "POST") {
     const tableId = norm(b.tableId);
     const recordId = norm(b.record_id);
     if (!tableId || !recordId || !b.file?.data) return json({ error: "Missing tableId, record_id or file" }, 400);
-    if (![env.ORDER_UAE_TABLE_ID, env.ORDER_KSA_TABLE_ID].filter(Boolean).includes(tableId)) return json({ error: "Invalid spare order table" }, 403);
+    const allowedSpareOrderTables = [env.SPARE_ORDER_UAE_TABLE_ID, env.SPARE_ORDER_KSA_TABLE_ID, env.ORDER_UAE_TABLE_ID, env.ORDER_KSA_TABLE_ID].filter(Boolean);
+    if (!allowedSpareOrderTables.includes(tableId)) return json({ error: "Invalid spare order table" }, 403);
     const rec = await getRecord(env, tableId, recordId);
     const no = assertValidSpareOrderNo(spareOrderNo(rec.fields || {}) || b.orderNo);
     const bytes = bytesFromDataUrl(b.file.data);
