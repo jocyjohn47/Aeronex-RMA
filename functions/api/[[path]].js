@@ -559,11 +559,11 @@ async function larkUploadBitableAttachment(env, bytes, fileName, mimeType) {
   return fileToken;
 }
 
-async function attachOrderExcelToLark(env, tableId, recordId, bytes, fileName) {
+async function attachOrderExcelToLark(env, tableId, recordId, bytes, fileName, mimeType = "application/vnd.ms-excel") {
   if (!recordId) throw new Error("Missing record_id for Order File attachment");
   const fieldTypes = await getFieldTypes(env, tableId);
   if (!fieldTypes["Order File"]) return { skipped: true, reason: "Order File field not found" };
-  const fileToken = await larkUploadBitableAttachment(env, bytes, fileName, "application/vnd.ms-excel");
+  const fileToken = await larkUploadBitableAttachment(env, bytes, fileName, mimeType);
   await updateRecord(env, tableId, recordId, { "Order File": larkAttachmentValue(fileToken, fileName) });
   return { ok: true, fileToken };
 }
@@ -1811,7 +1811,7 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
       try { await updateRecord(env, tableId, recordId, updateFields); } catch (_) {}
     }
 
-    return json({ ok: true, orderNo: no, r2ExcelUrl: fileUrl, r2OrderFileUrl: fileUrl, orderFileUpload, result: result.data });
+    return json({ ok: true, orderNo: no, tableId, record_id: recordId, r2ExcelUrl: fileUrl, r2OrderFileUrl: fileUrl, orderFileUpload, result: result.data });
   }
 
   if ((p === "/api/create-repair" || p === "/api/repair-case") && req.method === "POST") {
@@ -2109,6 +2109,22 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     await deleteRecord(env, b.tableId, b.record_id);
     return json({ ok: true });
   }
+if (p === "/api/upload-generated-order-xlsx" && req.method === "POST") {
+    const b = await readBody(req);
+    const tableId = norm(b.tableId);
+    const recordId = norm(b.record_id);
+    if (!tableId || !recordId || !b.file?.data) return json({ error: "Missing tableId, record_id or file" }, 400);
+    if (![env.ORDER_UAE_TABLE_ID, env.ORDER_KSA_TABLE_ID].filter(Boolean).includes(tableId)) return json({ error: "Invalid spare order table" }, 403);
+    const rec = await getRecord(env, tableId, recordId);
+    const no = assertValidSpareOrderNo(spareOrderNo(rec.fields || {}) || b.orderNo);
+    const bytes = bytesFromDataUrl(b.file.data);
+    const fileName = norm(b.file.name) || `${no}.xlsx`;
+    const mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    const fileUrl = await putR2(env, getOrderFolderKey(no, "order.xlsx"), bytes, mime);
+    const orderFileUpload = await attachOrderExcelToLark(env, tableId, recordId, bytes, fileName, mime);
+    return json({ ok: true, orderNo: no, fileUrl, orderFileUpload });
+  }
+
 if (p === "/api/download-order-excel") {
     const tableId = norm(url.searchParams.get("tableId"));
     const recordId = norm(url.searchParams.get("record_id"));
@@ -2116,22 +2132,38 @@ if (p === "/api/download-order-excel") {
     const fields = rec.fields || {};
     const no = spareOrderNo(fields) || norm(url.searchParams.get("orderNo"));
     if (!no) return json({ error: "Missing order number" }, 400);
-    const key = getOrderFolderKey(no, "order.xls");
     const date = new Date().toISOString().slice(0,10);
-    const filename = `${no}_${date}.xls`;
+    const xlsxKey = getOrderFolderKey(no, "order.xlsx");
+    const xlsxName = `${no}_${date}.xlsx`;
     if (env.R2?.get) {
-      const obj = await env.R2.get(key);
-      if (obj) return new Response(obj.body, { headers:{
-        "content-type": obj.httpMetadata?.contentType || "application/vnd.ms-excel",
-        "content-disposition": `attachment; filename="${filename}"`
+      const xlsxObj = await env.R2.get(xlsxKey);
+      if (xlsxObj) return new Response(xlsxObj.body, { headers:{
+        "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "content-disposition": `attachment; filename="${xlsxName}"`
       }});
     }
-    const fileUrl = `${String(env.R2_PUBLIC_URL || "").replace(/\/+$/, "")}/${key}`;
-    const res = await fetch(fileUrl);
-    if (!res.ok) return json({ error:"Order Excel file not found" }, 404);
-    return new Response(res.body, { headers:{
-      "content-type": res.headers.get("content-type") || "application/vnd.ms-excel",
-      "content-disposition": `attachment; filename="${filename}"`
+    const xlsxUrl = `${String(env.R2_PUBLIC_URL || "").replace(/\/+$/, "")}/${xlsxKey}`;
+    const xlsxRes = await fetch(xlsxUrl);
+    if (xlsxRes.ok) return new Response(xlsxRes.body, { headers:{
+      "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "content-disposition": `attachment; filename="${xlsxName}"`
+    }});
+
+    const oldKey = getOrderFolderKey(no, "order.xls");
+    const oldName = `${no}_${date}.xls`;
+    if (env.R2?.get) {
+      const oldObj = await env.R2.get(oldKey);
+      if (oldObj) return new Response(oldObj.body, { headers:{
+        "content-type": oldObj.httpMetadata?.contentType || "application/vnd.ms-excel",
+        "content-disposition": `attachment; filename="${oldName}"`
+      }});
+    }
+    const oldUrl = `${String(env.R2_PUBLIC_URL || "").replace(/\/+$/, "")}/${oldKey}`;
+    const oldRes = await fetch(oldUrl);
+    if (!oldRes.ok) return json({ error:"Order Excel file not found" }, 404);
+    return new Response(oldRes.body, { headers:{
+      "content-type": oldRes.headers.get("content-type") || "application/vnd.ms-excel",
+      "content-disposition": `attachment; filename="${oldName}"`
     }});
   }
 
