@@ -6,12 +6,17 @@
 <link rel="icon" type="image/png" href="img/dji_aeronex_logo.png">
 <link rel="stylesheet" href="css/style.css">
 <style>
+.login-logo-wrap{text-align:center;margin-bottom:22px}
+.login-logo-subtitle{margin-top:10px;font-size:24px;font-weight:500;color:#2b3d6e}
 .login-logo-img{width:360px;max-width:88%;height:auto;display:block;margin:0 auto 22px auto}
 </style>
 </head>
 <body class="login-wrap">
 <div class="login-card">
-<img class="login-logo-img" src="img/dji_aeronex_logo.png" alt="DJI AERONEX">
+<div class="login-logo-wrap">
+    <img class="login-logo-img" src="img/dji_aeronex_logo.png" alt="DJI AERONEX">
+    <div class="login-logo-subtitle">RMA &amp; Spare Portal</div>
+</div>
 <input id="u" placeholder="Username / Email">
 <input id="p" type="password" placeholder="Password">
 <button onclick="login()">Login</button>
