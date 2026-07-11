@@ -1238,7 +1238,8 @@ function flycartFields(){
     'Spare PI amount',
     'DJI Order Cost',
     'Dealer Name',
-    'DJI Case No'
+    'DJI Case No',
+    'Dealer Credit Note Upload'
   ];
 }
 
@@ -1281,7 +1282,7 @@ function renderFlycartCredit(){
       <tbody>
         ${rows.map((r,i)=>{
           const f=r.fields||{};
-          return `<tr>${fields.map(k=>`<td>${esc(flycartValue(f[k]))}</td>`).join('')}<td><button class="btn-light" onclick="editFlycartCredit(${i})">Edit</button></td></tr>`;
+          return `<tr>${fields.map(k=>`<td>${k==='Dealer Credit Note Upload'?spareOrderDisplayCell(f[k]):esc(flycartValue(f[k]))}</td>`).join('')}<td><button class="btn-light" onclick="editFlycartCredit(${i})">Edit</button></td></tr>`;
         }).join('') || `<tr><td colspan="${fields.length+1}">No records found. Check FLYCART_CREDIT_USE_TABLE_ID binding.</td></tr>`}
       </tbody>
     </table></div>
@@ -1300,7 +1301,7 @@ function flycartEditorHtml(row){
     <h3>${row?.record_id ? 'Edit Flycart Credit Record' : 'Add Flycart Credit Record'}</h3>
     <input id="flycartRecordId" type="hidden" value="${esc(row?.record_id||'')}">
     <div class="grid3">
-      ${fields.map(k=>`<div><label>${esc(k)}</label><input id="${flycartInputId(k)}" value="${esc(flycartValue(f[k]))}"></div>`).join('')}
+      ${fields.map(k=>k==='Dealer Credit Note Upload'?`<div><label>${esc(k)}</label><input id="flycartCreditNoteFile" type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls"><div>${spareOrderDisplayCell(f[k])}</div></div>`:`<div><label>${esc(k)}</label><input id="${flycartInputId(k)}" value="${esc(flycartValue(f[k]))}"></div>`).join('')}
     </div>
     <div class="row">
       <button onclick="saveFlycartCredit()">Save to Lark</button>
@@ -1324,6 +1325,7 @@ async function saveFlycartCredit(){
   try{
     const fields = {};
     for(const k of flycartFields()){
+      if(k==='Dealer Credit Note Upload') continue;
       fields[k] = ($(flycartInputId(k))?.value || '').trim();
     }
     const record_id = $('flycartRecordId')?.value || '';
@@ -1335,7 +1337,13 @@ async function saveFlycartCredit(){
         fields
       })
     });
-    msg('flycartMsg', d.skipped?.length ? 'Saved. Skipped non-editable fields: '+d.skipped.join(', ') : 'Saved');
+    const creditFile=$('flycartCreditNoteFile')?.files?.[0];
+    const savedId=d.record_id||record_id;
+    if(creditFile && savedId){
+      const data=await fileToDataUrl(creditFile);
+      await api('/api/flycart-credit-use/upload-credit-note',{method:'POST',body:JSON.stringify({role:S.user.role||'',record_id:savedId,file:{name:creditFile.name,type:creditFile.type,data}})});
+    }
+    msg('flycartMsg', creditFile ? 'Saved and credit note uploaded' : 'Saved');
     await loadFlycartCredit();
     renderFlycartCredit();
   }catch(e){
@@ -1641,11 +1649,18 @@ function dealerAddress(){
 function allowedInvoiceCurrencies(){
   return selectedCountry().includes('KSA') ? ['USD','SAR'] : ['USD','AED'];
 }
+function defaultInvoiceCurrency(){
+  const dealer = selectedOnBehalfDealerFields('spare');
+  const preferred = String((dealer && dealer['Invoice Currency']) || uf('Invoice Currency','') || '').toUpperCase();
+  const allowed = allowedInvoiceCurrencies();
+  if(allowed.includes(preferred)) return preferred;
+  return selectedCountry().includes('KSA') ? 'SAR' : 'AED';
+}
 function selectedInvoiceCurrency(){
   const el = document.getElementById('invoiceCurrency');
   const allowed = allowedInvoiceCurrencies();
-  const cur = (el && el.value) || allowed[0] || 'USD';
-  return allowed.includes(cur) ? cur : (allowed[0] || 'USD');
+  const cur = (el && el.value) || defaultInvoiceCurrency();
+  return allowed.includes(cur) ? cur : defaultInvoiceCurrency();
 }
 function currencyOptions(){
   const cur = selectedInvoiceCurrency();
@@ -1741,12 +1756,19 @@ function applyDealerToSpareForm(){
     if($('spareContact')) $('spareContact').value = uf('Contact Person','');
     if($('spareAddress')) $('spareAddress').value = dealerAddress();
     if($('spareCountry')) $('spareCountry').value = selectedCountry();
+    if($('invoiceCurrency')) $('invoiceCurrency').value = defaultInvoiceCurrency();
+    drawCart();
     return;
   }
   if($('spareCompany')) $('spareCompany').value = f['Company Name'] || '';
   if($('spareContact')) $('spareContact').value = f['Contact Person'] || '';
   if($('spareAddress')) $('spareAddress').value = dealerAddressFromFields(f);
   if($('spareCountry')) $('spareCountry').value = normalizeCountryValue(f.Country || selectedCountry());
+  if($('invoiceCurrency')) {
+    const v=String(f['Invoice Currency']||'').toUpperCase();
+    $('invoiceCurrency').value = allowedInvoiceCurrencies().includes(v) ? v : defaultInvoiceCurrency();
+  }
+  drawCart();
 }
 
 function applyDealerToRepairForm(){
@@ -1846,7 +1868,7 @@ async function submitOrder(){
       const unit = itemUnitPrice(x, currency);
       return {...x, selectedCurrency:currency, unitPrice:unit, totalPrice:unit*qty, price:unit};
     });
-    let p={companyName:($('spareCompany')?.value||uf('Company Name','AERO NEX')),contactName:($('spareContact')?.value||uf('Contact Person','')),billingAddress:($('spareAddress')?.value||dealerAddress()),invoiceCurrency:currency,country:($('spareCountry')?.value||selectedCountry()),items:pricedItems,remarks:(($('spareNotes')&&$('spareNotes').value)||'').trim()};
+    let p={companyName:($('spareCompany')?.value||uf('Company Name','AERO NEX')),contactName:($('spareContact')?.value||uf('Contact Person','')),billingAddress:($('spareAddress')?.value||dealerAddress()),contactEmail:(selectedOnBehalfDealerFields('spare')?.['Username ( Email )']||uf('Username ( Email )',S.user.email||'')),trnNo:(selectedOnBehalfDealerFields('spare')?.['TRN NO']||uf('TRN NO','')),invoiceCurrency:currency,country:($('spareCountry')?.value||selectedCountry()),items:pricedItems,remarks:(($('spareNotes')&&$('spareNotes').value)||'').trim()};
     let d=await api('/api/submit-spare',{method:'POST',body:JSON.stringify(p)});
     msg('orderMsg','Order submitted with Excel file: '+d.orderNo,true);
     submitSuccessPopup('Spare Order', d.orderNo);
@@ -2074,7 +2096,6 @@ function openSpareOrderDetails(i){
     ${kv('Contact Name', f['Contact Name'] || '-')}
     ${kv('Billing / Invoice Address', f['Billing Address'] || f['Invoice Address'] || '-')}
     ${kvHtml('Order File', backendOrderDownloadLink(r))}
-    ${kvHtml('Dealer CN', spareOrderDealerCnCell(f))}
     ${kv('Shipment Destination', spareOrderDestinationValue(f) || '-')}
     ${kv('Shipment Tracking No', spareOrderTrackingValue(f) || '-')}
     ${kv('Specialized', spareOrderSpecializedValue(f) || '-')}
@@ -2098,9 +2119,9 @@ function openSpareOrderDetails(i){
       </div>
       <div class="grid3">
         <div><label>Invoice Amount</label><input id="soInvoiceAmount" value="${esc(f['Invoice Amount']||'')}"></div>
+        <div><label>Dealer Credit No</label><input id="soDealerCreditNo" value="${esc(f['Dealer Credit No']||'')}"></div>
         <div><label>Shipment Cost ( AED )</label><input id="soShipmentCostAed" value="${esc(f['Shipment Cost ( AED )']||'')}"></div>
         <div><label>DJI Case No</label><input id="soDjiCaseNo" value="${esc(spareOrderDjiCaseValue(f)||'')}"></div>
-        <div><label>Dealer CN Upload</label><input id="soDealerCnFile" type="file" onchange="uploadSpareOrderDealerCn(currentSpareOrderDetailIndex)"></div>
       </div>
       <label>Final Notes</label><textarea id="soFinalNotes" style="min-height:90px">${esc(spareOrderFinalNotesValue(f)||'')}</textarea>
       <div class="row"><button onclick="saveSpareOrderInternal(${i})">Save Details</button></div>
@@ -2131,6 +2152,7 @@ async function saveSpareOrderInternal(i){
       spareSource:($('soSpareSource')?.value||'').trim(),
       finalNotes:($('soFinalNotes')?.value||'').trim(),
       invoiceAmount:($('soInvoiceAmount')?.value||'').trim(),
+      dealerCreditNo:($('soDealerCreditNo')?.value||'').trim(),
       shipmentCostAed:($('soShipmentCostAed')?.value||'').trim(),
       djiCaseNo:($('soDjiCaseNo')?.value||'').trim()
     };
