@@ -1,6 +1,7 @@
 {
-  "name": "aeronex-rma",
+  "name": "aeronex-rma-portal",
   "private": true,
+  "version": "1.0.0",
   "dependencies": {
     "fflate": "^0.8.2"
   }
