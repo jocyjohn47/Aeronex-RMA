@@ -1,5 +1,3 @@
-import { unzipSync, zipSync, strFromU8, strToU8 } from "fflate";
-
 const H = {
   "content-type": "application/json; charset=utf-8",
   "access-control-allow-origin": "https://rma-spare.aeronex.ae",
@@ -294,7 +292,7 @@ function orderFileUrl(env, row) {
   const m = text.match(/Order File URL:\s*(https?:\/\/\S+)/i);
   if (m) return m[1];
   const no = orderNo(f);
-  return no ? `${String(env.R2_PUBLIC_URL || "").replace(/\/+$/, "")}/${getOrderFolderKey(no, "order.xlsx")}` : "";
+  return no ? `${String(env.R2_PUBLIC_URL || "").replace(/\/+$/, "")}/${getOrderFolderKey(no, "order.xls")}` : "";
 }
 
 function withSpareMeta(env, tableId, row) {
@@ -486,52 +484,6 @@ function spareOrderNo(fields) {
 function getOrderFolderKey(orderNo, fileName) {
   const no = assertValidSpareOrderNo(orderNo);
   return `aeronex-orders/${no}/${fileName}`;
-}
-
-
-function xlsxEscape(v) { return String(v ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
-function xlsxColNo(ref) { const m=String(ref).match(/^([A-Z]+)/i); let n=0; for(const ch of (m?.[1]||"").toUpperCase()) n=n*26+(ch.charCodeAt(0)-64); return n; }
-function xlsxSetCell(xml, ref, value, numeric=false) {
-  const rowNo=Number(String(ref).match(/\d+/)?.[0]||0);
-  const rowRe=new RegExp(`<row([^>]*)\\br="${rowNo}"([^>]*)>([\\s\\S]*?)<\\/row>`);
-  const rm=xml.match(rowRe); if(!rm) return xml;
-  let body=rm[3]; const cellRe=new RegExp(`<c([^>]*)\\br="${ref}"([^>]*?)(?:\\/>|>[\\s\\S]*?<\\/c>)`); const cm=body.match(cellRe);
-  let style=""; if(cm){ const sm=(cm[0].match(/\\bs="(\\d+)"/)||[])[1]; if(sm) style=` s="${sm}"`; }
-  const cell=numeric ? `<c r="${ref}"${style}><v>${Number(value)||0}</v></c>` : `<c r="${ref}"${style} t="inlineStr"><is><t xml:space="preserve">${xlsxEscape(value)}</t></is></c>`;
-  if(cm) body=body.replace(cellRe,cell); else { const target=xlsxColNo(ref); let inserted=false; body=body.replace(/<c[^>]*\br="([A-Z]+\d+)"[^>]*?(?:\/>|>[\s\S]*?<\/c>)/g,(whole,r)=>{if(!inserted&&xlsxColNo(r)>target){inserted=true;return cell+whole;}return whole;}); if(!inserted) body+=cell; }
-  return xml.replace(rowRe,`<row${rm[1]} r="${rowNo}"${rm[2]}>${body}</row>`);
-}
-function xlsxDateText(d=new Date()) { const pad=n=>String(n).padStart(2,"0"); return `${pad(d.getUTCDate())}-${pad(d.getUTCMonth()+1)}-${d.getUTCFullYear()}`; }
-function xlsxSafeSheetName(v){return String(v||"Invoice").replace(/[\\\/?*\[\]:]/g," ").slice(0,31);}
-function xlsxTemplateConfig(currency){
-  const c=String(currency||"USD").toUpperCase();
-  if(c==="AED") return {file:"PI_AED_Template.xlsx",base:"Invoice AED",date:"K3",invoice:"K4",customer:"B9",trn:"H9",address:"B10",contact:"B11",email:"B12",currency:"K9",start:14,rows:20,code:"B",model:"C",qty:"D",price:"E"};
-  if(c==="SAR") return {file:"PI_SAR_Template.xlsx",base:"Invoice SAR",date:"K3",invoice:"K4",customer:"B9",trn:"H9",address:"B10",contact:"B11",email:"B12",currency:"K9",start:14,rows:20,code:"B",model:"C",qty:"D",price:"E"};
-  return {file:"PI_USD_Template.xlsx",base:"Invoice USD",date:"F3",invoice:"F4",customer:"B9",trn:null,address:"B10",contact:"B11",email:"B12",currency:"F11",start:14,rows:20,code:"C",model:"B",qty:"D",price:"E"};
-}
-function xlsxRelationshipId(xml){const ids=[...String(xml).matchAll(/Id="rId(\d+)"/g)].map(m=>Number(m[1]));return `rId${Math.max(0,...ids)+1}`;}
-function decodeHtml(v){return String(v||"").replace(/<[^>]+>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/\s+/g," ").trim();}
-function parseLegacyOrderItems(html){
-  const rows=[...String(html||"").matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)]; const out=[];
-  for(const r of rows){const cells=[...r[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map(x=>decodeHtml(x[1])); if(cells.length<7||!/^\d+$/.test(cells[0])) continue; out.push({materialCode:cells[1],materialName:cells[2],compatibleModel:cells[3],qty:Number(cells[4])||1,unitPrice:Number(cells[5])||0});}
-  return out;
-}
-async function generateSpareOrderTemplateXlsx(req, env, orderNo, fields, items){
-  const currency=norm(fields["Invoice Currency"]||"USD").toUpperCase(); const cfg=xlsxTemplateConfig(currency);
-  if(!env.ASSETS) throw new Error("Cloudflare ASSETS binding is required to load invoice templates");
-  const templateRes=await env.ASSETS.fetch(new Request(new URL(`/templates/spare-order/${cfg.file}`,req.url)));
-  if(!templateRes.ok) throw new Error(`Invoice template not found: ${cfg.file}`);
-  const files=unzipSync(new Uint8Array(await templateRes.arrayBuffer())); const dec=u=>strFromU8(u), enc=v=>strToU8(v);
-  const originalSheet=dec(files["xl/worksheets/sheet1.xml"]); let workbook=dec(files["xl/workbook.xml"]), rels=dec(files["xl/_rels/workbook.xml.rels"]), types=dec(files["[Content_Types].xml"]);
-  const count=Math.max(1,Math.ceil((items||[]).length/cfg.rows)); workbook=workbook.replace(/<sheets>[\s\S]*?<\/sheets>/,"<sheets></sheets>"); const generated=[];
-  for(let p=0;p<count;p++){
-    let sheet=originalSheet; const vals={customer:fields["Company Name"]||"",address:fields["Billing Address"]||fields["Invoice Address"]||"",contact:fields["Contact Name"]||fields["Contact Person"]||"",email:fields["Contact Email"]||fields["Username ( Email )"]||"",trn:fields["TRN NO"]||""};
-    sheet=xlsxSetCell(sheet,cfg.date,xlsxDateText()); sheet=xlsxSetCell(sheet,cfg.invoice,orderNo); sheet=xlsxSetCell(sheet,cfg.customer,vals.customer); sheet=xlsxSetCell(sheet,cfg.address,vals.address); sheet=xlsxSetCell(sheet,cfg.contact,vals.contact); sheet=xlsxSetCell(sheet,cfg.email,vals.email); if(cfg.trn) sheet=xlsxSetCell(sheet,cfg.trn,vals.trn); sheet=xlsxSetCell(sheet,cfg.currency,currency);
-    for(let i=0;i<cfg.rows;i++){const row=cfg.start+i,item=(items||[])[p*cfg.rows+i]; sheet=xlsxSetCell(sheet,`A${row}`,item?p*cfg.rows+i+1:"",!!item); sheet=xlsxSetCell(sheet,`${cfg.code}${row}`,item?(item.materialCode||item["Material Code"]||""):""); sheet=xlsxSetCell(sheet,`${cfg.model}${row}`,item?(item.materialName||item["Material Name"]||item.compatibleModel||""):""); sheet=xlsxSetCell(sheet,`${cfg.qty}${row}`,item?(backendCleanPrice(item.qty||item.Qty||1)||1):"",!!item); sheet=xlsxSetCell(sheet,`${cfg.price}${row}`,item?(item.unitPrice??backendItemUnitPrice(item,currency)):"",!!item);}
-    const n=p+1,path=`xl/worksheets/sheet${n}.xml`; files[path]=enc(sheet); generated.push(path); if(n>1&&files["xl/worksheets/_rels/sheet1.xml.rels"]) files[`xl/worksheets/_rels/sheet${n}.xml.rels`]=files["xl/worksheets/_rels/sheet1.xml.rels"];
-    const rid=xlsxRelationshipId(rels); rels=rels.replace("</Relationships>",`<Relationship Id="${rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${n}.xml"/></Relationships>`); const name=xlsxSafeSheetName(count===1?cfg.base:`${cfg.base} - Page ${n}`); workbook=workbook.replace("</sheets>",`<sheet name="${xlsxEscape(name)}" sheetId="${n}" r:id="${rid}"/></sheets>`); if(n>1) types=types.replace("</Types>",`<Override PartName="/xl/worksheets/sheet${n}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`);
-  }
-  for(const k of Object.keys(files)) if(/^xl\/worksheets\/sheet\d+\.xml$/.test(k)&&!generated.includes(k)) delete files[k]; files["xl/workbook.xml"]=enc(workbook); files["xl/_rels/workbook.xml.rels"]=enc(rels); files["[Content_Types].xml"]=enc(types); return zipSync(files,{level:6});
 }
 
 function htmlExcelBytes(orderNo, fields, items) {
@@ -1242,8 +1194,7 @@ const FLYCART_CREDIT_FIELDS = [
   "Spare PI amount",
   "DJI Order Cost",
   "Dealer Name",
-  "DJI Case No",
-  "Dealer Credit Note Upload"
+  "DJI Case No"
 ];
 
 function flycartAdminOnly(role) {
@@ -1549,7 +1500,6 @@ async function handle(req, env) {
     const skipped = [];
 
     for (const k of FLYCART_CREDIT_FIELDS) {
-      if (k === "Dealer Credit Note Upload") { skipped.push(k); continue; }
       if (!fieldTypes[k]) {
         skipped.push(k);
         continue;
@@ -1568,19 +1518,25 @@ async function handle(req, env) {
     } else {
       result = await createRecord(env, env.FLYCART_CREDIT_USE_TABLE_ID, fields);
     }
-    const savedRecordId = b.record_id || result.data?.record?.record_id || result.data?.record_id || result.record_id || "";
-    return json({ ok:true, result:result.data || result, record_id:savedRecordId, updated:Object.keys(fields), skipped });
+    return json({ ok:true, result:result.data || result, updated:Object.keys(fields), skipped });
   }
 
   if (p === "/api/flycart-credit-use/upload-credit-note" && req.method === "POST") {
     const b = await readBody(req);
     if (!flycartAdminOnly(b.role)) return json({ error:"Forbidden" }, 403);
-    if (!env.FLYCART_CREDIT_USE_TABLE_ID || !b.record_id || !b.file?.data) return json({ error:"Missing record or file" }, 400);
-    const meta = await getFieldMetaByName(env, env.FLYCART_CREDIT_USE_TABLE_ID); const fld=meta["Dealer Credit Note Upload"];
-    if (!fld?.field_id) return json({ error:"Dealer Credit Note Upload field not found" }, 400);
-    const uploaded=await uploadBitableAttachmentToLark(env,env.FLYCART_CREDIT_USE_TABLE_ID,b.record_id,fld.field_id,b.file);
-    const current=await getRecord(env,env.FLYCART_CREDIT_USE_TABLE_ID,b.record_id); const existing=Array.isArray(current?.fields?.["Dealer Credit Note Upload"])?current.fields["Dealer Credit Note Upload"].filter(x=>x?.file_token):[];
-    await updateRecord(env,env.FLYCART_CREDIT_USE_TABLE_ID,b.record_id,{"Dealer Credit Note Upload":[...existing,uploaded]}); return json({ok:true,uploaded});
+    const tableId = env.FLYCART_CREDIT_USE_TABLE_ID;
+    if (!tableId) return json({ error:"FLYCART_CREDIT_USE_TABLE_ID not configured" }, 400);
+    if (!b.record_id || !b.file) return json({ error:"Missing record_id or file" }, 400);
+    const fieldMeta = await getFieldMetaByName(env, tableId);
+    const field = fieldMeta["Dealer Credit Note Upload"];
+    if (!field?.field_id) return json({ error:"Dealer Credit Note Upload field not found" }, 400);
+    const uploaded = await uploadBitableAttachmentToLark(env, tableId, b.record_id, field.field_id, b.file);
+    const current = await getRecord(env, tableId, b.record_id);
+    const existing = Array.isArray(current?.fields?.["Dealer Credit Note Upload"])
+      ? current.fields["Dealer Credit Note Upload"].filter(x=>x && x.file_token)
+      : [];
+    await updateRecord(env, tableId, b.record_id, { "Dealer Credit Note Upload":[...existing, uploaded] });
+    return json({ ok:true, uploaded });
   }
 
   if (p === "/api/flycart-credit-use-report") {
@@ -1804,7 +1760,6 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
       "Company Name": b.companyName || "",
       "Contact Name": b.contactName || "",
       "Contact Email": b.contactEmail || b.email || "",
-      "TRN NO": b.trnNo || "",
       "Billing Address": b.billingAddress || b.invoiceAddress || "",
       "Invoice Address": b.billingAddress || b.invoiceAddress || "",
       "Country": country,
@@ -1836,10 +1791,9 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
 
     // Step 3: generate Excel using the same final Lark order number and the original item list.
     const finalFields = { ...fields, ...savedFields, "Spare Order Case": no, "Spare Order No": no };
-    const exportDate = new Date().toISOString().slice(0,10);
-    const excelFileName = `${no}_${exportDate}.xlsx`;
-    const excelData = await generateSpareOrderTemplateXlsx(req, env, no, finalFields, items);
-    const fileUrl = await putR2(env, getOrderFolderKey(no, "order.xlsx"), excelData, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    const excelFileName = `${no}.xls`;
+    const excelData = htmlExcelBytes(no, finalFields, items);
+    const fileUrl = await putR2(env, getOrderFolderKey(no, "order.xls"), excelData, "application/vnd.ms-excel");
 
     // Step 4: update Lark row with the same Order File and URL remark.
     let orderFileUpload = null;
@@ -1986,10 +1940,10 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     if (fieldTypes["Spare Source"]) fields["Spare Source"] = b.spareSource || "";
     if (fieldTypes["Final Notes"]) fields["Final Notes"] = b.finalNotes || "";
     if (fieldTypes["Invoice Amount"]) fields["Invoice Amount"] = b.invoiceAmount || "";
-    if (fieldTypes["Dealer Credit No"]) fields["Dealer Credit No"] = b.dealerCreditNo || "";
     if (fieldTypes["Shipment Cost ( AED )"]) fields["Shipment Cost ( AED )"] = b.shipmentCostAed || "";
     if (fieldTypes["DJI Case NO"]) fields["DJI Case NO"] = b.djiCaseNo || "";
     else if (fieldTypes["DJI case NO"]) fields["DJI case NO"] = b.djiCaseNo || "";
+    if (fieldTypes["Dealer Credit No"]) fields["Dealer Credit No"] = b.dealerCreditNo || "";
     await updateRecord(env, b.tableId, b.record_id, fields);
     return json({ ok:true, updated:Object.keys(fields) });
   }
@@ -2156,13 +2110,29 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     return json({ ok: true });
   }
 if (p === "/api/download-order-excel") {
-    const tableId=norm(url.searchParams.get("tableId")),recordId=norm(url.searchParams.get("record_id")); const rec=await getRecord(env,tableId,recordId),fields=rec.fields||{}; const no=spareOrderNo(fields)||norm(url.searchParams.get("orderNo")); if(!no)return json({error:"Missing order number"},400);
-    const base=String(env.R2_PUBLIC_URL||"").replace(/\/+$/,""); const xlsxKey=getOrderFolderKey(no,"order.xlsx"),xlsxUrl=`${base}/${xlsxKey}`; let fileRes=await fetch(xlsxUrl);
-    if(!fileRes.ok){
-      const oldRes=await fetch(`${base}/${getOrderFolderKey(no,"order.xls")}`); if(!oldRes.ok)return json({error:"Order source file not found"},404); const items=parseLegacyOrderItems(await oldRes.text());
-      const bytes=await generateSpareOrderTemplateXlsx(req,env,no,fields,items); await putR2(env,xlsxKey,bytes,"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"); fileRes=new Response(bytes);
+    const tableId = norm(url.searchParams.get("tableId"));
+    const recordId = norm(url.searchParams.get("record_id"));
+    const rec = await getRecord(env, tableId, recordId);
+    const fields = rec.fields || {};
+    const no = spareOrderNo(fields) || norm(url.searchParams.get("orderNo"));
+    if (!no) return json({ error: "Missing order number" }, 400);
+    const key = getOrderFolderKey(no, "order.xls");
+    const date = new Date().toISOString().slice(0,10);
+    const filename = `${no}_${date}.xls`;
+    if (env.R2?.get) {
+      const obj = await env.R2.get(key);
+      if (obj) return new Response(obj.body, { headers:{
+        "content-type": obj.httpMetadata?.contentType || "application/vnd.ms-excel",
+        "content-disposition": `attachment; filename="${filename}"`
+      }});
     }
-    return new Response(fileRes.body,{headers:{"content-type":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","content-disposition":`attachment; filename="${no}_${new Date().toISOString().slice(0,10)}.xlsx"`}});
+    const fileUrl = `${String(env.R2_PUBLIC_URL || "").replace(/\/+$/, "")}/${key}`;
+    const res = await fetch(fileUrl);
+    if (!res.ok) return json({ error:"Order Excel file not found" }, 404);
+    return new Response(res.body, { headers:{
+      "content-type": res.headers.get("content-type") || "application/vnd.ms-excel",
+      "content-disposition": `attachment; filename="${filename}"`
+    }});
   }
 
 
