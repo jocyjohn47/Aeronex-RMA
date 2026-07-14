@@ -1380,6 +1380,62 @@ async function handle(req, env) {
     return json(result);
   }
 
+
+  if (p === "/api/spare-stock-update/current") {
+    const role = norm(url.searchParams.get("role") || req.headers.get("x-user-role"));
+    if (lower(role) !== "admin") return json({ error:"Forbidden" }, 403);
+    if (!env.SPARE_LIST_TABLE_ID) return json({ error:"SPARE_LIST_TABLE_ID not configured" }, 400);
+    const warehouse = lower(url.searchParams.get("warehouse")) === "ksa" ? "ksa" : "uae";
+    const rows = await listRecords(env, env.SPARE_LIST_TABLE_ID);
+    const meta = await getFieldTypes(env, env.SPARE_LIST_TABLE_ID);
+    const names = Object.keys(meta || {});
+    const firstExisting = candidates => candidates.find(n => names.includes(n)) || "";
+    const stockField = warehouse === "ksa"
+      ? firstExisting(["KSA Stock","KSA Local Stock"])
+      : firstExisting(["DSO Local Stock","UAE Local Stock","Local Stock"]);
+    const materialNameField = firstExisting(["Material Name","Material Description","Description"]);
+    if (!stockField) return json({ error:"Required stock field not found", warehouse, availableFields:names }, 400);
+    return json({ warehouse, stockField, items:(rows||[]).map(r=>({
+      recordId:r.record_id,
+      materialCode:fieldText(r.fields?.["Material Code"]),
+      materialName:fieldText(r.fields?.[materialNameField]),
+      stock:r.fields?.[stockField] ?? null
+    })).filter(x=>x.materialCode) });
+  }
+
+  if (p === "/api/spare-stock-update/apply" && req.method === "POST") {
+    const b = await readBody(req);
+    const role = norm(b.role || req.headers.get("x-user-role"));
+    if (lower(role) !== "admin") return json({ error:"Forbidden" }, 403);
+    if (!env.SPARE_LIST_TABLE_ID) return json({ error:"SPARE_LIST_TABLE_ID not configured" }, 400);
+    const warehouse = lower(b.warehouse) === "ksa" ? "ksa" : "uae";
+    const items = Array.isArray(b.items) ? b.items.slice(0, 25) : [];
+    if (!items.length) return json({ error:"No stock updates supplied" }, 400);
+    const meta = await getFieldTypes(env, env.SPARE_LIST_TABLE_ID), names=Object.keys(meta||{});
+    const firstExisting = candidates => candidates.find(n => names.includes(n)) || "";
+    const stockField = warehouse === "ksa"
+      ? firstExisting(["KSA Stock","KSA Local Stock"])
+      : firstExisting(["DSO Local Stock","UAE Local Stock","Local Stock"]);
+    if (!stockField) return json({ error:"Required stock field not found", warehouse, availableFields:names }, 400);
+    const token = await larkToken(env), updated=[], failed=[];
+    for (const item of items) {
+      const recordId=norm(item.recordId), stock=Number(item.stock);
+      if (!recordId) { failed.push({materialCode:item.materialCode||"",error:"Missing record ID"}); continue; }
+      if (!Number.isFinite(stock)) { failed.push({recordId,materialCode:item.materialCode||"",error:"Invalid stock value"}); continue; }
+      try {
+        const res=await fetch(`https://open.larksuite.com/open-apis/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${env.SPARE_LIST_TABLE_ID}/records/${recordId}`,{
+          method:"PUT",
+          headers:{authorization:`Bearer ${token}`,"content-type":"application/json; charset=utf-8"},
+          body:JSON.stringify({fields:{[stockField]:stock}})
+        });
+        const data=await res.json().catch(()=>({}));
+        if(!res.ok||data.code) throw new Error(data.msg||JSON.stringify(data));
+        updated.push({recordId,materialCode:item.materialCode||""});
+      } catch(e) { failed.push({recordId,materialCode:item.materialCode||"",error:e.message||String(e)}); }
+    }
+    return json({ok:failed.length===0,warehouse,stockField,updated:updated.length,failed});
+  }
+
   if (p === "/api/dealers") {
     return json(await listRecords(env, env.USER_TABLE_ID));
   }
