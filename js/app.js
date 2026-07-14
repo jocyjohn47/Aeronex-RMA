@@ -426,10 +426,10 @@ function dealerPhone(){
   return uf('Contact No','') || '';
 }
 function dealerTrn(){
-  return parseRemark(uf('Remarks',''),'TRN No') || '';
+  return uf('TRN NO','') || '';
 }
 function dealerPoBox(){
-  return parseRemark(uf('Remarks',''),'P.O Box No') || '';
+  return uf('P O Box','') || '';
 }
 
 function country(){return normalizeCountryValue(S.user?.country||S.user?.fields?.Country||'UAE & Other Region')}function uf(k,d=''){return S.user?.fields?.[k]??d}
@@ -446,7 +446,7 @@ function ensureAeronexLogoStyles(){
 }
 
 function layout(){ensureAeronexLogoStyles();let n=S.user?.displayName||S.user?.username||'User';document.body.innerHTML=`<header class="topbar"><div class="brand"><img class="brand-logo-img" src="img/dji_aeronex_logo.png" alt="DJI AERONEX" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div class=&quot;brand-title&quot;>AERO NEX</div><div class=&quot;brand-sub&quot;>RMA & Spare Order Portal</div>')"></div><nav class="nav">
-<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${adminCenterEnabled()?`<a data-sec="adminCenter" href="#" onclick="show('adminCenter')">🧰 Admin Center</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','flycartCredit','dealers','adminCenter','reportBackup','internalRepair','spareOrderDetailsAdmin','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
+<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${adminCenterEnabled()?`<a data-sec="adminCenter" href="#" onclick="show('adminCenter')">🧰 Admin Center</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','flycartCredit','dealers','adminCenter','reportBackup','spareStockUpdate','internalRepair','spareOrderDetailsAdmin','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
 
 async function ensureSpareListLoaded(){
   if(Array.isArray(S.spares) && S.spares.length) return S.spares;
@@ -473,7 +473,7 @@ function show(sec){
         try{renderDealerRepairCase()}catch(err){console.error('renderDealerRepairCase failed',err)}
       });
   }
-  if(sec==='warrantySoftwareStatus'){try{renderWarrantySoftwareStatus()}catch(e){console.error('renderWarrantySoftwareStatus failed',e)}}if(sec==='flycartCredit'){loadFlycartCredit().then(renderFlycartCredit).catch(e=>{console.error('flycartCredit failed',e);try{renderFlycartCredit()}catch(err){}})}if(sec==='logsDiagnostics'){try{renderLogsDiagnostics()}catch(e){console.error('renderLogsDiagnostics failed',e)}}if(sec==='adminCenter'){try{renderAdminCenter()}catch(e){console.error('renderAdminCenter failed',e)}}if(sec==='reportBackup'){try{renderReportBackup()}catch(e){console.error('renderReportBackup failed',e)}}if(sec==='internalRepair'){loadInternalRepairMeta().then(renderInternalRepair).catch(e=>{console.error('internalRepair failed',e);try{renderInternalRepairError(e)}catch(_){}})}if(sec==='spareOrderDetailsAdmin'){loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin).catch(e=>{console.error('spareOrderDetails failed',e);try{renderSpareOrderDetailsError(e)}catch(_){}})}scrollTo(0,0)
+  if(sec==='warrantySoftwareStatus'){try{renderWarrantySoftwareStatus()}catch(e){console.error('renderWarrantySoftwareStatus failed',e)}}if(sec==='flycartCredit'){loadFlycartCredit().then(renderFlycartCredit).catch(e=>{console.error('flycartCredit failed',e);try{renderFlycartCredit()}catch(err){}})}if(sec==='logsDiagnostics'){try{renderLogsDiagnostics()}catch(e){console.error('renderLogsDiagnostics failed',e)}}if(sec==='adminCenter'){try{renderAdminCenter()}catch(e){console.error('renderAdminCenter failed',e)}}if(sec==='reportBackup'){try{renderReportBackup()}catch(e){console.error('renderReportBackup failed',e)}}if(sec==='spareStockUpdate'){try{renderSpareStockUpdate()}catch(e){console.error('renderSpareStockUpdate failed',e)}}if(sec==='internalRepair'){loadInternalRepairMeta().then(renderInternalRepair).catch(e=>{console.error('internalRepair failed',e);try{renderInternalRepairError(e)}catch(_){}})}if(sec==='spareOrderDetailsAdmin'){loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin).catch(e=>{console.error('spareOrderDetails failed',e);try{renderSpareOrderDetailsError(e)}catch(_){}})}scrollTo(0,0)
 }
 
 function dealerRepairCaseEnabled(){
@@ -1549,6 +1549,9 @@ function adminCenterCards(){
   if(isAdmin()){
     cards.push(['📦','Internal Spare Order details','Admin-only spare order internal processing records.','spareOrderDetailsAdmin','Open']);
   }
+  if(isAdmin()){
+    cards.push(['📊','Spare Stock Update','Download, compare, and update UAE or KSA spare stock.','spareStockUpdate','Open']);
+  }
   if(logsPageEnabled()){
     cards.push(['🧾','Logs & Diagnostics','Check error logs and Lark table diagnostics.','logsDiagnostics','Open']);
   }
@@ -1556,6 +1559,184 @@ function adminCenterCards(){
     cards.push(['💾','Report & Backup','Daily backup status, SFTP settings, retention, and backup history.','reportBackup','Open']);
   }
   return cards;
+}
+
+
+const SPARE_STOCK_UPDATE = { warehouse:'uae', current:[], preview:[], sourceFileName:'' };
+
+function spareStockCode(v){ return String(v ?? '').trim().toUpperCase(); }
+function spareStockHeader(v){ return String(v ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g,''); }
+function spareStockNumber(v){
+  if(v===null || v===undefined || String(v).trim()==='') return null;
+  const n=Number(String(v).replace(/,/g,'').trim());
+  return Number.isFinite(n) ? n : NaN;
+}
+function selectedSpareStockWarehouse(){
+  return $('spareStockWarehouse')?.value === 'ksa' ? 'ksa' : 'uae';
+}
+function spareStockWarehouseLabel(w){ return w==='ksa' ? 'KSA' : 'UAE'; }
+function spareStockColumnName(w){ return w==='ksa' ? 'KSA Stock' : 'DSO Local Stock'; }
+
+function renderSpareStockUpdate(){
+  const sec=$('spareStockUpdate');
+  if(!sec) return;
+  if(!isAdmin()){
+    sec.innerHTML='<div class="panel"><h2>Spare Stock Update</h2><div class="notice">Admin access only.</div></div>';
+    return;
+  }
+  sec.innerHTML=`<div class="panel"><h2>Spare Stock Update</h2>
+    <div class="notice"><b>Rules:</b> Match only by Material Code. Blank stock cells do not change Lark. Zero and negative values are valid. Duplicate Material Codes are merged and their quantities are added. Unknown codes are not created. Descriptions and prices are never changed.</div>
+    <div class="row">
+      <div><label>Warehouse</label><select id="spareStockWarehouse" onchange="resetSpareStockAnalysis()"><option value="uae">UAE - DSO Local Stock</option><option value="ksa">KSA Stock</option></select></div>
+      <div><label>Stock Excel (.xlsx)</label><input id="spareStockFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></div>
+      <div class="act" style="align-self:end"><button onclick="analyzeSpareStockExcel()">Analyze Stock</button></div>
+    </div>
+    <div style="margin:12px 0"><button class="btn-light" onclick="downloadCurrentSpareStockList()">Download Current Stock List</button></div>
+    <div id="spareStockMsg" class="msg"></div>
+    <div id="spareStockSummary"></div>
+    <div id="spareStockPreview"></div>
+  </div>`;
+}
+
+function resetSpareStockAnalysis(){
+  SPARE_STOCK_UPDATE.warehouse=selectedSpareStockWarehouse();
+  SPARE_STOCK_UPDATE.preview=[];
+  SPARE_STOCK_UPDATE.current=[];
+  if($('spareStockSummary')) $('spareStockSummary').innerHTML='';
+  if($('spareStockPreview')) $('spareStockPreview').innerHTML='';
+  if($('spareStockMsg')) $('spareStockMsg').textContent='';
+}
+
+async function loadCurrentSpareStockRows(warehouse){
+  const d=await api('/api/spare-stock-update/current?warehouse='+encodeURIComponent(warehouse)+'&role='+encodeURIComponent(S.user.role||''));
+  SPARE_STOCK_UPDATE.current=Array.isArray(d.items)?d.items:[];
+  return SPARE_STOCK_UPDATE.current;
+}
+
+async function downloadCurrentSpareStockList(){
+  const msg=$('spareStockMsg');
+  try{
+    if(!window.XlsxPopulate) throw new Error('Excel library is not loaded.');
+    const warehouse=selectedSpareStockWarehouse();
+    const rows=await loadCurrentSpareStockRows(warehouse);
+    const wb=await XlsxPopulate.fromBlankAsync();
+    const sh=wb.sheet(0).name(spareStockWarehouseLabel(warehouse)+' Spare Stock');
+    sh.cell('A1').value('Material Code');
+    sh.cell('B1').value('Material Description');
+    sh.cell('C1').value(spareStockColumnName(warehouse));
+    rows.forEach((r,i)=>{
+      const n=i+2;
+      sh.cell(`A${n}`).value(r.materialCode||'');
+      sh.cell(`B${n}`).value(r.materialName||'');
+      sh.cell(`C${n}`).value(r.stock===null||r.stock===undefined?'':r.stock);
+    });
+    sh.row(1).style({bold:true});
+    sh.column('A').width(26); sh.column('B').width(52); sh.column('C').width(20);
+    const blob=await wb.outputAsync('blob');
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`AERONEX_${spareStockWarehouseLabel(warehouse)}_Spare_Stock_List_${new Date().toISOString().slice(0,10)}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+    msg.textContent=`Downloaded ${rows.length} ${spareStockWarehouseLabel(warehouse)} stock records.`;
+  }catch(e){ msg.textContent=e.message||String(e); }
+}
+
+async function analyzeSpareStockExcel(){
+  const msg=$('spareStockMsg'), file=$('spareStockFile')?.files?.[0];
+  try{
+    if(!isAdmin()) throw new Error('Admin access only.');
+    if(!file) throw new Error('Choose an .xlsx file first.');
+    if(!window.XlsxPopulate) throw new Error('Excel library is not loaded.');
+    const warehouse=selectedSpareStockWarehouse();
+    SPARE_STOCK_UPDATE.warehouse=warehouse;
+    SPARE_STOCK_UPDATE.sourceFileName=file.name;
+    const wb=await XlsxPopulate.fromDataAsync(await file.arrayBuffer());
+    const sh=wb.sheet(0), used=sh.usedRange();
+    if(!used) throw new Error('The Excel sheet is empty.');
+    const values=used.value();
+    if(!Array.isArray(values)||values.length<2) throw new Error('The Excel sheet has no stock rows.');
+    const headers=(values[0]||[]).map(spareStockHeader);
+    const codeIx=headers.findIndex(h=>['materialcode','materialnumber','materialno','code'].includes(h));
+    const wanted=warehouse==='ksa' ? ['ksastock','ksalocalstock','stock'] : ['dsolocalstock','uaelocalstock','localstock','stock'];
+    const stockIx=headers.findIndex(h=>wanted.includes(h));
+    if(codeIx<0) throw new Error('Material Code column was not found.');
+    if(stockIx<0) throw new Error(`${spareStockColumnName(warehouse)} column was not found.`);
+
+    const merged=new Map();
+    let blankCodeRows=0, invalidRows=0;
+    for(let i=1;i<values.length;i++){
+      const row=values[i]||[], code=spareStockCode(row[codeIx]);
+      if(!code){ blankCodeRows++; continue; }
+      const raw=row[stockIx];
+      if(raw===null||raw===undefined||String(raw).trim()==='') continue;
+      const n=spareStockNumber(raw);
+      if(Number.isNaN(n)){ invalidRows++; if(!merged.has(code)) merged.set(code,{materialCode:code,values:[],sourceRows:0,invalid:true}); merged.get(code).invalid=true; continue; }
+      if(!merged.has(code)) merged.set(code,{materialCode:code,values:[],sourceRows:0,invalid:false});
+      const x=merged.get(code); x.values.push(n); x.sourceRows++;
+    }
+
+    const current=await loadCurrentSpareStockRows(warehouse);
+    const byCode=new Map(current.map(r=>[spareStockCode(r.materialCode),r]));
+    SPARE_STOCK_UPDATE.preview=[...merged.values()].map(x=>{
+      const cur=byCode.get(x.materialCode), uploaded=x.values.reduce((a,b)=>a+b,0);
+      let status='No Change', error='';
+      if(x.invalid){ status='Invalid Stock Value'; error='One or more values are not numeric'; }
+      else if(!cur){ status='Material Not Found'; }
+      else if(Number(cur.stock) !== uploaded){ status='Update'; }
+      return {recordId:cur?.recordId||'',materialCode:x.materialCode,materialName:cur?.materialName||'',currentStock:cur?.stock??null,newStock:uploaded,sourceRows:x.sourceRows,status,error};
+    });
+    renderSpareStockPreview({blankCodeRows,invalidRows});
+    msg.textContent='Analysis complete. Review the preview before confirming the update.';
+  }catch(e){
+    msg.textContent=e.message||String(e);
+    if($('spareStockSummary')) $('spareStockSummary').innerHTML='';
+    if($('spareStockPreview')) $('spareStockPreview').innerHTML='';
+  }
+}
+
+function renderSpareStockPreview(extra={}){
+  const rows=SPARE_STOCK_UPDATE.preview||[], count=s=>rows.filter(r=>r.status===s).length;
+  const mergedCount=rows.filter(r=>r.sourceRows>1).length;
+  $('spareStockSummary').innerHTML=`<div class="grid4"><div><b>Total Material Codes</b><br>${rows.length}</div><div><b>Update</b><br>${count('Update')}</div><div><b>No Change</b><br>${count('No Change')}</div><div><b>Not Found / Invalid</b><br>${count('Material Not Found')+count('Invalid Stock Value')}</div></div><div class="notice">Duplicate codes merged: ${mergedCount}. Blank Material Code rows skipped: ${extra.blankCodeRows||0}.</div>`;
+  $('spareStockPreview').innerHTML=`<div class="table-wrap"><table><thead><tr><th>Material Code</th><th>Material Description</th><th>Rows Merged</th><th>Current Stock</th><th>Uploaded Stock</th><th>Difference</th><th>Result</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.materialCode)}</td><td>${esc(r.materialName)}</td><td>${r.sourceRows}</td><td>${r.currentStock??''}</td><td>${r.newStock}</td><td>${r.currentStock===null?'':r.newStock-Number(r.currentStock)}</td><td>${esc(r.status)}</td></tr>`).join('')}</tbody></table></div><div style="margin-top:12px"><button onclick="applySpareStockUpdate()" ${count('Update')?'':'disabled'}>Confirm Stock Update (${count('Update')})</button> <button class="btn-light" onclick="downloadSpareStockComparison()">Download Comparison Excel</button></div>`;
+}
+
+async function applySpareStockUpdate(){
+  const updates=(SPARE_STOCK_UPDATE.preview||[]).filter(r=>r.status==='Update').map(r=>({recordId:r.recordId,materialCode:r.materialCode,stock:r.newStock}));
+  if(!updates.length) return;
+  const warehouse=SPARE_STOCK_UPDATE.warehouse;
+  if(!confirm(`${updates.length} ${spareStockWarehouseLabel(warehouse)} stock records will be replaced with the uploaded values. Continue?`)) return;
+  const msg=$('spareStockMsg'); let done=0, failed=[];
+  for(let i=0;i<updates.length;i+=20){
+    const batch=updates.slice(i,i+20);
+    msg.textContent=`Updating ${done} of ${updates.length}...`;
+    const d=await api('/api/spare-stock-update/apply',{method:'POST',body:JSON.stringify({role:S.user.role||'',warehouse,items:batch})});
+    done+=Number(d.updated||0); failed.push(...(d.failed||[]));
+  }
+  msg.textContent=`Spare stock update completed. Updated: ${done}. Failed: ${failed.length}.`;
+  await analyzeSpareStockExcel();
+}
+
+async function downloadSpareStockComparison(){
+  const msg=$('spareStockMsg');
+  try{
+    if(!window.XlsxPopulate) throw new Error('Excel library is not loaded.');
+    const warehouse=SPARE_STOCK_UPDATE.warehouse;
+    const wb=await XlsxPopulate.fromBlankAsync(), sh=wb.sheet(0).name('Stock Comparison');
+    const heads=['Material Code','Material Description','Rows Merged','Current Stock','Uploaded Stock','Difference','Result'];
+    heads.forEach((h,i)=>sh.cell(1,i+1).value(h));
+    (SPARE_STOCK_UPDATE.preview||[]).forEach((r,i)=>{
+      const n=i+2, vals=[r.materialCode,r.materialName,r.sourceRows,r.currentStock??'',r.newStock,r.currentStock===null?'':r.newStock-Number(r.currentStock),r.status];
+      vals.forEach((v,j)=>sh.cell(n,j+1).value(v));
+    });
+    sh.row(1).style({bold:true});
+    const blob=await wb.outputAsync('blob'), a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`AERONEX_${spareStockWarehouseLabel(warehouse)}_Spare_Stock_Comparison_${new Date().toISOString().slice(0,10)}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  }catch(e){ msg.textContent=e.message||String(e); }
 }
 
 function renderAdminCenter(){
