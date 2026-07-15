@@ -376,7 +376,7 @@ function portalDocumentLink(v){
 }
 
 
-let S={dealerRepairCases:[],drcParts:[],drcEditingId:'',drcSubmitting:false,user:loadUser(),spares:[],cart:[],orders:[],repairs:[],dealers:[],notes:[]};
+let S={dealerRepairCases:[],drcParts:[],drcEditingId:'',drcSubmitting:false,user:loadUser(),spares:[],cart:[],orders:[],repairs:[],dealers:[],notes:[],listUi:{orders:{page:1,pageSize:10,search:''},repairs:{page:1,pageSize:10,search:''}}};
 function $(id){return document.getElementById(id)}function esc(v){return String(v??'').replace(/[&<>"]/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]))}
 
 
@@ -1977,7 +1977,7 @@ function applyDealerToRepairForm(){
   if($('rcCountry')) $('rcCountry').value = normalizeCountryValue(f.Country || selectedCountry());
 }
 
-function renderSpare(){$('spare').innerHTML=`<div class="panel"><h2>Spare Order</h2><div class="notice">Select material by name or material code. Review before submit. No edit after apply; cancel request only.${isAdmin()?`<br><b>Country:</b> <select style="max-width:260px;display:inline-block;margin-left:10px" onchange="setAdminCountry(this.value);renderSpare()"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select>`:''}</div>${dealerSelectHtml('spare')}<div class="grid4"><div><label>Company Name</label><input id="spareCompany" value="${esc(uf('Company Name','AERO NEX'))}" disabled></div><div><label>Contact Name</label><input id="spareContact" value="${esc(uf('Contact Person',''))}" disabled></div><div><label>Billing Address</label><input id="spareAddress" value="${esc(dealerAddress())}" disabled></div><div><label>Country</label><input id="spareCountry" value="${esc(selectedCountry())}" disabled></div></div><div style="max-width:260px"><label>Invoice Currency</label><select id="invoiceCurrency" onchange="drawCart()">${currencyOptions()}</select></div><label>Add from Spare Part List</label><div class="row"><input id="spareSearch" placeholder="Search by Material Code or Material Name..." oninput="renderSpareOptions()"><input id="spareQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addListed()">Add Item</button></div><select id="spareSelect"></select><h3>Custom Spare (if not in list)</h3><div class="row"><input id="customCode" placeholder="Material Code (if known)"><input id="customName" placeholder="Material Name"><input id="customQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addCustom()">Add Custom</button></div><label>Remarks</label><textarea id="spareNotes" placeholder="Optional remarks for this spare order" style="min-height:80px"></textarea><h3>Review Items</h3><div class="table-wrap"><table><thead><tr><th>Material Code</th><th>Material Name</th><th>Compatible Model</th><th>Qty</th><th id="cartUnitPriceHead">Unit Price</th><th id="cartTotalHead">Total</th><th>Action</th></tr></thead><tbody id="cartRows"></tbody></table></div><button onclick="submitOrder()">Submit Order</button> <button class="btn-light" onclick="S.cart=[];drawCart()">Clear All</button><div id="orderMsg" class="msg"></div><h3>My Order History <button class="btn-light" onclick="loadOrders().then(renderOrders)">Refresh</button> ${isAdmin()?`<a class="btn-light" target="_blank" rel="noopener" href="/api/download-spare-orders-report?country=${encodeURIComponent(selectedCountry())}&role=${encodeURIComponent(S.user.role||'')}">Download All Reports</a>`:''}</h3><div class="table-wrap"><table><thead><tr><th>Spare Order No</th><th>Status</th><th>Invoice Download</th><th>Payment Receipt</th><th>Final Notes</th><th>Remarks</th></tr></thead><tbody id="orderRows"></tbody></table>${renderPageNote(window.AERONEX_SPARE_ORDER_NOTE)}</div></div>`;renderSpareOptions();drawCart();renderOrders()}
+function renderSpare(){$('spare').innerHTML=`<div class="panel"><h2>Spare Order</h2><div class="notice">Select material by name or material code. Review before submit. No edit after apply; cancel request only.${isAdmin()?`<br><b>Country:</b> <select style="max-width:260px;display:inline-block;margin-left:10px" onchange="setAdminCountry(this.value);renderSpare()"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select>`:''}</div>${dealerSelectHtml('spare')}<div class="grid4"><div><label>Company Name</label><input id="spareCompany" value="${esc(uf('Company Name','AERO NEX'))}" disabled></div><div><label>Contact Name</label><input id="spareContact" value="${esc(uf('Contact Person',''))}" disabled></div><div><label>Billing Address</label><input id="spareAddress" value="${esc(dealerAddress())}" disabled></div><div><label>Country</label><input id="spareCountry" value="${esc(selectedCountry())}" disabled></div></div><div style="max-width:260px"><label>Invoice Currency</label><select id="invoiceCurrency" onchange="drawCart()">${currencyOptions()}</select></div><label>Add from Spare Part List</label><div class="row"><input id="spareSearch" placeholder="Search by Material Code or Material Name..." oninput="renderSpareOptions()"><input id="spareQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addListed()">Add Item</button></div><select id="spareSelect"></select><h3>Custom Spare (if not in list)</h3><div class="row"><input id="customCode" placeholder="Material Code (if known)"><input id="customName" placeholder="Material Name"><input id="customQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addCustom()">Add Custom</button></div><label>Remarks</label><textarea id="spareNotes" placeholder="Optional remarks for this spare order" style="min-height:80px"></textarea><h3>Review Items</h3><div class="table-wrap"><table><thead><tr><th>Material Code</th><th>Material Name</th><th>Compatible Model</th><th>Qty</th><th id="cartUnitPriceHead">Unit Price</th><th id="cartTotalHead">Total</th><th>Action</th></tr></thead><tbody id="cartRows"></tbody></table></div><button onclick="submitOrder()">Submit Order</button> <button class="btn-light" onclick="S.cart=[];drawCart()">Clear All</button><div id="orderMsg" class="msg"></div><h3>My Order History <button class="btn-light" onclick="loadOrders().then(renderOrders)">Refresh</button> ${isAdmin()?`<a class="btn-light" target="_blank" rel="noopener" href="/api/download-spare-orders-report?country=${encodeURIComponent(selectedCountry())}&role=${encodeURIComponent(S.user.role||'')}">Download All Reports</a>`:''}</h3><div class="row" style="align-items:end;gap:12px;flex-wrap:wrap"><div style="min-width:260px;flex:1"><label>Search by Order No or Dealer / Company</label><input id="orderListSearch" value="${esc(S.listUi?.orders?.search||'')}" oninput="setListSearch('orders',this.value)" placeholder="Search order or dealer..."></div><div style="width:150px"><label>Records per page</label><select id="orderPageSize" onchange="setListPageSize('orders',this.value)">${[10,20,30,40,50,100].map(n=>`<option value="${n}" ${Number(S.listUi?.orders?.pageSize||10)===n?'selected':''}>${n}</option>`).join('')}</select></div></div><div id="orderListCount" class="muted" style="margin:10px 0"></div><div class="table-wrap"><table><thead><tr><th>Spare Order No</th><th>Status</th><th>Invoice Download</th><th>Payment Receipt</th><th>Final Notes</th><th>Remarks</th></tr></thead><tbody id="orderRows"></tbody></table></div><div id="orderPagination" class="row" style="justify-content:center;align-items:center;margin-top:12px"></div>${renderPageNote(window.AERONEX_SPARE_ORDER_NOTE)}</div>`;renderSpareOptions();drawCart();renderOrders()}
 function renderSpareOptions(){let q=($('spareSearch')?.value||'').toLowerCase(),s=$('spareSelect');if(!s)return;s.innerHTML=S.spares.filter(x=>{let f=x.fields||{};return `${f['Material Code']||''} ${f['Material Name']||''} ${f['Compatible Model']||''}`.toLowerCase().includes(q)}).map(x=>{let f=x.fields||{},o={materialCode:f['Material Code']||'',materialName:f['Material Name']||'',compatibleModel:f['Compatible Model']||'',priceUSD:f['Price (USD ) Without Tax & Duty']||'',priceAED:f['AED (Without Tax & Duty)']||'',priceSAR:f['SAR (Without Tax & Duty)']||'',price:f['Price (USD ) Without Tax & Duty']||'',stock:f['Local Stock']||''};return `<option value="${encodeURIComponent(JSON.stringify(o))}">${esc(o.materialCode)} - ${esc(o.materialName)} ${o.compatibleModel?'('+esc(o.compatibleModel)+')':''}</option>`}).join('')}
 function addListed(){let v=$('spareSelect').value;if(!v)return msg('orderMsg','Select material first');let o=JSON.parse(decodeURIComponent(v));o.qty=$('spareQty').value||'1';S.cart.push(o);drawCart()}
 function addCustom(){let n=$('customName').value.trim();if(!n)return msg('orderMsg','Enter custom material name');S.cart.push({materialCode:$('customCode').value.trim(),materialName:n,compatibleModel:'Custom',priceUSD:0,priceAED:0,priceSAR:0,price:0,stock:'-',qty:$('customQty').value||'1'});$('customCode').value='';$('customName').value='';drawCart()}
@@ -2433,21 +2433,78 @@ async function saveSpareOrderInternal(i){
     openSpareOrderDetails(i);
   }catch(e){msg('soDetailMsg',e.message)}
 }
+function listDateMillis(row, kind){
+  const f=(row&&row.fields)||{};
+  const names=kind==='repairs'
+    ? ['Date Created','Case created','Case Created','Case Creation Date','Created Date','Date Of Activation','Date of Purchase / Activation date']
+    : ['Date Created','Case Created','Case created','Created Date','Order Date'];
+  for(const name of names){
+    const v=f[name];
+    if(v===undefined || v===null || v==='') continue;
+    if(typeof v==='number' && Number.isFinite(v)) return v;
+    const numeric=Number(v);
+    if(Number.isFinite(numeric) && numeric>1000000000) return numeric;
+    const parsed=Date.parse(String(v));
+    if(Number.isFinite(parsed)) return parsed;
+  }
+  const meta=Number(row?.created_time || row?.createdTime || row?.modified_time || row?.modifiedTime || 0);
+  return Number.isFinite(meta) ? meta : 0;
+}
+function ensureListUi(kind){
+  S.listUi=S.listUi||{};
+  S.listUi[kind]=S.listUi[kind]||{page:1,pageSize:10,search:''};
+  return S.listUi[kind];
+}
+function setListSearch(kind,value){
+  const ui=ensureListUi(kind); ui.search=String(value||''); ui.page=1;
+  if(kind==='orders') renderOrders(); else renderRepairStatus();
+}
+function setListPageSize(kind,value){
+  const ui=ensureListUi(kind); ui.pageSize=Math.max(1,Number(value)||10); ui.page=1;
+  if(kind==='orders') renderOrders(); else renderRepairStatus();
+}
+function changeListPage(kind,delta){
+  const ui=ensureListUi(kind); ui.page=Math.max(1,(Number(ui.page)||1)+Number(delta||0));
+  if(kind==='orders') renderOrders(); else renderRepairStatus();
+}
+function listPaginationHtml(kind,total,page,pageSize){
+  const pages=Math.max(1,Math.ceil(total/pageSize));
+  return `<button class="btn-light" onclick="changeListPage('${kind}',-1)" ${page<=1?'disabled':''}>Previous</button><span class="muted">Page ${page} of ${pages}</span><button class="btn-light" onclick="changeListPage('${kind}',1)" ${page>=pages?'disabled':''}>Next</button>`;
+}
 function renderOrders(){
   let e=$('orderRows');
   if(!e)return;
-  e.innerHTML=(Array.isArray(S.orders)?S.orders:[]).map((r,i)=>{
+  const ui=ensureListUi('orders');
+  const q=String(ui.search||'').trim().toLowerCase();
+  const source=(Array.isArray(S.orders)?S.orders:[]).map((r,index)=>({r,index}));
+  const filtered=source.filter(({r})=>{
+    const f=r.fields||{};
+    const no=String(orderNoValue(f)||'').toLowerCase();
+    const dealer=String(f['Company Name']||f['Dealer Name']||f['Contact Name']||'').toLowerCase();
+    return !q || no.includes(q) || dealer.includes(q);
+  }).sort((a,b)=>listDateMillis(b.r,'orders')-listDateMillis(a.r,'orders'));
+  const total=filtered.length;
+  const pageSize=Number(ui.pageSize)||10;
+  const pages=Math.max(1,Math.ceil(total/pageSize));
+  ui.page=Math.min(Math.max(1,Number(ui.page)||1),pages);
+  const start=(ui.page-1)*pageSize;
+  const pageRows=filtered.slice(start,start+pageSize);
+  e.innerHTML=pageRows.map(({r,index})=>{
     let f=r.fields||{};
     let no=orderNoValue(f);
     return `<tr>
-      <td><a href="#" onclick="openSpareOrderDetails(${i});return false;">${esc(no||'-')}</a></td>
+      <td><a href="#" onclick="openSpareOrderDetails(${index});return false;">${esc(no||'-')}</a></td>
       <td>${statusCell(r,'spare')}</td>
       <td>${invoiceDownloadCell(r)}</td>
       <td>${paymentReceiptCell(r)}</td>
       <td>${esc(spareOrderFinalNotesValue(f)||'-')}</td>
       <td>${esc(f['Remarks']||'-')}</td>
     </tr>`;
-  }).join('');
+  }).join('') || '<tr><td colspan="6" class="muted">No spare orders found.</td></tr>';
+  const count=$('orderListCount');
+  if(count) count.textContent=total ? `Showing ${start+1}–${Math.min(start+pageSize,total)} of ${total} Spare Orders` : 'Showing 0 of 0 Spare Orders';
+  const nav=$('orderPagination');
+  if(nav) nav.innerHTML=listPaginationHtml('orders',total,ui.page,pageSize);
 }
 function readFileBase64(inputId){
   return new Promise(resolve=>{
@@ -2530,7 +2587,22 @@ async function submitRepair(){
   }
 }
 function renderRepairStatus(){
-  $('repairStatus').innerHTML=`<div class="panel"><h2>Repair Status <button class="btn-light" onclick="refreshRepairs()">Refresh</button></h2><div class="table-wrap"><table><thead><tr><th>Repair Case No</th><th>Dealer / Company</th><th>Model No</th><th>Serial No</th><th>Date</th><th>Status</th><th>Log Link</th><th>Issue Media / Required Details</th><th>Remarks</th><th>Notes</th><th>Case Close Comment</th></tr></thead><tbody>${(Array.isArray(S.repairs)?S.repairs:[]).map(r=>{let f=r.fields||{};return `<tr><td>${internalRepairCaseLink(r)}</td><td>${esc(f['Company Name']||f['Dealer Name']||'')}</td><td>${esc(f['Model No']||'')}</td><td>${esc(f['Serial No']||'')}</td><td>${new Date(Number(f['Date of Purchase / Activation date']||f['Date Of Activation']||'')).toLocaleDateString('en-GB')}</td><td>${statusCell(r,'repair')}</td><td>${linkCell(f['Log File']||f['Log for Drone and RC'])}</td><td>${linkCell(f['Upload all the required details']||f['Issue Video and Pictures'])}</td><td>${esc(f['Remarks']||'')}</td><td>${esc(f['Notes']||'')}</td><td>${esc(f['Case Close Comment']||'')}</td></tr>`}).join('')}</tbody></table></div></div>`;
+  const ui=ensureListUi('repairs');
+  const q=String(ui.search||'').trim().toLowerCase();
+  const source=(Array.isArray(S.repairs)?S.repairs:[]).map((r,index)=>({r,index}));
+  const filtered=source.filter(({r})=>{
+    const f=r.fields||{};
+    const caseNo=String(f['REPAIR CASE']||f['Repair Case']||f['Case Register No']||f['Repair Case No']||'').toLowerCase();
+    const dealer=String(f['Company Name']||f['Dealer Name']||f['Contact Name']||'').toLowerCase();
+    return !q || caseNo.includes(q) || dealer.includes(q);
+  }).sort((a,b)=>listDateMillis(b.r,'repairs')-listDateMillis(a.r,'repairs'));
+  const total=filtered.length;
+  const pageSize=Number(ui.pageSize)||10;
+  const pages=Math.max(1,Math.ceil(total/pageSize));
+  ui.page=Math.min(Math.max(1,Number(ui.page)||1),pages);
+  const start=(ui.page-1)*pageSize;
+  const pageRows=filtered.slice(start,start+pageSize);
+  $('repairStatus').innerHTML=`<div class="panel"><h2>Repair Status <button class="btn-light" onclick="refreshRepairs()">Refresh</button></h2><div class="row" style="align-items:end;gap:12px;flex-wrap:wrap"><div style="min-width:260px;flex:1"><label>Search by Case No or Dealer / Company</label><input id="repairListSearch" value="${esc(ui.search||'')}" oninput="setListSearch('repairs',this.value)" placeholder="Search case or dealer..."></div><div style="width:150px"><label>Records per page</label><select onchange="setListPageSize('repairs',this.value)">${[10,20,30,40,50,100].map(n=>`<option value="${n}" ${pageSize===n?'selected':''}>${n}</option>`).join('')}</select></div></div><div class="muted" style="margin:10px 0">${total?`Showing ${start+1}–${Math.min(start+pageSize,total)} of ${total} Repair Cases`:'Showing 0 of 0 Repair Cases'}</div><div class="table-wrap"><table><thead><tr><th>Repair Case No</th><th>Dealer / Company</th><th>Model No</th><th>Serial No</th><th>Date</th><th>Status</th><th>Log Link</th><th>Issue Media / Required Details</th><th>Remarks</th><th>Notes</th><th>Case Close Comment</th></tr></thead><tbody>${pageRows.map(({r})=>{let f=r.fields||{};return `<tr><td>${internalRepairCaseLink(r)}</td><td>${esc(f['Company Name']||f['Dealer Name']||'')}</td><td>${esc(f['Model No']||'')}</td><td>${esc(f['Serial No']||'')}</td><td>${new Date(Number(f['Date of Purchase / Activation date']||f['Date Of Activation']||'')).toLocaleDateString('en-GB')}</td><td>${statusCell(r,'repair')}</td><td>${linkCell(f['Log File']||f['Log for Drone and RC'])}</td><td>${linkCell(f['Upload all the required details']||f['Issue Video and Pictures'])}</td><td>${esc(f['Remarks']||'')}</td><td>${esc(f['Notes']||'')}</td><td>${esc(f['Case Close Comment']||'')}</td></tr>`}).join('')||'<tr><td colspan="11" class="muted">No repair cases found.</td></tr>'}</tbody></table></div><div class="row" style="justify-content:center;align-items:center;margin-top:12px">${listPaginationHtml('repairs',total,ui.page,pageSize)}</div></div>`;
 }
 function linkCell(v){if(!v)return '-'; if(typeof v==='object'&&v.link)return `<a href="${esc(v.link)}" target="_blank">Open</a>`; return `<a href="${esc(v)}" target="_blank">Open</a>`;}
 function renderDealers(){
