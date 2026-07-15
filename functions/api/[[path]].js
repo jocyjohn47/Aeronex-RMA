@@ -1702,7 +1702,17 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     const tableId = env.SPARE_ORDER_DETAILS_TABLE_ID;
     if (!tableId) return json({ error:"SPARE_ORDER_DETAILS_TABLE_ID not configured" }, 400);
     const fieldTypes = await getFieldTypes(env, tableId);
-    const fields = prepareFieldsForTable(fieldTypes, b.fields || {});
+    const incomingFields = { ...(b.fields || {}) };
+    if (Object.prototype.hasOwnProperty.call(incomingFields, "DJI Cost")) {
+      const raw = incomingFields["DJI Cost"];
+      if (fieldTypes["DJI Cost"] === 2) {
+        const numeric = Number(String(raw ?? "").replace(/,/g, "").replace(/[^0-9.-]/g, "").trim());
+        if (Number.isFinite(numeric)) incomingFields["DJI Cost"] = numeric;
+      } else if (raw !== undefined && raw !== null) {
+        incomingFields["DJI Cost"] = String(raw).trim();
+      }
+    }
+    const fields = prepareFieldsForTable(fieldTypes, incomingFields);
     if (!Object.keys(fields).length) {
       return json({ error:"No valid fields to save", received:Object.keys(b.fields || {}), available:Object.keys(fieldTypes || {}) }, 400);
     }
