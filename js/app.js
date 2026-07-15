@@ -916,6 +916,20 @@ function renderInternalRepair(){
   const meta=S.internalRepairMeta||{};
   const country=meta.country||adminModuleCountry();
   const rows=S.internalRepairRows||[];
+  const ui=ensureListUi('internalRepair');
+  const q=String(ui.search||'').trim().toLowerCase();
+  const filtered=rows.map((r,index)=>({r,index})).filter(({r})=>{
+    const f=r.fields||{};
+    const caseText=String(f['DJI Case ID']||f['DJI Internal Case ID']||f['Repair Case']||'').toLowerCase();
+    const company=String(f['Company Name']||'').toLowerCase();
+    return !q || caseText.includes(q) || company.includes(q);
+  }).sort((a,b)=>listDateMillis(b.r,'internalRepair')-listDateMillis(a.r,'internalRepair'));
+  const total=filtered.length;
+  const pageSize=Number(ui.pageSize)||10;
+  const pages=Math.max(1,Math.ceil(total/pageSize));
+  ui.page=Math.min(Math.max(1,Number(ui.page)||1),pages);
+  const start=(ui.page-1)*pageSize;
+  const pageRows=filtered.slice(start,start+pageSize);
   sec.innerHTML=`<div class="panel"><h2>Internal Repair</h2>
     <div class="notice">${S.returnToRepairStatus ? '<button class="btn-light" onclick="backToRepairStatus()">← Back to Repair Status</button>' : ''}
     ${internalRepairCountryControl(country)}
@@ -923,9 +937,11 @@ function renderInternalRepair(){
     <button class="act" onclick="newInternalRepair()">New Internal Repair</button></div>
     <div id="internalRepairForm"></div>
     <h3>Internal Repair Register</h3>
+    <div class="row" style="align-items:end;gap:12px;flex-wrap:wrap"><div style="min-width:260px;flex:1"><label>Search by Case No or Company</label><input value="${esc(ui.search||'')}" oninput="setListSearch('internalRepair',this.value)" placeholder="Search case or company..."></div><div style="width:150px"><label>Records per page</label><select onchange="setListPageSize('internalRepair',this.value)">${[10,20,30,40,50,100].map(n=>`<option value="${n}" ${pageSize===n?'selected':''}>${n}</option>`).join('')}</select></div></div>
+    <div class="muted" style="margin:10px 0">${total?`Showing ${start+1}–${Math.min(start+pageSize,total)} of ${total} Internal Repair Cases`:'Showing 0 of 0 Internal Repair Cases'}</div>
     <div class="table-wrap"><table><thead><tr><th>DJI Case ID</th><th>Repair Case</th><th>Company</th><th>Model</th><th>Serial</th><th>Case Type</th><th>Status</th><th>Action</th></tr></thead><tbody>
-    ${rows.map((r,i)=>{const f=r.fields||{};return `<tr><td>${esc(f['DJI Case ID']||'')}</td><td>${esc(f['Repair Case']||'')}</td><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Product Model']||'')}</td><td>${esc(f['Serial No']||'')}</td><td>${esc(f['Case Type']||'')}</td><td>${esc(f['Case Status']||'')}</td><td><button class="btn-light" onclick="editInternalRepair(${i})">Open</button></td></tr>`}).join('')}
-    </tbody></table></div></div>`;
+    ${pageRows.map(({r,index})=>{const f=r.fields||{};return `<tr><td>${esc(f['DJI Case ID']||'')}</td><td>${esc(f['Repair Case']||'')}</td><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Product Model']||'')}</td><td>${esc(f['Serial No']||'')}</td><td>${esc(f['Case Type']||'')}</td><td>${esc(f['Case Status']||'')}</td><td><button class="btn-light" onclick="editInternalRepair(${index})">Open</button></td></tr>`}).join('')||'<tr><td colspan="8" class="muted">No internal repair cases found.</td></tr>'}
+    </tbody></table></div><div class="row" style="justify-content:center;align-items:center;margin-top:12px">${listPaginationHtml('internalRepair',total,ui.page,pageSize)}</div></div>`;
   renderInternalRepairForm(S.internalRepairEdit||S.internalRepairPrefill||{});
 }
 function newInternalRepair(){S.internalRepairEdit=null;S.internalRepairPrefill={};renderInternalRepairForm({});}
@@ -1060,9 +1076,25 @@ function renderSpareOrderDetailsAdmin(){
   const sec=$('spareOrderDetailsAdmin'); if(!sec)return;
   if(!isAdmin()){sec.innerHTML=`<div class="panel"><h2>Internal Spare Order details</h2><div class="notice">Admin only.</div></div>`;return;}
   const rows=S.spareOrderDetailsRows||[];
+  const ui=ensureListUi('internalSpare');
+  const q=String(ui.search||'').trim().toLowerCase();
+  const filtered=rows.map((r,index)=>({r,index})).filter(({r})=>{
+    const f=r.fields||{};
+    const caseText=String(f['DJI Case ID']||f['Case ID Remarks']||'').toLowerCase();
+    const company=String(f['Company Name']||'').toLowerCase();
+    return !q || caseText.includes(q) || company.includes(q);
+  }).sort((a,b)=>listDateMillis(b.r,'internalSpare')-listDateMillis(a.r,'internalSpare'));
+  const total=filtered.length;
+  const pageSize=Number(ui.pageSize)||10;
+  const pages=Math.max(1,Math.ceil(total/pageSize));
+  ui.page=Math.min(Math.max(1,Number(ui.page)||1),pages);
+  const start=(ui.page-1)*pageSize;
+  const pageRows=filtered.slice(start,start+pageSize);
   sec.innerHTML=`<div class="panel"><h2>Internal Spare Order details</h2><div class="notice">Admin-only table for DJI/internal spare order, shipment and document records. <button class="btn-light" onclick="loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin)">Refresh</button> <button class="act" onclick="newSpareOrderDetails()">New Internal Spare Order</button></div><div id="spareOrderDetailsForm"></div>
-  <div class="table-wrap"><table><thead><tr><th>DJI Case ID</th><th>Company</th><th>Case Type</th><th>Billing</th><th>Order Type</th><th>Created</th><th>Closed</th><th>Document</th><th>Action</th></tr></thead><tbody>
-  ${rows.map((r,i)=>{const f=r.fields||{};return `<tr><td>${esc(f['DJI Case ID']||'')}</td><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Case Type']||'')}</td><td>${esc(f['Billing Company']||'')}</td><td>${esc(Array.isArray(f['Order Type'])?f['Order Type'].join(', '):(f['Order Type']||''))}</td><td>${esc(dateInputValue(f['Case Creation Date']))}</td><td>${esc(dateInputValue(f['Case Close Date']))}</td><td>${detailsFieldValue(f['Document Upload'])}</td><td><button class="btn-light" onclick="editSpareOrderDetails(${i})">Open</button></td></tr>`}).join('')}</tbody></table></div></div>`;
+  <div class="row" style="align-items:end;gap:12px;flex-wrap:wrap"><div style="min-width:260px;flex:1"><label>Search by DJI Case ID or Company</label><input value="${esc(ui.search||'')}" oninput="setListSearch('internalSpare',this.value)" placeholder="Search case or company..."></div><div style="width:150px"><label>Records per page</label><select onchange="setListPageSize('internalSpare',this.value)">${[10,20,30,40,50,100].map(n=>`<option value="${n}" ${pageSize===n?'selected':''}>${n}</option>`).join('')}</select></div></div>
+  <div class="muted" style="margin:10px 0">${total?`Showing ${start+1}–${Math.min(start+pageSize,total)} of ${total} Internal Spare Orders`:'Showing 0 of 0 Internal Spare Orders'}</div>
+  <div class="table-wrap"><table><thead><tr><th>DJI Case ID</th><th>Company</th><th>Case Type</th><th>Billing</th><th>Order Type</th><th>DJI Cost</th><th>Created</th><th>Closed</th><th>Document</th><th>Action</th></tr></thead><tbody>
+  ${pageRows.map(({r,index})=>{const f=r.fields||{};return `<tr><td>${esc(f['DJI Case ID']||'')}</td><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Case Type']||'')}</td><td>${esc(f['Billing Company']||'')}</td><td>${esc(Array.isArray(f['Order Type'])?f['Order Type'].join(', '):(f['Order Type']||''))}</td><td>${esc(f['DJI Cost']||'')}</td><td>${esc(dateInputValue(f['Case Creation Date']))}</td><td>${esc(dateInputValue(f['Case Close Date']))}</td><td>${detailsFieldValue(f['Document Upload'])}</td><td><button class="btn-light" onclick="editSpareOrderDetails(${index})">Open</button></td></tr>`}).join('')||'<tr><td colspan="10" class="muted">No internal spare orders found.</td></tr>'}</tbody></table></div><div class="row" style="justify-content:center;align-items:center;margin-top:12px">${listPaginationHtml('internalSpare',total,ui.page,pageSize)}</div></div>`;
   renderSpareOrderDetailsForm(S.spareOrderDetailsEdit?.fields||{});
 }
 function newSpareOrderDetails(){S.spareOrderDetailsEdit=null;renderSpareOrderDetailsForm({});}
@@ -2455,17 +2487,23 @@ function ensureListUi(kind){
   S.listUi[kind]=S.listUi[kind]||{page:1,pageSize:10,search:''};
   return S.listUi[kind];
 }
+function renderListKind(kind){
+  if(kind==='orders') return renderOrders();
+  if(kind==='repairs') return renderRepairStatus();
+  if(kind==='internalRepair') return renderInternalRepair();
+  if(kind==='internalSpare') return renderSpareOrderDetailsAdmin();
+}
 function setListSearch(kind,value){
   const ui=ensureListUi(kind); ui.search=String(value||''); ui.page=1;
-  if(kind==='orders') renderOrders(); else renderRepairStatus();
+  renderListKind(kind);
 }
 function setListPageSize(kind,value){
   const ui=ensureListUi(kind); ui.pageSize=Math.max(1,Number(value)||10); ui.page=1;
-  if(kind==='orders') renderOrders(); else renderRepairStatus();
+  renderListKind(kind);
 }
 function changeListPage(kind,delta){
   const ui=ensureListUi(kind); ui.page=Math.max(1,(Number(ui.page)||1)+Number(delta||0));
-  if(kind==='orders') renderOrders(); else renderRepairStatus();
+  renderListKind(kind);
 }
 function listPaginationHtml(kind,total,page,pageSize){
   const pages=Math.max(1,Math.ceil(total/pageSize));
