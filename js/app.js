@@ -2467,20 +2467,28 @@ async function saveSpareOrderInternal(i){
 }
 function listDateMillis(row, kind){
   const f=(row&&row.fields)||{};
-  const names=kind==='repairs'
-    ? ['Date Created','Case created','Case Created','Case Creation Date','Created Date','Date Of Activation','Date of Purchase / Activation date']
-    : ['Date Created','Case Created','Case created','Created Date','Order Date'];
-  for(const name of names){
-    const v=f[name];
-    if(v===undefined || v===null || v==='') continue;
-    if(typeof v==='number' && Number.isFinite(v)) return v;
+  const fieldNamesByKind={
+    repairs:['Date Created','Case created','Case Created','Case Creation Date','Created Date','Date Of Activation','Date of Purchase / Activation date'],
+    orders:['Date Created','Case Created','Case created','Created Date','Order Date'],
+    internalRepair:['Case Creation Date','Date Created','Case Created','Case created','Created Date'],
+    internalSpare:['Case Creation Date','Date Created','Case Created','Case created','Created Date','Order Date']
+  };
+  const names=fieldNamesByKind[kind]||fieldNamesByKind.orders;
+  const toMillis=(v)=>{
+    if(v===undefined || v===null || v==='') return 0;
     const numeric=Number(v);
-    if(Number.isFinite(numeric) && numeric>1000000000) return numeric;
+    if(Number.isFinite(numeric)){
+      if(numeric>100000000000) return numeric;      // milliseconds
+      if(numeric>1000000000) return numeric*1000;  // seconds
+    }
     const parsed=Date.parse(String(v));
-    if(Number.isFinite(parsed)) return parsed;
+    return Number.isFinite(parsed)?parsed:0;
+  };
+  for(const name of names){
+    const ms=toMillis(f[name]);
+    if(ms) return ms;
   }
-  const meta=Number(row?.created_time || row?.createdTime || row?.modified_time || row?.modifiedTime || 0);
-  return Number.isFinite(meta) ? meta : 0;
+  return toMillis(row?.created_time || row?.createdTime || row?.modified_time || row?.modifiedTime || 0);
 }
 function ensureListUi(kind){
   S.listUi=S.listUi||{};
