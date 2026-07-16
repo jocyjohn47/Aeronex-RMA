@@ -275,7 +275,29 @@ async function listSpareOrderDetailsRows(env) {
   return (await listRecords(env, env.SPARE_ORDER_DETAILS_TABLE_ID)).map(r => ({ ...r, _table_id: env.SPARE_ORDER_DETAILS_TABLE_ID }));
 }
 
+function sameFieldValue(a, b) {
+  const left = lower(norm(a));
+  const right = lower(norm(b));
+  return !!left && !!right && left === right;
+}
 
+function findExistingInternalRepair(rows, fields) {
+  const repairCase = fields?.["Repair Case"];
+  const djiCase = fields?.["DJI Case ID"];
+  const djiInternalCase = fields?.["DJI Internal Case ID"];
+  return (rows || []).find(r => {
+    const f = r.fields || {};
+    return (repairCase && sameFieldValue(f["Repair Case"], repairCase)) ||
+           (djiCase && sameFieldValue(f["DJI Case ID"], djiCase)) ||
+           (djiInternalCase && sameFieldValue(f["DJI Internal Case ID"], djiInternalCase));
+  }) || null;
+}
+
+function findExistingInternalSpareOrder(rows, fields) {
+  const djiCase = fields?.["DJI Case ID"];
+  if (!djiCase) return null;
+  return (rows || []).find(r => sameFieldValue((r.fields || {})["DJI Case ID"], djiCase)) || null;
+}
 
 
 function orderNo(fields) {
@@ -1653,10 +1675,21 @@ async function handle(req, env) {
     const fieldTypes = await getFieldTypes(env, tableId);
     const fields = prepareFieldsForTable(fieldTypes, b.fields || {});
     if (!Object.keys(fields).length) return json({ error:"No valid fields to save" }, 400);
-    if (b.record_id) {
-      await updateRecord(env, tableId, b.record_id, fields);
-      return json({ ok:true, updated:true });
+
+    // Update-only protection: if the browser loses record_id, identify the
+    // existing case by its stable case fields and update that same Lark row.
+    let targetRecordId = norm(b.record_id);
+    if (!targetRecordId) {
+      const existingRows = await listInternalRepairRows(env, country);
+      const existing = findExistingInternalRepair(existingRows, b.fields || {});
+      targetRecordId = existing?.record_id || "";
     }
+    if (targetRecordId) {
+      await updateRecord(env, tableId, targetRecordId, fields);
+      return json({ ok:true, updated:true, record_id:targetRecordId, matchedExisting:!b.record_id });
+    }
+
+    // Creation is allowed only when no existing case can be found.
     const rec = await createRecord(env, tableId, fields);
     return json({ ok:true, created:true, record:rec.data || rec });
   }
@@ -1716,9 +1749,15 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     if (!Object.keys(fields).length) {
       return json({ error:"No valid fields to save", received:Object.keys(b.fields || {}), available:Object.keys(fieldTypes || {}) }, 400);
     }
-    if (b.record_id) {
-      const result = await updateRecordBestEffort(env, tableId, b.record_id, fields);
-      return json(result);
+    let targetRecordId = norm(b.record_id);
+    if (!targetRecordId) {
+      const existingRows = await listSpareOrderDetailsRows(env);
+      const existing = findExistingInternalSpareOrder(existingRows, b.fields || {});
+      targetRecordId = existing?.record_id || "";
+    }
+    if (targetRecordId) {
+      const result = await updateRecordBestEffort(env, tableId, targetRecordId, fields);
+      return json({ ...result, record_id:targetRecordId, matchedExisting:!b.record_id });
     }
     const rec = await createRecordBestEffort(env, tableId, fields);
     return json({ ok:true, created:true, record:rec.data || rec });
