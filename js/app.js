@@ -884,20 +884,38 @@ function internalRepairCaseLink(row){
   if(!currentUserIsAdminTech()) return esc(no||'-');
   return `<a href="#" onclick="openInternalRepairFromRepair('${esc(row.record_id)}');return false;">${esc(no||'Open')}</a>`;
 }
-function openInternalRepairFromRepair(recordId){
+async function openInternalRepairFromRepair(recordId){
   const row=(S.repairs||[]).find(r=>r.record_id===recordId) || {};
   const f=row.fields||{};
-  S.internalRepairEdit=null;
-  S.internalRepairPrefill={
-    'Repair Case': internalRepairCaseNo(f),
-    'Company Name': f['Company Name']||f['Dealer Name']||'',
-    'Product Model': f['Model No']||'',
-    'Serial No': f['Serial No']||'',
-    'Warranty Status': f['Warranty Status']||'',
-    'Warranry Status': f['Warranty Status']||'',
-    'Remark': f['Details Of Issue']||f['Issue Description']||f['Remarks']||'',
-    'Remarks': f['Details Of Issue']||f['Issue Description']||f['Remarks']||''
-  };
+  const repairCaseNo=internalRepairCaseNo(f);
+
+  // Always bind the Repair Status case to an existing Internal Repair record
+  // when one already exists. This prevents Save from creating a duplicate row.
+  try{
+    await loadInternalRepairMeta();
+  }catch(e){
+    console.warn('Unable to preload Internal Repair records',e);
+  }
+  const existing=(S.internalRepairRows||[]).find(r=>{
+    const rf=r.fields||{};
+    return repairCaseNo && String(rf['Repair Case']||'').trim().toLowerCase()===String(repairCaseNo).trim().toLowerCase();
+  });
+  if(existing){
+    S.internalRepairEdit=existing;
+    S.internalRepairPrefill=null;
+  }else{
+    S.internalRepairEdit=null;
+    S.internalRepairPrefill={
+      'Repair Case': repairCaseNo,
+      'Company Name': f['Company Name']||f['Dealer Name']||'',
+      'Product Model': f['Model No']||'',
+      'Serial No': f['Serial No']||'',
+      'Warranty Status': f['Warranty Status']||'',
+      'Warranry Status': f['Warranty Status']||'',
+      'Remark': f['Details Of Issue']||f['Issue Description']||f['Remarks']||'',
+      'Remarks': f['Details Of Issue']||f['Issue Description']||f['Remarks']||''
+    };
+  }
   S.returnToRepairStatus = true;
   show('internalRepair');
 }
