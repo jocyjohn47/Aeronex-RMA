@@ -199,8 +199,10 @@ function getSpareOrderNoFromRow(r){
 
 function invoiceDownloadCell(row){
   const f = (row && row.fields) || {};
-  const url = linkUrlValue(f['Invoice Download'] || f['Invoice Link'] || f['Invoice URL']);
-  const current = url ? `<a class="btn-light" target="_blank" href="${esc(url)}">Download Invoice</a>` : '-';
+  const value = f['Invoice Download'] || f['Invoice Link'] || f['Invoice URL'];
+  const secure = Array.isArray(value) && value.length ? secureLarkAttachmentUrl(value[0],'Invoice Download',row) : '';
+  const url = secure || linkUrlValue(value);
+  const current = url ? `<a class="btn-light" target="_blank" rel="noopener" href="${esc(url)}">Download Invoice</a>` : '-';
   const orderNo = orderNoValue(f);
   const upload = (canManageOrders && canManageOrders())
     ? `<br><label class="mini-upload">Upload Invoice<input type="file" onchange="uploadInvoiceFile('${esc(row.record_id)}','${esc(row._table_id||'')}','${esc(getSpareOrderNoFromRow(row))}',this)"></label>`
@@ -209,8 +211,10 @@ function invoiceDownloadCell(row){
 }
 function paymentReceiptCell(row){
   const f = (row && row.fields) || {};
-  const url = linkUrlValue(f['Payment Receipt'] || f['Payment Receipt Link'] || f['Payment Receipt URL']);
-  const current = url ? `<a class="btn-light" target="_blank" href="${esc(url)}">View Receipt</a>` : '-';
+  const value = f['Payment Receipt'] || f['Payment Receipt Link'] || f['Payment Receipt URL'];
+  const secure = Array.isArray(value) && value.length ? secureLarkAttachmentUrl(value[0],'Payment Receipt',row) : '';
+  const url = secure || linkUrlValue(value);
+  const current = url ? `<a class="btn-light" target="_blank" rel="noopener" href="${esc(url)}">View Receipt</a>` : '-';
   const orderNo = orderNoValue(f);
   const upload = `<br><label class="mini-upload">Upload Receipt<input type="file" onchange="uploadPaymentReceipt('${esc(row.record_id)}','${esc(row._table_id||'')}','${esc(getSpareOrderNoFromRow(row))}',this)"></label>`;
   return current + upload;
@@ -1112,7 +1116,7 @@ function renderSpareOrderDetailsAdmin(){
   <div class="row" style="align-items:end;gap:12px;flex-wrap:wrap"><div style="min-width:260px;flex:1"><label>Search by DJI Case ID or Company</label><input value="${esc(ui.search||'')}" oninput="setListSearch('internalSpare',this.value)" placeholder="Search case or company..."></div><div style="width:150px"><label>Records per page</label><select onchange="setListPageSize('internalSpare',this.value)">${[10,20,30,40,50,100].map(n=>`<option value="${n}" ${pageSize===n?'selected':''}>${n}</option>`).join('')}</select></div></div>
   <div class="muted" style="margin:10px 0">${total?`Showing ${start+1}–${Math.min(start+pageSize,total)} of ${total} Internal Spare Orders`:'Showing 0 of 0 Internal Spare Orders'}</div>
   <div class="table-wrap"><table><thead><tr><th>DJI Case ID</th><th>Company</th><th>Case Type</th><th>Billing</th><th>Order Type</th><th>DJI Cost</th><th>Created</th><th>Closed</th><th>Document</th><th>Action</th></tr></thead><tbody>
-  ${pageRows.map(({r,index})=>{const f=r.fields||{};return `<tr><td>${esc(f['DJI Case ID']||'')}</td><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Case Type']||'')}</td><td>${esc(f['Billing Company']||'')}</td><td>${esc(Array.isArray(f['Order Type'])?f['Order Type'].join(', '):(f['Order Type']||''))}</td><td>${esc(f['DJI Cost']||'')}</td><td>${esc(dateInputValue(f['Case Creation Date']))}</td><td>${esc(dateInputValue(f['Case Close Date']))}</td><td>${detailsFieldValue(f['Document Upload'])}</td><td><button class="btn-light" onclick="editSpareOrderDetails(${index})">Open</button></td></tr>`}).join('')||'<tr><td colspan="10" class="muted">No internal spare orders found.</td></tr>'}</tbody></table></div><div class="row" style="justify-content:center;align-items:center;margin-top:12px">${listPaginationHtml('internalSpare',total,ui.page,pageSize)}</div></div>`;
+  ${pageRows.map(({r,index})=>{const f=r.fields||{};return `<tr><td>${esc(f['DJI Case ID']||'')}</td><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Case Type']||'')}</td><td>${esc(f['Billing Company']||'')}</td><td>${esc(Array.isArray(f['Order Type'])?f['Order Type'].join(', '):(f['Order Type']||''))}</td><td>${esc(f['DJI Cost']||'')}</td><td>${esc(dateInputValue(f['Case Creation Date']))}</td><td>${esc(dateInputValue(f['Case Close Date']))}</td><td>${detailsFieldValue(f['Document Upload'],'Document Upload',r)}</td><td><button class="btn-light" onclick="editSpareOrderDetails(${index})">Open</button></td></tr>`}).join('')||'<tr><td colspan="10" class="muted">No internal spare orders found.</td></tr>'}</tbody></table></div><div class="row" style="justify-content:center;align-items:center;margin-top:12px">${listPaginationHtml('internalSpare',total,ui.page,pageSize)}</div></div>`;
   renderSpareOrderDetailsForm(S.spareOrderDetailsEdit?.fields||{});
 }
 function newSpareOrderDetails(){S.spareOrderDetailsEdit=null;renderSpareOrderDetailsForm({});}
@@ -1123,10 +1127,10 @@ function editSpareOrderDetails(i){
   const inline=$('spareOrderDetailsForm');
   if(inline) inline.innerHTML='';
   const f=r.fields||{};
-  const html = spareOrderDetailsFormHtml(f) + `<h3 class="details-section-title">All Lark Fields</h3>${renderAllLarkFieldsTable(f)}`;
+  const html = spareOrderDetailsFormHtml(f,r) + `<h3 class="details-section-title">All Lark Fields</h3>${renderAllLarkFieldsTable(f,r)}`;
   showDetailsModal(`Internal Spare Order details - ${(f['DJI Case ID']||f['Company Name']||'Open')}`, html);
 }
-function spareOrderDetailsFormHtml(f){
+function spareOrderDetailsFormHtml(f,row){
   const meta=S.spareOrderDetailsMeta||{};
   return `<div class="subpanel"><h3>${S.spareOrderDetailsEdit?'Edit':'New'} Internal Spare Order details</h3><div class="grid3">
     <div><label>DJI Case ID</label><input id="sodDjiCaseId" value="${esc(f['DJI Case ID']||'')}"></div>
@@ -1148,7 +1152,7 @@ function spareOrderDetailsFormHtml(f){
   <label>Remarks</label><textarea id="sodRemarks">${esc(f['Remarks']||'')}</textarea>
   <div class="panel">
     <h3>Document Upload</h3>
-    <div class="notice"><b>Current document:</b> ${detailsFieldValue(f['Document Upload'])}</div>
+    <div class="notice"><b>Current document:</b> ${detailsFieldValue(f['Document Upload'],'Document Upload',row)}</div>
     <div class="row"><input id="sodDocumentUploadFile" type="file" multiple><button class="btn-light" onclick="uploadSpareOrderDetailsDocument()">Upload Document(s)</button></div>
     <div id="sodDocumentMsg" class="msg"></div>
   </div>
@@ -1156,7 +1160,7 @@ function spareOrderDetailsFormHtml(f){
 }
 function renderSpareOrderDetailsForm(f){
   const box=$('spareOrderDetailsForm'); if(!box)return;
-  box.innerHTML=spareOrderDetailsFormHtml(f||{});
+  box.innerHTML=spareOrderDetailsFormHtml(f||{},S.spareOrderDetailsEdit||null);
 }
 
 async function uploadSpareOrderDetailsDocument(){
@@ -1353,7 +1357,7 @@ function flycartEditorHtml(row){
     <div class="grid3">
       ${fields.filter(k=>k!=='Dealer Credit Note Upload').map(k=>`<div><label>${esc(k)}</label><input id="${flycartInputId(k)}" value="${esc(flycartValue(f[k]))}"></div>`).join('')}
       <div><label>Dealer Credit Note Upload</label><input id="flycartCreditNoteFile" type="file"></div>
-      <div><label>Current Credit Note</label><div>${spareOrderDisplayCell(f['Dealer Credit Note Upload'])}</div></div>
+      <div><label>Current Credit Note</label><div>${spareOrderDisplayCell(f['Dealer Credit Note Upload'],row,'Dealer Credit Note Upload')}</div></div>
     </div>
     <div class="row">
       <button onclick="saveFlycartCredit()">Save to Lark</button>
@@ -2271,23 +2275,45 @@ function localOrderDownloadLink(orderNo, fileVal, row){
 }
 
 
-function spareOrderDisplayCell(v){
+function larkAttachmentToken(v){
+  if(!v || typeof v!=='object') return '';
+  const direct=v.file_token||v.token||'';
+  if(direct) return String(direct);
+  const raw=String(v.tmp_url||v.url||v.file_url||v.href||'');
+  const m=raw.match(/\/medias\/([^/]+)\/download/i);
+  return m ? decodeURIComponent(m[1]) : '';
+}
+function secureLarkAttachmentUrl(v, fieldName, row){
+  const token=larkAttachmentToken(v);
+  const tableId=row && (row._table_id||row.tableId||row.table_id) || '';
+  const recordId=row && row.record_id || '';
+  if(!token || !tableId || !recordId) return '';
+  const q=new URLSearchParams({
+    tableId,
+    record_id:recordId,
+    fieldName:String(fieldName||''),
+    fileToken:token,
+    name:String(v.name||v.file_name||v.filename||'download'),
+    email:String(S.user?.email||S.user?.username||''),
+    role:String(S.user?.role||'')
+  });
+  return '/api/download-lark-attachment?'+q.toString();
+}
+function spareOrderDisplayCell(v, row, fieldName){
   if(v===undefined || v===null || v==='') return '-';
   if(Array.isArray(v)){
     if(!v.length) return '-';
-    const f=v[0]||{};
-    const url=f.url||f.link||f.tmp_url||'';
-    const name=f.name||f.file_name||f.filename||'Open';
-    return url ? `<a class="btn-light" target="_blank" rel="noopener" href="${esc(url)}">${esc(name)}</a>` : esc(name||'Available');
+    return v.map(f=>spareOrderDisplayCell(f,row,fieldName)).join('<br>');
   }
   if(typeof v==='object'){
-    const url=v.link||v.url||v.tmp_url||'';
-    const text=v.text||v.name||v.file_name||v.value||'Open';
+    const secure=secureLarkAttachmentUrl(v,fieldName,row);
+    const url=secure || v.link||v.url||v.tmp_url||'';
+    const text=v.text||v.name||v.file_name||v.filename||v.value||'Open';
     return url ? `<a class="btn-light" target="_blank" rel="noopener" href="${esc(url)}">${esc(text)}</a>` : esc(text);
   }
-  const s=String(v);
-  if(s.startsWith('http://') || s.startsWith('https://')) return `<a class="btn-light" target="_blank" rel="noopener" href="${esc(s)}">Open</a>`;
-  return esc(s);
+  const text=String(v);
+  if(text.startsWith('http://') || text.startsWith('https://')) return `<a class="btn-light" target="_blank" rel="noopener" href="${esc(text)}">Open</a>`;
+  return esc(text);
 }
 function spareOrderField(f, names){
   for(const n of names){
@@ -2379,8 +2405,9 @@ function detailsFieldValue(v, fieldName, row){
   if(shouldFormatAsDisplayDate(fieldName, v)) return esc(formatDisplayDate(v));
 
   if(typeof v==='object'){
-    const link = v.link || v.url || v.href || v.file_url || v.tmp_url;
-    const name = v.text || v.name || v.filename || v.value || v.title || 'Open';
+    const secure = secureLarkAttachmentUrl(v, fieldName, row);
+    const link = secure || v.link || v.url || v.href || v.file_url || v.tmp_url;
+    const name = v.text || v.name || v.file_name || v.filename || v.value || v.title || 'Open';
     if(link) return `<a target="_blank" rel="noopener" href="${esc(link)}">${esc(name)}</a>`;
     try{return esc(JSON.stringify(v));}catch(e){return esc(String(v));}
   }
