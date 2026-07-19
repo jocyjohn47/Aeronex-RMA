@@ -94,6 +94,72 @@ async function larkFetchRaw(env, path, init = {}) {
   return data;
 }
 
+function attachmentTokens(value) {
+  const out = [];
+  const walk = v => {
+    if (!v) return;
+    if (Array.isArray(v)) return v.forEach(walk);
+    if (typeof v !== "object") return;
+    const direct = norm(v.file_token || v.token);
+    if (direct) out.push(direct);
+    const raw = norm(v.tmp_url || v.url || v.file_url || v.href);
+    const m = raw.match(/\/medias\/([^/]+)\/download/i);
+    if (m) out.push(decodeURIComponent(m[1]));
+  };
+  walk(value);
+  return [...new Set(out)];
+}
+
+function allowedAttachmentTables(env) {
+  return new Set([
+    env.SPARE_ORDER_UAE_TABLE_ID, env.SPARE_ORDER_KSA_TABLE_ID,
+    env.REPAIR_UAE_TABLE_ID, env.REPAIR_KSA_TABLE_ID,
+    env.INTERNAL_REPAIR_UAE_TABLE_ID, env.INTERNAL_REPAIR_KSA_TABLE_ID,
+    env.SPARE_ORDER_DETAILS_TABLE_ID, env.DEALER_REPAIR_CASE_TABLE_ID,
+    env.FLYCART_CREDIT_USE_TABLE_ID, env.WARRANTY_STATUS_TABLE_ID,
+    env.SOFTWARE_STATUS_TABLE_ID, env.CONTRACT_DOCUMENT_INTERNAL_TABLE_ID,
+    env.INTERNAL_CONTRACT_DOCUMENT_TABLE_ID, env.CONTRACT_DOCUMENT_TABLE_ID,
+    env.PORTAL_NOTES_TABLE_ID
+  ].filter(Boolean));
+}
+
+async function attachmentUser(env, email) {
+  const wanted = lower(email);
+  if (!wanted) return null;
+  const rows = await listRecords(env, env.USER_TABLE_ID);
+  const rec = rows.find(r => userEmail(r.fields || {}) === wanted);
+  return rec ? publicUser(rec) : null;
+}
+
+function canAccessAttachmentRecord(user, recordFields) {
+  if (!user) return false;
+  const role = lower(user.role);
+  if (role.includes("admin") || role.includes("technician")) return true;
+  const f = recordFields || {};
+  const userMail = lower(user.email || user.username);
+  const userComp = lower(user.companyName || user.fields?.["Company Name"]);
+  const recordMails = [f["Contact Email"], f["Username ( Email )"], f["Email"], f["Dealer Email"]].map(x => lower(fieldText(x))).filter(Boolean);
+  const recordCompanies = [f["Company Name"], f["Dealer / Company"], f["Dealer Name"], f["Company"]].map(x => lower(fieldText(x))).filter(Boolean);
+  return (!!userMail && recordMails.includes(userMail)) || (!!userComp && recordCompanies.includes(userComp));
+}
+
+async function downloadLarkAttachment(env, tableId, fileToken, fileName) {
+  const token = await larkToken(env);
+  const extra = encodeURIComponent(JSON.stringify({ bitablePerm: { tableId } }));
+  const url = `https://open.larksuite.com/open-apis/drive/v1/medias/${encodeURIComponent(fileToken)}/download?extra=${extra}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Lark attachment download failed (${res.status}): ${text.slice(0,300)}`);
+  }
+  const headers = new Headers();
+  headers.set("content-type", res.headers.get("content-type") || "application/octet-stream");
+  headers.set("content-disposition", `attachment; filename*=UTF-8''${encodeURIComponent(fileName || "download")}`);
+  headers.set("cache-control", "private, no-store");
+  headers.set("x-content-type-options", "nosniff");
+  return new Response(res.body, { status: 200, headers });
+}
+
 async function listRecords(env, tableId) {
   if (!tableId) return [];
   let rows = [];
@@ -1263,6 +1329,27 @@ async function handle(req, env) {
   const p = url.pathname;
 
   if (p === "/api/health") return json({ ok: true, cloudflare_pages_functions: true });
+
+
+  if (p === "/api/download-lark-attachment" && req.method === "GET") {
+    const tableId = norm(url.searchParams.get("tableId"));
+    const recordId = norm(url.searchParams.get("record_id"));
+    const fieldName = norm(url.searchParams.get("fieldName"));
+    const fileToken = norm(url.searchParams.get("fileToken"));
+    const fileName = norm(url.searchParams.get("name")) || "download";
+    const email = lower(url.searchParams.get("email"));
+    if (!tableId || !recordId || !fieldName || !fileToken || !email) {
+      return json({ error: "Missing attachment download parameters" }, 400);
+    }
+    if (!allowedAttachmentTables(env).has(tableId)) return json({ error: "Attachment table not allowed" }, 403);
+    const user = await attachmentUser(env, email);
+    if (!user) return json({ error: "User not found" }, 401);
+    const rec = await getRecord(env, tableId, recordId);
+    if (!canAccessAttachmentRecord(user, rec.fields || {})) return json({ error: "Forbidden" }, 403);
+    const fieldValue = (rec.fields || {})[fieldName];
+    if (!attachmentTokens(fieldValue).includes(fileToken)) return json({ error: "Attachment does not belong to this record" }, 403);
+    return downloadLarkAttachment(env, tableId, fileToken, fileName);
+  }
 
   if (p === "/api/debug-env") {
     return json({ ok: true, has: {
