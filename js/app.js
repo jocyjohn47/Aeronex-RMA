@@ -412,27 +412,9 @@ function selectedCountry(){
   if(isAdmin()) return localStorage.getItem('aeronexAdminCountry') || 'UAE & Other Region';
   return country();
 }
-async function setAdminCountry(v){
+function setAdminCountry(v){
   localStorage.setItem('aeronexAdminCountry', v);
-
-  const activeSection = document.querySelector('.section.active')?.id || 'dashboard';
-
-  try{
-    await Promise.all([loadOrders(), loadRepairs()]);
-  }catch(e){
-    console.error('Country data refresh failed', e);
-  }
-
-  renderDashboard();
-  renderSpare();
-  renderRepairCreate();
-  renderRepairStatus();
-  renderDealers();
-  renderNotes();
-  renderAdmin();
-  renderAdminCenter();
-
-  show(activeSection);
+  initApp();
 }
 
 async function login(){
@@ -1021,7 +1003,7 @@ function internalRepairFormHtml(src, isPopup){
       <div><label>Tracking No - Receiving</label><input id="irRecvTrack" value="${esc(f[n.recvTracking]||'')}"></div>
       <div><label>Shipment Cost - Receiving</label><input id="irRecvCost" value="${esc(f[n.recvCost]||'')}"></div>
       <div><label>Unit Consumed</label><input id="irUnitConsumed" value="${esc(f['Unit Consumed']||'')}"></div>
-      <div><label>Material Consumed</label><input id="irMaterialConsumed" value="${esc(f[n.material]||'')}"></div>
+      <input id="irMaterialConsumed" type="hidden" value="${esc(f[n.material]||'')}">
       <div><label>DJI Invoice</label><input id="irDjiInvoice" value="${esc(f['DJI Invoice']||'')}"></div>
       <div><label>Total Invoice</label><input id="irTotalInvoice" value="${esc(f['Total Invoice']||'')}"></div>
       <div><label>DJI Repair Status</label>${fieldMetaByName(meta)[n.djiStatus]?.optionCount?selectHtml(meta,'irDjiStatus',n.djiStatus,f[n.djiStatus]||''):`<input id="irDjiStatus" value="${esc(f[n.djiStatus]||'')}">`}</div>
@@ -2698,7 +2680,6 @@ async function submitRepair(){
 function renderRepairStatus(){
   const ui=ensureListUi('repairs');
   const q=String(ui.search||'').trim().toLowerCase();
-  const isKsaView=String(selectedCountry()||'').toLowerCase().includes('ksa');
   const source=(Array.isArray(S.repairs)?S.repairs:[]).map((r,index)=>({r,index}));
   const filtered=source.filter(({r})=>{
     const f=r.fields||{};
@@ -2712,8 +2693,7 @@ function renderRepairStatus(){
   ui.page=Math.min(Math.max(1,Number(ui.page)||1),pages);
   const start=(ui.page-1)*pageSize;
   const pageRows=filtered.slice(start,start+pageSize);
-  const emptyColspan=isKsaView?12:11;
-  $('repairStatus').innerHTML=`<div class="panel"><h2>Repair Status <button class="btn-light" onclick="refreshRepairs()">Refresh</button></h2><div class="row" style="align-items:end;gap:12px;flex-wrap:wrap"><div style="min-width:260px;flex:1"><label>Search by Case No or Dealer / Company</label><input id="repairListSearch" value="${esc(ui.search||'')}" oninput="setListSearch('repairs',this.value)" placeholder="Search case or dealer..."></div><div style="width:150px"><label>Records per page</label><select onchange="setListPageSize('repairs',this.value)">${[10,20,30,40,50,100].map(n=>`<option value="${n}" ${pageSize===n?'selected':''}>${n}</option>`).join('')}</select></div></div><div class="muted" style="margin:10px 0">${total?`Showing ${start+1}–${Math.min(start+pageSize,total)} of ${total} Repair Cases`:'Showing 0 of 0 Repair Cases'}</div><div class="table-wrap"><table><thead><tr><th>Repair Case No</th><th>Dealer / Company</th>${isKsaView?'<th>Receiver Address</th>':''}<th>Model No</th><th>Serial No</th><th>Date</th><th>Status</th><th>Log Link</th><th>Issue Media / Required Details</th><th>Remarks</th><th>Notes</th><th>Case Close Comment</th></tr></thead><tbody>${pageRows.map(({r})=>{let f=r.fields||{};return `<tr><td>${internalRepairCaseLink(r)}</td><td>${esc(f['Company Name']||f['Dealer Name']||'')}</td>${isKsaView?`<td>${esc(f['Receiver Address']||'')}</td>`:''}<td>${esc(f['Model No']||'')}</td><td>${esc(f['Serial No']||'')}</td><td>${new Date(Number(f['Date of Purchase / Activation date']||f['Date Of Activation']||'')).toLocaleDateString('en-GB')}</td><td>${statusCell(r,'repair')}</td><td>${linkCell(f['Log File']||f['Log for Drone and RC'])}</td><td>${linkCell(f['Upload all the required details']||f['Issue Video and Pictures'])}</td><td>${esc(f['Remarks']||'')}</td><td>${esc(f['Notes']||'')}</td><td>${esc(f['Case Close Comment']||'')}</td></tr>`}).join('')||`<tr><td colspan="${emptyColspan}" class="muted">No repair cases found.</td></tr>`}</tbody></table></div><div class="row" style="justify-content:center;align-items:center;margin-top:12px">${listPaginationHtml('repairs',total,ui.page,pageSize)}</div></div>`;
+  $('repairStatus').innerHTML=`<div class="panel"><h2>Repair Status <button class="btn-light" onclick="refreshRepairs()">Refresh</button></h2><div class="row" style="align-items:end;gap:12px;flex-wrap:wrap"><div style="min-width:260px;flex:1"><label>Search by Case No or Dealer / Company</label><input id="repairListSearch" value="${esc(ui.search||'')}" oninput="setListSearch('repairs',this.value)" placeholder="Search case or dealer..."></div><div style="width:150px"><label>Records per page</label><select onchange="setListPageSize('repairs',this.value)">${[10,20,30,40,50,100].map(n=>`<option value="${n}" ${pageSize===n?'selected':''}>${n}</option>`).join('')}</select></div></div><div class="muted" style="margin:10px 0">${total?`Showing ${start+1}–${Math.min(start+pageSize,total)} of ${total} Repair Cases`:'Showing 0 of 0 Repair Cases'}</div><div class="table-wrap"><table><thead><tr><th>Repair Case No</th><th>Dealer / Company</th><th>Model No</th><th>Serial No</th><th>Date</th><th>Status</th><th>Log Link</th><th>Issue Media / Required Details</th><th>Remarks</th><th>Notes</th><th>Case Close Comment</th></tr></thead><tbody>${pageRows.map(({r})=>{let f=r.fields||{};return `<tr><td>${internalRepairCaseLink(r)}</td><td>${esc(f['Company Name']||f['Dealer Name']||'')}</td><td>${esc(f['Model No']||'')}</td><td>${esc(f['Serial No']||'')}</td><td>${new Date(Number(f['Date of Purchase / Activation date']||f['Date Of Activation']||'')).toLocaleDateString('en-GB')}</td><td>${statusCell(r,'repair')}</td><td>${linkCell(f['Log File']||f['Log for Drone and RC'])}</td><td>${linkCell(f['Upload all the required details']||f['Issue Video and Pictures'])}</td><td>${esc(f['Remarks']||'')}</td><td>${esc(f['Notes']||'')}</td><td>${esc(f['Case Close Comment']||'')}</td></tr>`}).join('')||'<tr><td colspan="11" class="muted">No repair cases found.</td></tr>'}</tbody></table></div><div class="row" style="justify-content:center;align-items:center;margin-top:12px">${listPaginationHtml('repairs',total,ui.page,pageSize)}</div></div>`;
 }
 function linkCell(v){if(!v)return '-'; if(typeof v==='object'&&v.link)return `<a href="${esc(v.link)}" target="_blank">Open</a>`; return `<a href="${esc(v)}" target="_blank">Open</a>`;}
 function renderDealers(){
