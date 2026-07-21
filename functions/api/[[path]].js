@@ -2005,7 +2005,9 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     const uploadRequiredLink = b.requiredDetailsLink || b.uploadRequiredDetailsLink || b.uploadAllRequiredDetailsLink || "";
     const logLink = b.logFileLink || b.logFile || "";
     const issueMediaLink = b.issueMediaLink || "";
-    const gacaValue = b.gacaDocument?.data || b.gacaDocument || "";
+    const gacaDocument = b.gacaDocument && typeof b.gacaDocument === "object"
+      ? b.gacaDocument
+      : null;
 
     const fields = {
       "REPAIR CASE": no,
@@ -2046,7 +2048,8 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
 
       "Issue Video and Pictures Link": issueMediaLink,
 
-      "GACA Document": gacaValue,
+      // GACA Document is a Lark attachment field (type 17).
+      // It is uploaded and attached only after the repair record exists.
       "Warranty Status": b.warrantyStatus || "",
 
       "Remarks": b.remarks || "",
@@ -2075,6 +2078,22 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     }
 
     const result = await createRecord(env, tableId, sendFields);
+    const recordId = result.data?.record?.record_id || result.data?.record_id;
+
+    // Lark attachment fields cannot accept browser base64 data directly.
+    // Create the row first, upload the file to Lark, then attach its file_token
+    // to the same Repair Case record.
+    if (gacaDocument?.data && fieldTypes["GACA Document"] === 17) {
+      if (!recordId) throw new Error("Repair case created but record_id was not returned for GACA attachment");
+      const fileName = norm(gacaDocument.name) || `GACA-${no}.pdf`;
+      const mimeType = norm(gacaDocument.type) || "application/pdf";
+      const bytes = bytesFromDataUrl(gacaDocument.data);
+      const fileToken = await larkUploadBitableAttachment(env, bytes, fileName, mimeType);
+      await updateRecord(env, tableId, recordId, {
+        "GACA Document": larkAttachmentValue(fileToken, fileName)
+      });
+    }
+
     return json({ ok: true, repairNo: no, caseNo: no, result: result.data, sentFields: Object.keys(sendFields) });
   }
 
