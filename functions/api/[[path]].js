@@ -1995,6 +1995,37 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     return json({ ok: true, orderNo: no, tableId, record_id: recordId, piGenerationRequired: true, result: result.data });
   }
 
+
+  if (p === "/api/update-spare-order" && req.method === "POST") {
+    const b = await readBody(req);
+    if (!logAccessAllowed(norm(b.role))) return json({ error:"Forbidden" }, 403);
+    const tableId = norm(b.tableId);
+    const recordId = norm(b.record_id);
+    const allowed = [env.SPARE_ORDER_UAE_TABLE_ID, env.SPARE_ORDER_KSA_TABLE_ID, env.ORDER_UAE_TABLE_ID, env.ORDER_KSA_TABLE_ID].filter(Boolean);
+    if (!tableId || !recordId) return json({ error:"Missing tableId or record_id" }, 400);
+    if (!allowed.includes(tableId)) return json({ error:"Invalid spare order table" }, 403);
+    const current = await getRecord(env, tableId, recordId);
+    const orderNo = assertValidSpareOrderNo(spareOrderNo(current.fields || {}));
+    const items = Array.isArray(b.items) ? b.items : [];
+    if (!items.length) return json({ error:"Add at least one item" }, 400);
+    const requested = {
+      "Company Name": b.companyName || "",
+      "Contact Name": b.contactName || "",
+      "Billing Address": b.billingAddress || "",
+      "Invoice Address": b.billingAddress || "",
+      "Invoice Currency": b.invoiceCurrency || current.fields?.["Invoice Currency"] || "USD",
+      "Material Name": items.map(i=>i.materialName || i["Material Name"] || "").join(", "),
+      "Material Code": items.map(i=>i.materialCode || i["Material Code"] || "").join(", "),
+      "Qty": items.map(i=>i.qty || i.Qty || 1).join(", "),
+      "Remarks": b.remarks || ""
+    };
+    const fieldTypes = await getFieldTypes(env, tableId);
+    const fields = {};
+    for (const [k,v] of Object.entries(requested)) if (fieldTypes[k]) fields[k]=v;
+    await updateRecord(env, tableId, recordId, fields);
+    return json({ ok:true, updated:true, orderNo, tableId, record_id:recordId });
+  }
+
   if ((p === "/api/create-repair" || p === "/api/repair-case") && req.method === "POST") {
     const b = await readBody(req);
     const country = norm(b.country || "UAE & Other Region");
