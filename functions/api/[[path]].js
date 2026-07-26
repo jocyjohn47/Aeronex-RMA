@@ -119,7 +119,7 @@ function allowedAttachmentTables(env) {
     env.FLYCART_CREDIT_USE_TABLE_ID, env.WARRANTY_STATUS_TABLE_ID,
     env.SOFTWARE_STATUS_TABLE_ID, env.CONTRACT_DOCUMENT_INTERNAL_TABLE_ID,
     env.INTERNAL_CONTRACT_DOCUMENT_TABLE_ID, env.CONTRACT_DOCUMENT_TABLE_ID,
-    env.PORTAL_NOTES_TABLE_ID
+    env.PORTAL_NOTES_TABLE_ID, env.AFTER_SALES_SUPPORT_TABLE_ID
   ].filter(Boolean));
 }
 
@@ -1717,6 +1717,56 @@ async function handle(req, env) {
     });
   }
 
+
+
+  if (p === "/api/after-sales-support" && req.method === "GET") {
+    const role = norm(url.searchParams.get("role"));
+    if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    const tableId = env.AFTER_SALES_SUPPORT_TABLE_ID;
+    if (!tableId) return json({ error:"AFTER_SALES_SUPPORT_TABLE_ID not configured" }, 400);
+    const rows = await listRecords(env, tableId);
+    const fields = await getTableFieldsForDiagnostics(env, tableId);
+    return json({ ok:true, tableId, rows, fields });
+  }
+
+  if (p === "/api/after-sales-support/save" && req.method === "POST") {
+    const body = await readBody(req);
+    const role = norm(body.role);
+    if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    const tableId = env.AFTER_SALES_SUPPORT_TABLE_ID;
+    if (!tableId) return json({ error:"AFTER_SALES_SUPPORT_TABLE_ID not configured" }, 400);
+    const fieldTypes = await getFieldTypes(env, tableId);
+    const fields = prepareFieldsForTable(fieldTypes, body.fields || {});
+    if (!Object.keys(fields).length) return json({ error:"No valid fields to save" }, 400);
+    let recordId = norm(body.record_id);
+    let updated = false;
+    if (recordId) {
+      await updateRecord(env, tableId, recordId, fields);
+      updated = true;
+    } else {
+      const created = await createRecord(env, tableId, fields);
+      recordId = created.data?.record?.record_id || created.data?.record_id || created.data?.record?.id || "";
+      if (!recordId) {
+        const caseNo = norm((body.fields || {})["DJI Case Number"]);
+        const rows = await listRecords(env, tableId);
+        const match = [...rows].reverse().find(r => norm((r.fields || {})["DJI Case Number"]) === caseNo);
+        recordId = match?.record_id || "";
+      }
+    }
+    const files = Array.isArray(body.files) ? body.files : [];
+    if (files.length) {
+      if (!recordId) return json({ error:"Case saved but record_id was not returned for attachment upload" }, 500);
+      const meta = await getFieldMetaByName(env, tableId);
+      const attachmentField = meta["Attachment"];
+      if (!attachmentField) return json({ error:"Attachment field not found in Lark table" }, 400);
+      const current = updated ? await getRecord(env, tableId, recordId) : null;
+      const existing = Array.isArray(current?.fields?.["Attachment"]) ? current.fields["Attachment"] : [];
+      const uploaded = [];
+      for (const file of files) uploaded.push(await uploadBitableAttachmentToLark(env, tableId, recordId, attachmentField.field_id, file));
+      await updateRecord(env, tableId, recordId, { "Attachment":[...existing, ...uploaded] });
+    }
+    return json({ ok:true, updated, created:!updated, record_id:recordId });
+  }
 
   if (p === "/api/admin-module-meta") {
     const role = norm(url.searchParams.get("role"));
