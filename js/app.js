@@ -1010,6 +1010,7 @@ function internalRepairFormHtml(src, isPopup){
       <div><label>Case Status</label>${selectHtml(meta,'irCaseStatus','Case Status',f['Case Status']||'')}</div>
     </div>
     <label>Remarks</label><textarea id="irRemark">${esc(f[n.remark]||'')}</textarea>
+    <label>Case Close Comment</label><textarea id="irCaseCloseComment">${esc(f['Case Close Comment']||'')}</textarea>
     <div class="notice"><b>Add spare used:</b> select from Spare Part List. It saves to Material Consumed / Unit Consumed in the same case row.</div>
     <div class="row"><input id="irSpareSearch" placeholder="Search Material Code or Name" oninput="renderInternalRepairSpareOptions()"><input id="irSpareQty" class="qty" type="number" min="1" value="1"><button class="btn-light" onclick="addInternalRepairSpare()">Add Spare</button></div>
     <select id="irSpareSelect"></select>
@@ -1070,7 +1071,8 @@ async function saveInternalRepair(){
       'Total Invoice':val('irTotalInvoice'),
       [n.djiStatus]:selectedOptionsValue('irDjiStatus')||val('irDjiStatus'),
       'Case Status':selectedOptionsValue('irCaseStatus'),
-      [n.remark]:val('irRemark')
+      [n.remark]:val('irRemark'),
+      'Case Close Comment':val('irCaseCloseComment')
     };
     const editingId=S.internalRepairEdit?.record_id||'';
     await api('/api/save-internal-repair',{method:'POST',body:JSON.stringify({role:S.user.role||'',country:meta.country||adminModuleCountry(),userCountry:userCountryText()||'',record_id:editingId,fields})});
@@ -2329,8 +2331,8 @@ function spareOrderSpareSourceValue(f){ return spareOrderField(f, ['Spare Source
 function spareOrderStockUpdatedValue(f){ return spareOrderField(f, ['Stock Updated']); }
 function spareOrderFinalNotesValue(f){ return spareOrderField(f, ['Final Notes']); }
 function spareOrderDjiCaseValue(f){ return spareOrderField(f, ['DJI Case NO','DJI case NO','DJI Case No','DJI case No']); }
-function spareOrderCanEditInternal(){ return isAdmin(); }
-function spareOrderCanDownloadReport(){ return isAdmin(); }
+function spareOrderCanEditInternal(){ return currentUserIsAdminTech(); }
+function spareOrderCanDownloadReport(){ return currentUserIsAdminTech(); }
 function shipmentDestinationOptions(cur){
   const opts=['','HONG KONG WH','DXB FZCO (JAFZA)','DXB DSO (Mainland)','KSA Office','SHIP TO DEALER'];
   return opts.map(x=>`<option value="${esc(x)}" ${String(cur||'')===x?'selected':''}>${esc(x||'Select')}</option>`).join('');
@@ -2426,6 +2428,75 @@ function kvHtml(label, html){
 }
 
 
+
+function splitOrderFieldValues(v){
+  if(Array.isArray(v)) return v.map(x=>String(x||'').trim()).filter(Boolean);
+  return String(v||'').split(',').map(x=>x.trim()).filter(Boolean);
+}
+function spareOrderItemsFromFields(f){
+  const codes=splitOrderFieldValues(f['Material Code']);
+  const names=splitOrderFieldValues(f['Material Name']);
+  const qtys=splitOrderFieldValues(f['Qty']);
+  const count=Math.max(codes.length,names.length,qtys.length);
+  const items=[];
+  for(let i=0;i<count;i++) items.push({materialCode:codes[i]||'',materialName:names[i]||'',qty:Number(qtys[i]||1)||1});
+  return items;
+}
+function orderEditSpareOptions(){
+  return (S.spares||[]).map(x=>{const f=x.fields||{};const o={materialCode:f['Material Code']||'',materialName:f['Material Name']||''};return `<option value="${encodeURIComponent(JSON.stringify(o))}">${esc(o.materialCode)} - ${esc(o.materialName)}</option>`}).join('');
+}
+function renderOrderEditItems(){
+  const body=$('orderEditItems'); if(!body) return;
+  const items=S.orderEdit?.items||[];
+  body.innerHTML=items.map((x,i)=>`<tr><td>${esc(x.materialCode)}</td><td>${esc(x.materialName)}</td><td><input type="number" min="1" value="${esc(x.qty||1)}" onchange="S.orderEdit.items[${i}].qty=Math.max(1,Number(this.value)||1)"></td><td><button class="btn-light" onclick="S.orderEdit.items.splice(${i},1);renderOrderEditItems()">Remove</button></td></tr>`).join('')||'<tr><td colspan="4" class="muted">No items.</td></tr>';
+}
+function addOrderEditItem(){
+  const sel=$('orderEditSpareSelect'); if(!sel||!sel.value) return;
+  const item=JSON.parse(decodeURIComponent(sel.value));
+  item.qty=Math.max(1,Number(val('orderEditQty'))||1);
+  S.orderEdit.items.push(item);
+  renderOrderEditItems();
+}
+function openSpareOrderEdit(i){
+  if(!currentUserIsAdminTech()) return;
+  const r=(S.orders||[])[i]; if(!r) return;
+  const f=r.fields||{};
+  S.orderEdit={index:i,row:r,items:spareOrderItemsFromFields(f)};
+  const html=`<div class="panel"><h3>Update Existing Spare Order</h3>
+    <div class="notice">Updates the same Lark record and regenerates the Order Excel. It does not change stock.</div>
+    <div class="grid3">
+      <div><label>Spare Order No</label><input value="${esc(orderNoValue(f)||'')}" disabled></div>
+      <div><label>Company Name</label><input id="orderEditCompany" value="${esc(f['Company Name']||'')}"></div>
+      <div><label>Contact Name</label><input id="orderEditContact" value="${esc(f['Contact Name']||'')}"></div>
+      <div><label>Billing Address</label><input id="orderEditAddress" value="${esc(f['Billing Address']||f['Invoice Address']||'')}"></div>
+      <div><label>Invoice Currency</label><select id="orderEditCurrency">${['AED','USD','SAR'].map(x=>`<option ${String(f['Invoice Currency']||'USD').toUpperCase()===x?'selected':''}>${x}</option>`).join('')}</select></div>
+      <div><label>Country</label><input value="${esc(f['Country']||selectedCountry())}" disabled></div>
+    </div>
+    <label>Remarks</label><textarea id="orderEditRemarks">${esc(f['Remarks']||'')}</textarea>
+    <h3>Order Items</h3>
+    <div class="row"><select id="orderEditSpareSelect">${orderEditSpareOptions()}</select><input id="orderEditQty" class="qty" type="number" min="1" value="1"><button class="btn-light" onclick="addOrderEditItem()">Add Item</button></div>
+    <div class="table-wrap"><table><thead><tr><th>Material Code</th><th>Material Name</th><th>Qty</th><th>Action</th></tr></thead><tbody id="orderEditItems"></tbody></table></div>
+    <div class="row"><button class="act" onclick="saveExistingSpareOrder()">Save & Regenerate Order File</button></div><div id="orderEditMsg" class="msg"></div>
+  </div>`;
+  showDetailsModal(`Update Order - ${orderNoValue(f)||''}`,html);
+  renderOrderEditItems();
+}
+async function saveExistingSpareOrder(){
+  try{
+    if(!currentUserIsAdminTech()) throw new Error('Admin/Technician only');
+    const edit=S.orderEdit; if(!edit?.row) throw new Error('Order not selected');
+    if(!edit.items.length) throw new Error('Add at least one item');
+    const r=edit.row, f=r.fields||{}, currency=val('orderEditCurrency')||f['Invoice Currency']||'USD';
+    const pricedItems=edit.items.map(x=>{const qty=Math.max(1,Number(x.qty)||1);const unit=itemUnitPrice(x,currency);return {...x,qty,selectedCurrency:currency,unitPrice:unit,totalPrice:unit*qty,price:unit};});
+    const orderData={companyName:val('orderEditCompany'),contactName:val('orderEditContact'),billingAddress:val('orderEditAddress'),invoiceCurrency:currency,country:f['Country']||selectedCountry(),remarks:val('orderEditRemarks')};
+    const result=await api('/api/update-spare-order',{method:'POST',body:JSON.stringify({role:S.user.role||'',tableId:r._table_id||r.tableId||r.table_id,record_id:r.record_id,companyName:orderData.companyName,contactName:orderData.contactName,billingAddress:orderData.billingAddress,invoiceCurrency:currency,remarks:orderData.remarks,items:pricedItems})});
+    await generateAndUploadPi({orderNo:result.orderNo,tableId:result.tableId,record_id:result.record_id},orderData,pricedItems);
+    msg('orderEditMsg','Order updated and Order Excel replaced successfully');
+    await loadOrders();
+    setTimeout(()=>{const idx=(S.orders||[]).findIndex(x=>x.record_id===result.record_id);if(idx>=0)openSpareOrderDetails(idx);},500);
+  }catch(e){msg('orderEditMsg',e.message||String(e));}
+}
+
 function openOrderDetails(i){ return openSpareOrderDetails(i); }
 function openSpareOrderDetails(i){
   currentSpareOrderDetailIndex=i;
@@ -2443,7 +2514,7 @@ function openSpareOrderDetails(i){
     ${kv('Company Name', f['Company Name'] || '-')}
     ${kv('Contact Name', f['Contact Name'] || '-')}
     ${kv('Billing / Invoice Address', f['Billing Address'] || f['Invoice Address'] || '-')}
-    ${kvHtml('Order File', backendOrderDownloadLink(r))}
+    ${kvHtml('Order File', `${backendOrderDownloadLink(r)}${currentUserIsAdminTech()?` <button class="btn-light" onclick="openSpareOrderEdit(${i})">Update Order</button>`:''}`)}
     ${kv('Shipment Destination', spareOrderDestinationValue(f) || '-')}
     ${kv('Shipment Tracking No', spareOrderTrackingValue(f) || '-')}
     ${kv('Specialized', spareOrderSpecializedValue(f) || '-')}
