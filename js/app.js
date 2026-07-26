@@ -380,7 +380,7 @@ function portalDocumentLink(v){
 }
 
 
-let S={dealerRepairCases:[],drcParts:[],drcEditingId:'',drcSubmitting:false,user:loadUser(),spares:[],cart:[],orders:[],repairs:[],dealers:[],notes:[],listUi:{orders:{page:1,pageSize:10,search:''},repairs:{page:1,pageSize:10,search:''}}};
+let S={dealerRepairCases:[],drcParts:[],drcEditingId:'',drcSubmitting:false,afterSalesRows:[],afterSalesFields:[],afterSalesTableId:'',afterSalesEditingId:'',user:loadUser(),spares:[],cart:[],orders:[],repairs:[],dealers:[],notes:[],listUi:{orders:{page:1,pageSize:10,search:''},repairs:{page:1,pageSize:10,search:''}}};
 function $(id){return document.getElementById(id)}function esc(v){return String(v??'').replace(/[&<>"]/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]))}
 
 
@@ -450,7 +450,7 @@ function ensureAeronexLogoStyles(){
 }
 
 function layout(){ensureAeronexLogoStyles();let n=S.user?.displayName||S.user?.username||'User';document.body.innerHTML=`<header class="topbar"><div class="brand"><img class="brand-logo-img" src="img/dji_aeronex_logo.png" alt="DJI AERONEX" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div class=&quot;brand-title&quot;>AERO NEX</div><div class=&quot;brand-sub&quot;>RMA & Spare Order Portal</div>')"></div><nav class="nav">
-<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${adminCenterEnabled()?`<a data-sec="adminCenter" href="#" onclick="show('adminCenter')">🧰 Admin Center</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','flycartCredit','dealers','adminCenter','reportBackup','spareStockUpdate','internalRepair','spareOrderDetailsAdmin','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
+<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${adminCenterEnabled()?`<a data-sec="adminCenter" href="#" onclick="show('adminCenter')">🧰 Admin Center</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','flycartCredit','dealers','adminCenter','reportBackup','spareStockUpdate','internalRepair','afterSalesSupport','spareOrderDetailsAdmin','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
 
 async function ensureSpareListLoaded(){
   if(Array.isArray(S.spares) && S.spares.length) return S.spares;
@@ -477,7 +477,7 @@ function show(sec){
         try{renderDealerRepairCase()}catch(err){console.error('renderDealerRepairCase failed',err)}
       });
   }
-  if(sec==='warrantySoftwareStatus'){try{renderWarrantySoftwareStatus()}catch(e){console.error('renderWarrantySoftwareStatus failed',e)}}if(sec==='flycartCredit'){loadFlycartCredit().then(renderFlycartCredit).catch(e=>{console.error('flycartCredit failed',e);try{renderFlycartCredit()}catch(err){}})}if(sec==='logsDiagnostics'){try{renderLogsDiagnostics()}catch(e){console.error('renderLogsDiagnostics failed',e)}}if(sec==='adminCenter'){try{renderAdminCenter()}catch(e){console.error('renderAdminCenter failed',e)}}if(sec==='reportBackup'){try{renderReportBackup()}catch(e){console.error('renderReportBackup failed',e)}}if(sec==='spareStockUpdate'){try{renderSpareStockUpdate()}catch(e){console.error('renderSpareStockUpdate failed',e)}}if(sec==='internalRepair'){loadInternalRepairMeta().then(renderInternalRepair).catch(e=>{console.error('internalRepair failed',e);try{renderInternalRepairError(e)}catch(_){}})}if(sec==='spareOrderDetailsAdmin'){loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin).catch(e=>{console.error('spareOrderDetails failed',e);try{renderSpareOrderDetailsError(e)}catch(_){}})}scrollTo(0,0)
+  if(sec==='warrantySoftwareStatus'){try{renderWarrantySoftwareStatus()}catch(e){console.error('renderWarrantySoftwareStatus failed',e)}}if(sec==='flycartCredit'){loadFlycartCredit().then(renderFlycartCredit).catch(e=>{console.error('flycartCredit failed',e);try{renderFlycartCredit()}catch(err){}})}if(sec==='logsDiagnostics'){try{renderLogsDiagnostics()}catch(e){console.error('renderLogsDiagnostics failed',e)}}if(sec==='adminCenter'){try{renderAdminCenter()}catch(e){console.error('renderAdminCenter failed',e)}}if(sec==='reportBackup'){try{renderReportBackup()}catch(e){console.error('renderReportBackup failed',e)}}if(sec==='spareStockUpdate'){try{renderSpareStockUpdate()}catch(e){console.error('renderSpareStockUpdate failed',e)}}if(sec==='internalRepair'){loadInternalRepairMeta().then(renderInternalRepair).catch(e=>{console.error('internalRepair failed',e);try{renderInternalRepairError(e)}catch(_){}})}if(sec==='afterSalesSupport'){loadAfterSalesSupport().then(renderAfterSalesSupport).catch(e=>{console.error('afterSalesSupport failed',e);try{renderAfterSalesSupportError(e)}catch(_){}})}if(sec==='spareOrderDetailsAdmin'){loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin).catch(e=>{console.error('spareOrderDetails failed',e);try{renderSpareOrderDetailsError(e)}catch(_){}})}scrollTo(0,0)
 }
 
 function dealerRepairCaseEnabled(){
@@ -1601,6 +1601,7 @@ function adminCenterCards(){
   }
   if(currentUserIsAdminTech()){
     cards.push(['🛠','Internal Repair','Create and update internal repair register cases.','internalRepair','Open']);
+    cards.push(['🎧','After Sales Support Register','Create, update, and close after-sales support cases.','afterSalesSupport','Open']);
   }
   if(isAdmin()){
     cards.push(['📦','Internal Spare Order details','Admin-only spare order internal processing records.','spareOrderDetailsAdmin','Open']);
@@ -1793,6 +1794,55 @@ async function downloadSpareStockComparison(){
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   }catch(e){ msg.textContent=e.message||String(e); }
+}
+
+
+function afterSalesFieldValue(row,name){return (row?.fields||{})[name]??''}
+function afterSalesDateInput(v){
+  if(!v) return new Date().toISOString().slice(0,10);
+  const n=Number(v), d=Number.isFinite(n)&&n>0?new Date(n):new Date(v);
+  return Number.isNaN(d.getTime())?new Date().toISOString().slice(0,10):d.toISOString().slice(0,10);
+}
+function afterSalesAttachmentLinks(row){
+  const files=afterSalesFieldValue(row,'Attachment');
+  if(!Array.isArray(files)||!files.length) return '-';
+  return files.map((f,i)=>{
+    const token=f?.file_token||f?.token||'', name=f?.name||f?.file_name||`Attachment ${i+1}`;
+    if(!token) return esc(name);
+    const q=new URLSearchParams({tableId:S.afterSalesTableId,record_id:row.record_id,fieldName:'Attachment',fileToken:token,name,email:userEmail()});
+    return `<a class="btn-light" href="/api/download-lark-attachment?${q.toString()}" target="_blank" rel="noopener">${esc(name)}</a>`;
+  }).join(' ');
+}
+async function loadAfterSalesSupport(){
+  if(!currentUserIsAdminTech()) throw new Error('Admin or Technician access only.');
+  const d=await api('/api/after-sales-support?role='+encodeURIComponent(S.user.role||''));
+  S.afterSalesRows=d.rows||[]; S.afterSalesFields=d.fields||[]; S.afterSalesTableId=d.tableId||'';
+  return d;
+}
+function newAfterSalesSupport(){S.afterSalesEditingId='';renderAfterSalesSupport()}
+function editAfterSalesSupport(recordId){S.afterSalesEditingId=recordId||'';renderAfterSalesSupport();setTimeout(()=>$('afterSalesForm')?.scrollIntoView({behavior:'smooth',block:'start'}),30)}
+function renderAfterSalesSupportError(e){const sec=$('afterSalesSupport');if(sec)sec.innerHTML=`<div class="panel"><h2>After Sales Support Register</h2><div class="notice">${esc(e?.message||e||'Unable to load records.')}</div></div>`}
+function renderAfterSalesSupport(){
+  const sec=$('afterSalesSupport'); if(!sec) return;
+  if(!currentUserIsAdminTech()){sec.innerHTML='<div class="panel"><h2>After Sales Support Register</h2><div class="notice">Admin or Technician access only.</div></div>';return}
+  const rows=S.afterSalesRows||[], editing=rows.find(r=>r.record_id===S.afterSalesEditingId)||null, f=editing?.fields||{};
+  const search=(window.AFTER_SALES_SEARCH||'').toLowerCase();
+  const status=window.AFTER_SALES_STATUS||'';
+  const shown=rows.filter(r=>{const x=r.fields||{};const hay=['DJI Case Number','Dealer Name','Dealer Email','Type of Case','Case Description','Recorded by'].map(k=>String(x[k]||'')).join(' ').toLowerCase();return(!search||hay.includes(search))&&(!status||String(x['Case Status']||'')===status)});
+  sec.innerHTML=`<div class="panel"><h2>After Sales Support Register <button class="btn-light" onclick="loadAfterSalesSupport().then(renderAfterSalesSupport)">Refresh</button></h2><div class="notice">Available to Admin and Technician. Records are saved directly to the Lark After Sales Support Register Case table.</div>
+  <div class="row" style="align-items:end;gap:12px;flex-wrap:wrap"><div style="min-width:260px;flex:1"><label>Search</label><input value="${esc(window.AFTER_SALES_SEARCH||'')}" oninput="window.AFTER_SALES_SEARCH=this.value;renderAfterSalesSupport()" placeholder="Case number, dealer, email, or case type"></div><div style="width:190px"><label>Case Status</label><select onchange="window.AFTER_SALES_STATUS=this.value;renderAfterSalesSupport()"><option value="">All Status</option><option ${status==='Open'?'selected':''}>Open</option><option ${status==='Closed'?'selected':''}>Closed</option></select></div><div><button onclick="newAfterSalesSupport()">+ New Support Case</button></div></div>
+  <div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>Date</th><th>DJI Case Number</th><th>Status</th><th>Recorded by</th><th>Dealer Name</th><th>Dealer Email</th><th>Type of Case</th><th>Case Description</th><th>Attachment</th><th>DJI Reply</th><th>Remarks</th><th>Action</th></tr></thead><tbody>${shown.map(r=>{const x=r.fields||{};return `<tr><td>${esc(afterSalesDateInput(x['Date of Case Register']))}</td><td>${esc(x['DJI Case Number']||'')}</td><td>${esc(x['Case Status']||'')}</td><td>${esc(x['Recorded by']||'')}</td><td>${esc(x['Dealer Name']||'')}</td><td>${esc(x['Dealer Email']||'')}</td><td>${esc(x['Type of Case']||'')}</td><td>${esc(x['Case Description']||'')}</td><td>${afterSalesAttachmentLinks(r)}</td><td>${esc(x['DJI Reply']||'')}</td><td>${esc(x['Remarks']||'')}</td><td><button class="btn-light" onclick="editAfterSalesSupport('${esc(r.record_id)}')">Open</button></td></tr>`}).join('')||'<tr><td colspan="12" class="muted">No support cases found.</td></tr>'}</tbody></table></div>
+  <div id="afterSalesForm" class="panel" style="box-shadow:none;margin-top:18px;border:1px solid #dbe3ef"><h3>${editing?'Update Support Case':'New Support Case'}</h3><input type="hidden" id="afterSalesRecordId" value="${esc(editing?.record_id||'')}"><div class="grid3"><div><label>Date of Case Register</label><input id="afterSalesDate" type="date" value="${esc(afterSalesDateInput(f['Date of Case Register']))}"></div><div><label>DJI Case Number</label><input id="afterSalesCaseNo" value="${esc(f['DJI Case Number']||'')}"></div><div><label>Case Status</label><select id="afterSalesCaseStatus"><option ${String(f['Case Status']||'Open')==='Open'?'selected':''}>Open</option><option ${String(f['Case Status']||'')==='Closed'?'selected':''}>Closed</option></select></div><div><label>Recorded by</label><input id="afterSalesRecordedBy" value="${esc(f['Recorded by']||S.user.displayName||S.user.contactName||S.user.username||'')}"></div><div><label>Dealer Name</label><input id="afterSalesDealerName" value="${esc(f['Dealer Name']||'')}"></div><div><label>Dealer Email</label><input id="afterSalesDealerEmail" type="email" value="${esc(f['Dealer Email']||'')}"></div><div><label>Type of Case</label><input id="afterSalesType" value="${esc(f['Type of Case']||'')}"></div><div style="grid-column:span 2"><label>Attachment</label><input id="afterSalesAttachment" type="file" multiple></div></div><div class="grid2"><div><label>Case Description</label><textarea id="afterSalesDescription" rows="4">${esc(f['Case Description']||'')}</textarea></div><div><label>DJI Reply</label><textarea id="afterSalesReply" rows="4">${esc(f['DJI Reply']||'')}</textarea></div></div><div><label>Remarks</label><textarea id="afterSalesRemarks" rows="3">${esc(f['Remarks']||'')}</textarea></div><p><button onclick="saveAfterSalesSupport()">${editing?'Update Case':'Create Case'}</button> <button class="btn-light" onclick="newAfterSalesSupport()">Clear</button> <span id="afterSalesMsg" class="msg"></span></p></div></div>`;
+}
+async function saveAfterSalesSupport(){
+  try{
+    if(!currentUserIsAdminTech()) throw new Error('Admin or Technician access only.');
+    const fields={'Date of Case Register':$('afterSalesDate')?.value||'','DJI Case Number':$('afterSalesCaseNo')?.value.trim()||'','Case Status':$('afterSalesCaseStatus')?.value||'Open','Recorded by':$('afterSalesRecordedBy')?.value.trim()||'','Dealer Name':$('afterSalesDealerName')?.value.trim()||'','Dealer Email':$('afterSalesDealerEmail')?.value.trim()||'','Type of Case':$('afterSalesType')?.value.trim()||'','Case Description':$('afterSalesDescription')?.value.trim()||'','DJI Reply':$('afterSalesReply')?.value.trim()||'','Remarks':$('afterSalesRemarks')?.value.trim()||''};
+    if(!fields['DJI Case Number']) throw new Error('DJI Case Number is required.');
+    const files=[]; for(const file of Array.from($('afterSalesAttachment')?.files||[])) files.push({name:file.name,type:file.type||'application/octet-stream',data:await fileToDataUrl(file)});
+    const d=await api('/api/after-sales-support/save',{method:'POST',body:JSON.stringify({role:S.user.role||'',record_id:$('afterSalesRecordId')?.value||'',fields,files})});
+    msg('afterSalesMsg',d.updated?'Support case updated.':'Support case created.',true); S.afterSalesEditingId=d.record_id||''; await loadAfterSalesSupport(); renderAfterSalesSupport();
+  }catch(e){msg('afterSalesMsg',e.message||String(e))}
 }
 
 function renderAdminCenter(){
