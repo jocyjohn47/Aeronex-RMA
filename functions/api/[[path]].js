@@ -1432,6 +1432,25 @@ async function handle(req, env) {
   }
 
 
+  if (p === "/api/lark-dropdown-options") {
+    const country = norm(url.searchParams.get("country"));
+    const build = async (tableId) => {
+      if (!tableId) return {};
+      const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields`);
+      const out = {};
+      for (const field of data.data?.items || []) {
+        const options = diagnosticFieldOptions(field);
+        if (options.length) out[field.field_name] = [...new Set(options.map(x => norm(x)).filter(Boolean))];
+      }
+      return out;
+    };
+    const [order, repair] = await Promise.all([
+      build(spareTable(env, country)),
+      build(repairTable(env, country))
+    ]);
+    return json({ ok:true, country:normalizePortalCountry(country), order, repair });
+  }
+
   if (p === "/api/logs-diagnostics/tables") {
     const role = norm(url.searchParams.get("role"));
     if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
