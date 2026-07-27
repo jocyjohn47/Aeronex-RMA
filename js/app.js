@@ -268,12 +268,30 @@ function canUpdateStatus(){
   const role = String(S.user?.role || S.user?.fields?.['User Role'] || '').toLowerCase();
   return role.includes('admin') || role.includes('technician');
 }
+function uniqueOptions(list){
+  return [...new Set((Array.isArray(list)?list:[]).map(x=>String(x||'').trim()).filter(Boolean))];
+}
+function larkOptions(section, fieldName){
+  return uniqueOptions(S.dropdownOptions?.[section]?.[fieldName] || []);
+}
+function selectOptions(list, current, includeBlank=true){
+  const cur=String(current||'');
+  const opts=uniqueOptions(list);
+  if(cur && !opts.includes(cur)) opts.unshift(cur);
+  if(includeBlank) opts.unshift('');
+  return uniqueOptions(opts).map(x=>`<option value="${esc(x)}" ${cur===x?'selected':''}>${esc(x||'Select')}</option>`).join('');
+}
 function statusOptions(type, current){
-  const repair = ['Registered','On Process','Closed'];
-  const spare = ['Submitted','Registered','On Process','Approved','Invoiced','Closed','Cancelled'];
-  const list = type === 'repair' ? repair : spare;
-  const cur = current || (type === 'repair' ? 'Registered' : 'Submitted');
-  return list.map(x => `<option ${x===cur?'selected':''}>${x}</option>`).join('');
+  return selectOptions(larkOptions(type==='repair'?'repair':'order','Status'), current, false);
+}
+async function loadDropdownOptions(){
+  try{
+    const d=await api('/api/lark-dropdown-options?country='+encodeURIComponent(selectedCountry()));
+    S.dropdownOptions={order:d.order||{},repair:d.repair||{}};
+  }catch(e){
+    console.error('Unable to load Lark dropdown options',e);
+    S.dropdownOptions={order:{},repair:{}};
+  }
 }
 async function updateRecordStatus(tableId, recordId, status, type){
   try{
@@ -380,7 +398,7 @@ function portalDocumentLink(v){
 }
 
 
-let S={dealerRepairCases:[],drcParts:[],drcEditingId:'',drcSubmitting:false,afterSalesRows:[],afterSalesFields:[],afterSalesTableId:'',afterSalesEditingId:'',afterSalesPage:1,portalNotesPage:1,user:loadUser(),spares:[],cart:[],orders:[],repairs:[],dealers:[],notes:[],listUi:{orders:{page:1,pageSize:10,search:''},repairs:{page:1,pageSize:10,search:''}}};
+let S={dealerRepairCases:[],drcParts:[],drcEditingId:'',drcSubmitting:false,afterSalesRows:[],afterSalesFields:[],afterSalesTableId:'',afterSalesEditingId:'',afterSalesPage:1,portalNotesPage:1,user:loadUser(),spares:[],cart:[],orders:[],repairs:[],dealers:[],notes:[],dropdownOptions:{order:{},repair:{}},listUi:{orders:{page:1,pageSize:10,search:''},repairs:{page:1,pageSize:10,search:''}}};
 function $(id){return document.getElementById(id)}function esc(v){return String(v??'').replace(/[&<>"]/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]))}
 
 
@@ -1967,13 +1985,13 @@ function dealerAddress(){
   );
 }
 function allowedInvoiceCurrencies(){
-  return selectedCountry().includes('KSA') ? ['USD','SAR'] : ['USD','AED'];
+  return larkOptions('order','Invoice Currency');
 }
 function defaultInvoiceCurrency(){
   const allowed = allowedInvoiceCurrencies();
   const configured = String(uf('Invoice Currency','') || '').trim().toUpperCase();
   if(allowed.includes(configured)) return configured;
-  return selectedCountry().includes('KSA') ? 'SAR' : 'AED';
+  return allowed[0] || '';
 }
 function selectedInvoiceCurrency(){
   const el = document.getElementById('invoiceCurrency');
@@ -1982,9 +2000,9 @@ function selectedInvoiceCurrency(){
   return allowed.includes(cur) ? cur : defaultInvoiceCurrency();
 }
 function currencyOptions(){
-  const cur = selectedInvoiceCurrency();
-  return allowedInvoiceCurrencies().map(c => `<option ${cur===c?'selected':''}>${c}</option>`).join('');
+  return selectOptions(allowedInvoiceCurrencies(), selectedInvoiceCurrency(), false);
 }
+
 function priceLabel(prefix, currency){
   return `${prefix} ${currency} (Without Tax & Duty)`;
 }
@@ -2401,19 +2419,15 @@ function spareOrderDjiCaseValue(f){ return spareOrderField(f, ['DJI Case NO','DJ
 function spareOrderCanEditInternal(){ return currentUserIsAdminTech(); }
 function spareOrderCanDownloadReport(){ return currentUserIsAdminTech(); }
 function shipmentDestinationOptions(cur){
-  const opts=['','HONG KONG WH','DXB FZCO (JAFZA)','DXB DSO (Mainland)','KSA Office','SHIP TO DEALER'];
-  return opts.map(x=>`<option value="${esc(x)}" ${String(cur||'')===x?'selected':''}>${esc(x||'Select')}</option>`).join('');
+  const fields=['Shipment Destination','Order Location','Spare Order Location'];
+  const opts=fields.flatMap(name=>larkOptions('order',name));
+  return selectOptions(opts,cur,true);
 }
 function spareSourceOptions(cur){
-  const isKsa = String(selectedCountry() || '').toLowerCase().includes('ksa');
-  const opts = isKsa
-    ? ['', 'KSA Local Stock', 'From DJI']
-    : ['', 'UAE Local Stock', 'From DJI'];
-  return opts.map(x=>`<option value="${esc(x)}" ${String(cur||'')===x?'selected':''}>${esc(x||'Select')}</option>`).join('');
+  return selectOptions(larkOptions('order','Spare Source'),cur,true);
 }
 function specializedOptions(cur){
-  const opts=['','Enterprise','Delivery','Consumer','Agriculture'];
-  return opts.map(x=>`<option value="${esc(x)}" ${String(cur||'')===x?'selected':''}>${esc(x||'Select')}</option>`).join('');
+  return selectOptions(larkOptions('order','Specialized'),cur,true);
 }
 
 function ensureDetailsModalStyles(){
@@ -2561,7 +2575,7 @@ async function openSpareOrderEdit(i){
       <div><label>Company Name</label><input id="orderEditCompany" value="${esc(f['Company Name']||'')}"></div>
       <div><label>Contact Name</label><input id="orderEditContact" value="${esc(f['Contact Name']||'')}"></div>
       <div><label>Billing Address</label><input id="orderEditAddress" value="${esc(f['Billing Address']||f['Invoice Address']||'')}"></div>
-      <div><label>Invoice Currency</label><select id="orderEditCurrency">${['AED','USD','SAR'].map(x=>`<option ${String(f['Invoice Currency']||'USD').toUpperCase()===x?'selected':''}>${x}</option>`).join('')}</select></div>
+      <div><label>Invoice Currency</label><select id="orderEditCurrency">${selectOptions(allowedInvoiceCurrencies(),String(f['Invoice Currency']||'').toUpperCase(),false)}</select></div>
       <div><label>Country</label><input value="${esc(f['Country']||selectedCountry())}" disabled></div>
     </div>
     <label>Remarks</label><textarea id="orderEditRemarks">${esc(f['Remarks']||'')}</textarea>
@@ -2901,6 +2915,7 @@ async function initApp(){
   // Do not load full spare list during initial login; it is large and slows the portal.
   S.spares = Array.isArray(S.spares) ? S.spares : [];
 
+  await loadDropdownOptions();
   try{await loadOrders()}catch{}
   try{await loadRepairs()}catch{}
   try{S.dealers=await api('/api/dealers')}catch{}
