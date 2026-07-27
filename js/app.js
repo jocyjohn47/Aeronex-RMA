@@ -2524,13 +2524,38 @@ function addOrderEditItem(){
   S.orderEdit.items.push(item);
   renderOrderEditItems();
 }
-function openSpareOrderEdit(i){
+async function loadExistingSpareOrderItems(r, currency){
+  const fromFields=spareOrderItemsFromFields((r&&r.fields)||{}).filter(x=>x.materialCode||x.materialName);
+  if(fromFields.length) return fromFields;
+  if(!window.XlsxPopulate) return [];
+  const tableId=r&&(r._table_id||r.tableId||r.table_id)||'';
+  const recordId=r&&r.record_id||'';
+  if(!tableId||!recordId) return [];
+  const orderNo=getSpareOrderNoFromRow(r);
+  const url=`/api/download-order-excel?tableId=${encodeURIComponent(tableId)}&record_id=${encodeURIComponent(recordId)}&orderNo=${encodeURIComponent(orderNo)}&role=${encodeURIComponent(S.user.role||'')}`;
+  const res=await fetch(url,{cache:'no-store'});
+  if(!res.ok) return [];
+  const workbook=await XlsxPopulate.fromDataAsync(await res.arrayBuffer());
+  const cfg=piTemplateConfig(currency);
+  const items=[];
+  for(const sheet of workbook.sheets()){
+    for(let row=cfg.itemStart;row<=cfg.itemEnd;row++){
+      const materialCode=String(sheet.cell(`${cfg.codeCol}${row}`).value()??'').trim();
+      const materialName=String(sheet.cell(`${cfg.modelCol}${row}`).value()??'').trim();
+      const qtyValue=sheet.cell(`${cfg.qtyCol}${row}`).value();
+      if(!materialCode&&!materialName) continue;
+      items.push({materialCode,materialName,qty:Math.max(1,Number(qtyValue)||1)});
+    }
+  }
+  return items;
+}
+async function openSpareOrderEdit(i){
   if(!currentUserIsAdminTech()) return;
   const r=(S.orders||[])[i]; if(!r) return;
   const f=r.fields||{};
-  S.orderEdit={index:i,row:r,items:spareOrderItemsFromFields(f)};
+  const currency=String(f['Invoice Currency']||'USD').toUpperCase();
+  S.orderEdit={index:i,row:r,items:[]};
   const html=`<div class="panel"><h3>Update Existing Spare Order</h3>
-    <div class="notice">Updates the same Lark record and regenerates the Order Excel. It does not change stock.</div>
     <div class="grid3">
       <div><label>Spare Order No</label><input value="${esc(orderNoValue(f)||'')}" disabled></div>
       <div><label>Company Name</label><input id="orderEditCompany" value="${esc(f['Company Name']||'')}"></div>
@@ -2546,6 +2571,14 @@ function openSpareOrderEdit(i){
     <div class="row"><button class="act" onclick="saveExistingSpareOrder()">Save & Regenerate Order File</button></div><div id="orderEditMsg" class="msg"></div>
   </div>`;
   showDetailsModal(`Update Order - ${orderNoValue(f)||''}`,html);
+  const body=$('orderEditItems');
+  if(body) body.innerHTML='<tr><td colspan="4" class="muted">Loading order items...</td></tr>';
+  try{
+    S.orderEdit.items=await loadExistingSpareOrderItems(r,currency);
+  }catch(e){
+    console.error('Unable to load existing order items',e);
+    S.orderEdit.items=[];
+  }
   renderOrderEditItems();
 }
 async function saveExistingSpareOrder(){
