@@ -1023,12 +1023,11 @@ function internalRepairFormHtml(src, isPopup){
       <div><label>Unit Consumed</label><input id="irUnitConsumed" value="${esc(f['Unit Consumed']||'')}"></div>
       <input id="irMaterialConsumed" type="hidden" value="${esc(f[n.material]||'')}">
       <div><label>DJI Invoice</label><input id="irDjiInvoice" value="${esc(f['DJI Invoice']||'')}"></div>
-      <div><label>Total Invoice</label><input id="irTotalInvoice" value="${esc(f['Total Invoice']||'')}"></div>
+      <div><label>Total Amount</label><input id="irTotalAmount" type="number" step="0.01" value="${esc(f['Total Amount']??'')}"></div>
       <div><label>DJI Repair Status</label>${fieldMetaByName(meta)[n.djiStatus]?.optionCount?selectHtml(meta,'irDjiStatus',n.djiStatus,f[n.djiStatus]||''):`<input id="irDjiStatus" value="${esc(f[n.djiStatus]||'')}">`}</div>
       <div><label>Case Status</label>${selectHtml(meta,'irCaseStatus','Case Status',f['Case Status']||'')}</div>
     </div>
     <label>Remarks</label><textarea id="irRemark">${esc(f[n.remark]||'')}</textarea>
-    <label>Case Close Comment</label><textarea id="irCaseCloseComment">${esc(f['Case Close Comment']||'')}</textarea>
     <div class="notice"><b>Add spare used:</b> select from Spare Part List. It saves to Material Consumed / Unit Consumed in the same case row.</div>
     <div class="row"><input id="irSpareSearch" placeholder="Search Material Code or Name" oninput="renderInternalRepairSpareOptions()"><input id="irSpareQty" class="qty" type="number" min="1" value="1"><button class="btn-light" onclick="addInternalRepairSpare()">Add Spare</button></div>
     <select id="irSpareSelect"></select>
@@ -1086,11 +1085,10 @@ async function saveInternalRepair(){
       'Unit Consumed':val('irUnitConsumed'),
       [n.material]:val('irMaterialConsumed'),
       'DJI Invoice':val('irDjiInvoice'),
-      'Total Invoice':val('irTotalInvoice'),
+      'Total Amount':val('irTotalAmount'),
       [n.djiStatus]:selectedOptionsValue('irDjiStatus')||val('irDjiStatus'),
       'Case Status':selectedOptionsValue('irCaseStatus'),
-      [n.remark]:val('irRemark'),
-      'Case Close Comment':val('irCaseCloseComment')
+      [n.remark]:val('irRemark')
     };
     const editingId=S.internalRepairEdit?.record_id||'';
     await api('/api/save-internal-repair',{method:'POST',body:JSON.stringify({role:S.user.role||'',country:meta.country||adminModuleCountry(),userCountry:userCountryText()||'',record_id:editingId,fields})});
@@ -2863,6 +2861,68 @@ async function submitRepair(){
     }
   }
 }
+
+function repairAttachmentCell(row, fieldName, label){
+  const value=(row.fields||{})[fieldName];
+  if(!Array.isArray(value) || !value.length) return '<span class="muted">Not uploaded</span>';
+  return value.map(file=>{
+    const url=secureLarkAttachmentUrl(file,fieldName,row);
+    const name=file.name||file.file_name||file.filename||label||'Download';
+    return url?`<a class="btn-light" target="_blank" rel="noopener" href="${esc(url)}">${esc(name)}</a>`:'<span class="muted">File unavailable</span>';
+  }).join('<br>');
+}
+async function uploadRepairDocument(index, fieldName, input){
+  const row=(S.repairs||[])[index];
+  if(!row) return;
+  const file=await readUploadFile(input);
+  if(!file) return;
+  try{
+    await api('/api/upload-repair-document',{method:'POST',body:JSON.stringify({
+      role:S.user.role||'', tableId:row._table_id||'', record_id:row.record_id, fieldName, file
+    })});
+    await loadRepairs();
+    openRepairCaseDetails((S.repairs||[]).findIndex(x=>x.record_id===row.record_id));
+  }catch(e){ alert(e.message||'Upload failed'); }
+}
+async function saveRepairCaseDetails(index){
+  const row=(S.repairs||[])[index];
+  if(!row) return;
+  try{
+    await api('/api/update-repair-details',{method:'POST',body:JSON.stringify({
+      role:S.user.role||'', tableId:row._table_id||'', record_id:row.record_id,
+      invoiceAmount:($('repairInvoiceAmount')?.value||'').trim(),
+      caseCloseComment:($('repairCaseCloseComment')?.value||'').trim()
+    })});
+    msg('repairDetailMsg','Saved successfully');
+    await loadRepairs();
+    openRepairCaseDetails((S.repairs||[]).findIndex(x=>x.record_id===row.record_id));
+  }catch(e){ msg('repairDetailMsg',e.message||'Save failed'); }
+}
+function openRepairCaseDetails(index){
+  const row=(S.repairs||[])[index];
+  if(!row) return;
+  const f=row.fields||{};
+  const canEdit=currentUserIsAdminTech();
+  const caseNo=internalRepairCaseNo(f)||'-';
+  const amount=f['Invoice Amount'];
+  const html=`<div class="details-kv">
+    ${kv('Repair Case',caseNo)}
+    ${kv('Company Name',f['Company Name']||'-')}
+    ${kv('Model No',f['Model No']||'-')}
+    ${kv('Serial No',f['Serial No']||'-')}
+    ${kv('Status',f['Status']||'-')}
+  </div>
+  <h3 class="details-section-title">Invoice & Payment</h3>
+  <div class="grid3">
+    <div><label>Invoice Amount</label>${canEdit?`<input id="repairInvoiceAmount" type="number" step="0.01" value="${esc(amount??'')}">`:`<div class="notice">${esc(amount??'-')}</div>`}</div>
+    <div><label>Invoice Download</label>${repairAttachmentCell(row,'Invoice Download','Download Invoice')}${canEdit?`<br><label class="mini-upload">Upload / Replace Invoice<input type="file" onchange="uploadRepairDocument(${index},'Invoice Download',this)"></label>`:''}</div>
+    <div><label>Payment Receipt</label>${repairAttachmentCell(row,'Payment Receipt','Download Receipt')}${canEdit?`<br><label class="mini-upload">Upload / Replace Receipt<input type="file" onchange="uploadRepairDocument(${index},'Payment Receipt',this)"></label>`:''}</div>
+  </div>
+  <label>Case Close Comment</label>${canEdit?`<textarea id="repairCaseCloseComment">${esc(f['Case Close Comment']||'')}</textarea>`:`<div class="notice">${esc(f['Case Close Comment']||'-')}</div>`}
+  ${canEdit?`<div class="row"><button class="act" onclick="saveRepairCaseDetails(${index})">Save Repair Details</button><span id="repairDetailMsg" class="msg"></span></div>`:''}
+  <h3 class="details-section-title">All Lark Fields</h3>${renderAllLarkFieldsTable(f,row)}`;
+  showDetailsModal(`Repair Case Details - ${caseNo}`,html);
+}
 function renderRepairStatus(){
   const ui=ensureListUi('repairs');
   const q=String(ui.search||'').trim().toLowerCase();
@@ -2879,7 +2939,7 @@ function renderRepairStatus(){
   ui.page=Math.min(Math.max(1,Number(ui.page)||1),pages);
   const start=(ui.page-1)*pageSize;
   const pageRows=filtered.slice(start,start+pageSize);
-  $('repairStatus').innerHTML=`<div class="panel"><h2>Repair Status <button class="btn-light" onclick="refreshRepairs()">Refresh</button></h2><div class="row" style="align-items:end;gap:12px;flex-wrap:wrap"><div style="min-width:260px;flex:1"><label>Search by Case No or Dealer / Company</label><input id="repairListSearch" value="${esc(ui.search||'')}" oninput="setListSearch('repairs',this.value)" placeholder="Search case or dealer..."></div><div style="width:150px"><label>Records per page</label><select onchange="setListPageSize('repairs',this.value)">${[10,20,30,40,50,100].map(n=>`<option value="${n}" ${pageSize===n?'selected':''}>${n}</option>`).join('')}</select></div></div><div class="muted" style="margin:10px 0">${total?`Showing ${start+1}–${Math.min(start+pageSize,total)} of ${total} Repair Cases`:'Showing 0 of 0 Repair Cases'}</div><div class="table-wrap"><table><thead><tr><th>Repair Case No</th><th>Dealer / Company</th><th>Model No</th><th>Serial No</th><th>Date</th><th>Status</th><th>Log Link</th><th>Issue Media / Required Details</th><th>Remarks</th><th>Notes</th><th>Case Close Comment</th></tr></thead><tbody>${pageRows.map(({r})=>{let f=r.fields||{};return `<tr><td>${internalRepairCaseLink(r)}</td><td>${esc(f['Company Name']||f['Dealer Name']||'')}</td><td>${esc(f['Model No']||'')}</td><td>${esc(f['Serial No']||'')}</td><td>${new Date(Number(f['Date of Purchase / Activation date']||f['Date Of Activation']||'')).toLocaleDateString('en-GB')}</td><td>${statusCell(r,'repair')}</td><td>${linkCell(f['Log File']||f['Log for Drone and RC'])}</td><td>${linkCell(f['Upload all the required details']||f['Issue Video and Pictures'])}</td><td>${esc(f['Remarks']||'')}</td><td>${esc(f['Notes']||'')}</td><td>${esc(f['Case Close Comment']||'')}</td></tr>`}).join('')||'<tr><td colspan="11" class="muted">No repair cases found.</td></tr>'}</tbody></table></div><div class="row" style="justify-content:center;align-items:center;margin-top:12px">${listPaginationHtml('repairs',total,ui.page,pageSize)}</div></div>`;
+  $('repairStatus').innerHTML=`<div class="panel"><h2>Repair Status <button class="btn-light" onclick="refreshRepairs()">Refresh</button></h2><div class="row" style="align-items:end;gap:12px;flex-wrap:wrap"><div style="min-width:260px;flex:1"><label>Search by Case No or Dealer / Company</label><input id="repairListSearch" value="${esc(ui.search||'')}" oninput="setListSearch('repairs',this.value)" placeholder="Search case or dealer..."></div><div style="width:150px"><label>Records per page</label><select onchange="setListPageSize('repairs',this.value)">${[10,20,30,40,50,100].map(n=>`<option value="${n}" ${pageSize===n?'selected':''}>${n}</option>`).join('')}</select></div></div><div class="muted" style="margin:10px 0">${total?`Showing ${start+1}–${Math.min(start+pageSize,total)} of ${total} Repair Cases`:'Showing 0 of 0 Repair Cases'}</div><div class="table-wrap"><table><thead><tr><th>Repair Case No</th><th>Dealer / Company</th><th>Model No</th><th>Serial No</th><th>Date</th><th>Status</th><th>Log Link</th><th>Issue Media / Required Details</th><th>Remarks</th><th>Notes</th><th>Case Close Comment</th><th>Action</th></tr></thead><tbody>${pageRows.map(({r,index})=>{let f=r.fields||{};return `<tr><td>${internalRepairCaseLink(r)}</td><td>${esc(f['Company Name']||f['Dealer Name']||'')}</td><td>${esc(f['Model No']||'')}</td><td>${esc(f['Serial No']||'')}</td><td>${new Date(Number(f['Date of Purchase / Activation date']||f['Date Of Activation']||'')).toLocaleDateString('en-GB')}</td><td>${statusCell(r,'repair')}</td><td>${linkCell(f['Log File']||f['Log for Drone and RC'])}</td><td>${linkCell(f['Upload all the required details']||f['Issue Video and Pictures'])}</td><td>${esc(f['Remarks']||'')}</td><td>${esc(f['Notes']||'')}</td><td>${esc(f['Case Close Comment']||'')}</td><td><button class="btn-light" onclick="openRepairCaseDetails(${index})">View / Edit</button></td></tr>`}).join('')||'<tr><td colspan="12" class="muted">No repair cases found.</td></tr>'}</tbody></table></div><div class="row" style="justify-content:center;align-items:center;margin-top:12px">${listPaginationHtml('repairs',total,ui.page,pageSize)}</div></div>`;
 }
 function linkCell(v){if(!v)return '-'; if(typeof v==='object'&&v.link)return `<a href="${esc(v.link)}" target="_blank">Open</a>`; return `<a href="${esc(v)}" target="_blank">Open</a>`;}
 function renderDealers(){
