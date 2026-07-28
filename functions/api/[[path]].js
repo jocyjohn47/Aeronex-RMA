@@ -270,6 +270,10 @@ function normalizeLarkOptionValue(v, type) {
     return String(v).split(",").map(x => x.trim()).filter(Boolean);
   }
   if (type === 5) return toLarkDateTimeValue(v);
+  if (type === 2) {
+    const numeric = Number(String(v).replace(/,/g, "").trim());
+    return Number.isFinite(numeric) ? numeric : "";
+  }
   return v;
 }
 
@@ -2386,6 +2390,36 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     const entry = { date:new Date().toISOString(), status:"Queued", records:"-", attachments:"-", size:"-", destination:`${settings.protocol || "sftp"}://${settings.host}${settings.remoteFolder || ""}`, error:"Export-to-NAS worker not enabled yet" };
     await appendBackupHistory(env, entry);
     return json({ ok:true, ...entry });
+  }
+
+
+  if (p === "/api/update-repair-details" && req.method === "POST") {
+    const b = await readBody(req);
+    if (!logAccessAllowed(norm(b.role))) return json({ error:"Forbidden" }, 403);
+    const allowed = [env.REPAIR_UAE_TABLE_ID, env.REPAIR_KSA_TABLE_ID].filter(Boolean);
+    if (!allowed.includes(norm(b.tableId))) return json({ error:"Invalid repair table" }, 403);
+    if (!b.record_id) return json({ error:"Missing record_id" }, 400);
+    const fieldTypes = await getFieldTypes(env, b.tableId);
+    const incoming = { "Invoice Amount":b.invoiceAmount, "Case Close Comment":b.caseCloseComment };
+    const fields = prepareFieldsForTable(fieldTypes, incoming);
+    if (!Object.keys(fields).length) return json({ error:"No valid fields to save" }, 400);
+    await updateRecord(env, b.tableId, b.record_id, fields);
+    return json({ ok:true, updated:Object.keys(fields) });
+  }
+
+  if (p === "/api/upload-repair-document" && req.method === "POST") {
+    const b = await readBody(req);
+    if (!logAccessAllowed(norm(b.role))) return json({ error:"Forbidden" }, 403);
+    const allowed = [env.REPAIR_UAE_TABLE_ID, env.REPAIR_KSA_TABLE_ID].filter(Boolean);
+    if (!allowed.includes(norm(b.tableId))) return json({ error:"Invalid repair table" }, 403);
+    if (!b.record_id || !b.file) return json({ error:"Missing record_id or file" }, 400);
+    if (!["Invoice Download","Payment Receipt"].includes(norm(b.fieldName))) return json({ error:"Invalid attachment field" }, 400);
+    const fieldMeta = await getFieldMetaByName(env, b.tableId);
+    const field = fieldMeta[b.fieldName];
+    if (!field?.field_id) return json({ error:`${b.fieldName} field not found` }, 400);
+    const uploaded = await uploadBitableAttachmentToLark(env, b.tableId, b.record_id, field.field_id, b.file);
+    await updateRecord(env, b.tableId, b.record_id, { [b.fieldName]:[uploaded] });
+    return json({ ok:true, uploaded });
   }
 
   if (p === "/api/update-status" && req.method === "POST") {
