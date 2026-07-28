@@ -2188,9 +2188,9 @@ Please send us an email with the Case Number for follow-up.`
 
 function piTemplateConfig(currency){
   const c=String(currency||'USD').toUpperCase();
-  if(c==='AED') return {currency:'AED',file:'/templates/spare-order/PI_AED_Template.xlsx',sheet:'Invoice AED',date:'K3',invoice:'K4',customer:'B9',trn:'F9',address:'B10',contact:'B11',email:'B12',currencyCell:'K9',itemStart:14,itemEnd:33,codeCol:'B',modelCol:'C',qtyCol:'D',priceCol:'E'};
-  if(c==='SAR') return {currency:'SAR',file:'/templates/spare-order/PI_SAR_Template.xlsx',sheet:'Invoice SAR',date:'K3',invoice:'K4',customer:'B9',trn:'F9',address:'B10',contact:'B11',email:'B12',currencyCell:'K9',itemStart:14,itemEnd:33,codeCol:'B',modelCol:'C',qtyCol:'D',priceCol:'E'};
-  return {currency:'USD',file:'/templates/spare-order/PI_USD_Template.xlsx',sheet:'Invoice USD',date:'F3',invoice:'F4',customer:'B9',trn:'',address:'B10',contact:'B11',email:'B12',currencyCell:'F11',itemStart:14,itemEnd:33,codeCol:'C',modelCol:'B',qtyCol:'D',priceCol:'E'};
+  if(c==='AED') return {currency:'AED',file:'/templates/spare-order/PI_AED_Template.xlsx',sheet:'Invoice AED',date:'K3',invoice:'K4',customer:'B9',trn:'F9',address:'B10',contact:'B11',email:'B12',currencyCell:'K9',termsPrice:'B38',deliveryTerms:'B40',itemStart:14,itemEnd:33,codeCol:'B',modelCol:'C',qtyCol:'D',priceCol:'E'};
+  if(c==='SAR') return {currency:'SAR',file:'/templates/spare-order/PI_SAR_Template.xlsx',sheet:'Invoice SAR',date:'K3',invoice:'K4',customer:'B9',trn:'F9',address:'B10',contact:'B11',email:'B12',currencyCell:'K9',termsPrice:'B38',deliveryTerms:'B40',itemStart:14,itemEnd:33,codeCol:'B',modelCol:'C',qtyCol:'D',priceCol:'E'};
+  return {currency:'USD',file:'/templates/spare-order/PI_USD_Template.xlsx',sheet:'Invoice USD',date:'F3',invoice:'F4',customer:'B9',trn:'',address:'B10',contact:'B11',email:'B12',currencyCell:'F11',termsPrice:'B37',deliveryTerms:'B39',itemStart:14,itemEnd:33,codeCol:'C',modelCol:'B',qtyCol:'D',priceCol:'E'};
 }
 function piToday(){
   const d=new Date();
@@ -2216,6 +2216,10 @@ function fillPiSheet(sheet,cfg,orderNo,orderData,items,pageIndex){
   sheet.cell(cfg.contact).value(orderData.contactName||'');
   sheet.cell(cfg.email).value(orderData.contactEmail||'');
   sheet.cell(cfg.currencyCell).value(cfg.currency);
+  if(orderData.piTerms){
+    sheet.cell(cfg.termsPrice).value(orderData.piTerms.price||'');
+    sheet.cell(cfg.deliveryTerms).value(orderData.piTerms.delivery||'');
+  }
   for(let row=cfg.itemStart;row<=cfg.itemEnd;row++){
     sheet.range(`A${row}:E${row}`).value(null);
     const item=pageItems[row-cfg.itemStart];
@@ -2407,7 +2411,7 @@ function spareOrderField(f, names){
   return '';
 }
 function spareOrderDealerCnCell(f){ return spareOrderDisplayCell(spareOrderField(f, ['Dealer Credit Note','Dealer CN'])); }
-function spareOrderDestinationValue(f){ return spareOrderField(f, ['Shipment Destination','Order Location','Spare Order Location']); }
+function spareOrderDestinationValue(f){ return spareOrderField(f, ['Shipment Destination']); }
 function spareOrderTrackingValue(f){ return spareOrderField(f, ['Shipment Tracking No','Tracking No','Shipment Tracking Number']); }
 function spareOrderSpecializedValue(f){ return spareOrderField(f, ['Specialized']); }
 function spareOrderSpareSourceValue(f){ return spareOrderField(f, ['Spare Source']); }
@@ -2417,10 +2421,26 @@ function spareOrderDjiCaseValue(f){ return spareOrderField(f, ['DJI Case NO','DJ
 function spareOrderCanEditInternal(){ return currentUserIsAdminTech(); }
 function spareOrderCanDownloadReport(){ return currentUserIsAdminTech(); }
 function shipmentDestinationOptions(cur){
-  const fields=['Shipment Destination','Order Location','Spare Order Location'];
-  const opts=fields.flatMap(name=>larkOptions('order',name));
-  return selectOptions(opts,cur,true);
+  return selectOptions(larkOptions('order','Shipment Destination'),cur,true);
 }
+function spareOrderDealerFields(f){
+  const email=String(spareOrderField(f,['Contact Email','Username ( Email )','Email'])||'').trim().toLowerCase();
+  if(!email) return {};
+  const row=(S.dealers||[]).find(x=>dealerContactEmail(x)===email);
+  return row?.fields||{};
+}
+function uaePiTermsForOrder(f){
+  const destination=String(spareOrderDestinationValue(f)||'').trim();
+  if(destination==='DXB DSO (Mainland)') return {price:'Include Duty & VAT',delivery:'EXW Dubai'};
+  if(destination==='DXB FZCO (JAFZA)') return {price:'Exclude Duty & VAT',delivery:'EXW JAFZA Free Zone'};
+  if(destination==='HONG KONG WH') return {price:'Exclude Duty & VAT',delivery:'FCA Hong Kong'};
+  if(destination==='SHIP TO DEALER'){
+    const shippingCountry=String(spareOrderDealerFields(f)['Shipping Country']||'').trim();
+    return {price:'Exclude Duty & VAT',delivery:`DAP – ${shippingCountry||'Country'}`};
+  }
+  return null;
+}
+
 function spareSourceOptions(cur){
   return selectOptions(larkOptions('order','Spare Source'),cur,true);
 }
@@ -2601,6 +2621,7 @@ async function saveExistingSpareOrder(){
     const r=edit.row, f=r.fields||{}, currency=val('orderEditCurrency')||f['Invoice Currency']||'USD';
     const pricedItems=edit.items.map(x=>{const qty=Math.max(1,Number(x.qty)||1);const unit=itemUnitPrice(x,currency);return {...x,qty,selectedCurrency:currency,unitPrice:unit,totalPrice:unit*qty,price:unit};});
     const orderData={companyName:val('orderEditCompany'),contactName:val('orderEditContact'),billingAddress:val('orderEditAddress'),invoiceCurrency:currency,country:f['Country']||selectedCountry(),remarks:val('orderEditRemarks')};
+    if(!String(orderData.country||'').toLowerCase().includes('ksa')) orderData.piTerms=uaePiTermsForOrder(f);
     const result=await api('/api/update-spare-order',{method:'POST',body:JSON.stringify({role:S.user.role||'',tableId:r._table_id||r.tableId||r.table_id,record_id:r.record_id,companyName:orderData.companyName,contactName:orderData.contactName,billingAddress:orderData.billingAddress,invoiceCurrency:currency,remarks:orderData.remarks,items:pricedItems})});
     await generateAndUploadPi({orderNo:result.orderNo,tableId:result.tableId,record_id:result.record_id},orderData,pricedItems);
     msg('orderEditMsg','Order updated and Order Excel replaced successfully');
