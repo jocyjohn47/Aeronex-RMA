@@ -1032,6 +1032,12 @@ function internalRepairFormHtml(src, isPopup){
     <div class="row"><input id="irSpareSearch" placeholder="Search Material Code or Name" oninput="renderInternalRepairSpareOptions()"><input id="irSpareQty" class="qty" type="number" min="1" value="1"><button class="btn-light" onclick="addInternalRepairSpare()">Add Spare</button></div>
     <select id="irSpareSelect"></select>
     <div id="irSparePreview" class="notice"></div>
+    <div class="panel">
+      <h3>Shipping Document</h3>
+      <div class="notice"><b>Current shipping document:</b> ${detailsFieldValue(f['Shipping Document'],'Shipping Document',S.internalRepairEdit||null)}</div>
+      <div class="row"><input id="irShippingDocumentFile" type="file" multiple><button class="btn-light" onclick="uploadInternalRepairShippingDocument()">Upload Shipping Document(s)</button></div>
+      <div id="irShippingDocumentMsg" class="msg"></div>
+    </div>
     <p><button class="act" onclick="saveInternalRepair()">Save Internal Repair</button> <span id="internalRepairMsg" class="msg"></span></p>
   </div>`;
 }
@@ -1061,7 +1067,8 @@ function renderInternalRepairSparePreview(){
   const parts=S.irParts||[];
   box.innerHTML=parts.length?parts.map((p,i)=>`${esc(p.materialCode)} - ${esc(p.materialName)} x ${esc(p.qty)} <button class="btn-light" onclick="S.irParts.splice(${i},1);setVal('irMaterialConsumed',S.irParts.map(p=>p.materialCode+' - '+p.materialName+' x '+p.qty).join('; '));setVal('irUnitConsumed',S.irParts.reduce((a,p)=>a+(Number(p.qty)||0),0));renderInternalRepairSparePreview()">Remove</button>`).join('<br>'):'No spare selected.';
 }
-async function saveInternalRepair(){
+async function saveInternalRepair(opts){
+  opts = opts || {};
   try{
     const meta=S.internalRepairMeta||{}, n=internalRepairFieldsForCountry(meta.country);
     const fields={
@@ -1091,9 +1098,16 @@ async function saveInternalRepair(){
       [n.remark]:val('irRemark')
     };
     const editingId=S.internalRepairEdit?.record_id||'';
-    await api('/api/save-internal-repair',{method:'POST',body:JSON.stringify({role:S.user.role||'',country:meta.country||adminModuleCountry(),userCountry:userCountryText()||'',record_id:editingId,fields})});
-    msg('internalRepairMsg','Saved successfully');
+    const res=await api('/api/save-internal-repair',{method:'POST',body:JSON.stringify({role:S.user.role||'',country:meta.country||adminModuleCountry(),userCountry:userCountryText()||'',record_id:editingId,fields})});
+    if(!opts.silent) msg('internalRepairMsg','Saved successfully');
+    const createdId=res?.record_id||res?.record?.record_id||res?.record?.record?.record_id||'';
+    const savedId=editingId||createdId;
     await loadInternalRepairMeta();
+    if(savedId){
+      const savedRow=(S.internalRepairRows||[]).find(x=>x.record_id===savedId);
+      S.internalRepairEdit=savedRow||{record_id:savedId,fields};
+    }
+    if(opts.keepForm) return {record_id:savedId};
     if(document.getElementById('detailsModalOverlay') && editingId){
       const idx=(S.internalRepairRows||[]).findIndex(x=>x.record_id===editingId);
       if(idx>=0) editInternalRepair(idx);
@@ -1101,7 +1115,39 @@ async function saveInternalRepair(){
       S.internalRepairEdit=null;S.internalRepairPrefill=null;
       renderInternalRepair();
     }
-  }catch(e){msg('internalRepairMsg',e.message||'Save failed')}
+  }catch(e){if(!opts.silent) msg('internalRepairMsg',e.message||'Save failed'); else throw e; return null}
+}
+
+async function uploadInternalRepairShippingDocument(){
+  if(!currentUserIsAdminTech()) return alert('Admin/Technician only');
+  const inp=scopedEl('irShippingDocumentFile');
+  const files=inp&&inp.files ? Array.from(inp.files) : [];
+  const box=scopedEl('irShippingDocumentMsg');
+  const setUploadMsg=(text,cls)=>{if(box){box.className='msg '+(cls||'');box.textContent=text;}};
+  if(!files.length) return setUploadMsg('Upload Failed: select shipping document file','upload-fail');
+  let recordId=S.internalRepairEdit?.record_id||'';
+  if(!recordId){
+    setUploadMsg('Saving record before upload...','upload-wait');
+    const saved=await saveInternalRepair({silent:true,keepForm:true});
+    recordId=saved?.record_id||'';
+    if(!recordId) return setUploadMsg('Upload Failed: unable to create Internal Repair record first','upload-fail');
+  }
+  try{
+    setUploadMsg('Uploading... Please wait','upload-wait');
+    const uploaded=[];
+    for(const file of files){
+      const data=await new Promise(resolve=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>resolve(null);reader.readAsDataURL(file);});
+      uploaded.push({name:file.name,type:file.type||'application/octet-stream',data});
+    }
+    const meta=S.internalRepairMeta||{};
+    await api('/api/upload-internal-shipping-document',{method:'POST',body:JSON.stringify({
+      role:S.user.role||'',module:'internalRepair',country:meta.country||adminModuleCountry(),userCountry:userCountryText()||'',record_id:recordId,files:uploaded
+    })});
+    setUploadMsg(`Upload Success: ${files.length} shipping document(s) uploaded to Lark`,'upload-ok');
+    await loadInternalRepairMeta();
+    const idx=(S.internalRepairRows||[]).findIndex(x=>x.record_id===recordId);
+    if(idx>=0) setTimeout(()=>editInternalRepair(idx),700);
+  }catch(e){setUploadMsg('Upload Failed: '+(e.message||'Unknown error'),'upload-fail');}
 }
 
 async function loadSpareOrderDetailsMeta(){
@@ -1174,6 +1220,12 @@ function spareOrderDetailsFormHtml(f,row){
     <div class="row"><input id="sodDocumentUploadFile" type="file" multiple><button class="btn-light" onclick="uploadSpareOrderDetailsDocument()">Upload Document(s)</button></div>
     <div id="sodDocumentMsg" class="msg"></div>
   </div>
+  <div class="panel">
+    <h3>Shipping Document</h3>
+    <div class="notice"><b>Current shipping document:</b> ${detailsFieldValue(f['Shipping Document'],'Shipping Document',row)}</div>
+    <div class="row"><input id="sodShippingDocumentFile" type="file" multiple><button class="btn-light" onclick="uploadSpareOrderDetailsShippingDocument()">Upload Shipping Document(s)</button></div>
+    <div id="sodShippingDocumentMsg" class="msg"></div>
+  </div>
   <p><button class="act" onclick="saveSpareOrderDetails()">Save Internal Spare Order</button> <span id="spareOrderDetailsMsg" class="msg"></span></p></div>`;
 }
 function renderSpareOrderDetailsForm(f){
@@ -1231,6 +1283,35 @@ async function uploadSpareOrderDetailsDocument(){
   }
 }
 
+
+async function uploadSpareOrderDetailsShippingDocument(){
+  if(!isAdmin()) return alert('Admin only');
+  const inp=scopedEl('sodShippingDocumentFile');
+  const files=inp&&inp.files ? Array.from(inp.files) : [];
+  const box=scopedEl('sodShippingDocumentMsg');
+  const setUploadMsg=(text,cls)=>{if(box){box.className='msg '+(cls||'');box.textContent=text;}};
+  let recordId=S.spareOrderDetailsEdit?.record_id||'';
+  if(!files.length) return setUploadMsg('Upload Failed: select shipping document file','upload-fail');
+  if(!recordId){
+    setUploadMsg('Saving record before upload...','upload-wait');
+    const saved=await saveSpareOrderDetails({silent:true,keepForm:true});
+    recordId=saved?.record_id||'';
+    if(!recordId) return setUploadMsg('Upload Failed: unable to create Internal Spare Order record first','upload-fail');
+  }
+  try{
+    setUploadMsg('Uploading... Please wait','upload-wait');
+    const uploaded=[];
+    for(const file of files){
+      const data=await new Promise(resolve=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>resolve(null);reader.readAsDataURL(file);});
+      uploaded.push({name:file.name,type:file.type||'application/octet-stream',data});
+    }
+    await api('/api/upload-internal-shipping-document',{method:'POST',body:JSON.stringify({role:S.user.role||'',module:'internalSpare',record_id:recordId,files:uploaded})});
+    setUploadMsg(`Upload Success: ${files.length} shipping document(s) uploaded to Lark`,'upload-ok');
+    await loadSpareOrderDetailsMeta();
+    const idx=(S.spareOrderDetailsRows||[]).findIndex(x=>x.record_id===recordId);
+    if(idx>=0) setTimeout(()=>editSpareOrderDetails(idx),700);
+  }catch(e){setUploadMsg('Upload Failed: '+(e.message||'Unknown error'),'upload-fail');}
+}
 
 function modalRoot(){
   return document.querySelector('#detailsModalOverlay .details-modal') || document;
