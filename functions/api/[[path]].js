@@ -1855,6 +1855,47 @@ async function handle(req, env) {
   }
 
   
+  if (p === "/api/upload-internal-shipping-document" && req.method === "POST") {
+    const b = await readBody(req);
+    const role = norm(b.role);
+    const module = lower(b.module || "");
+    let tableId = "";
+
+    if (module === "internalspare") {
+      if (!flycartAdminOnly(role)) return json({ error:"Forbidden" }, 403);
+      tableId = env.SPARE_ORDER_DETAILS_TABLE_ID;
+      if (!tableId) return json({ error:"SPARE_ORDER_DETAILS_TABLE_ID not configured" }, 400);
+    } else if (module === "internalrepair") {
+      if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+      const country = scopedModuleCountry(role, b.country || "UAE & Other Region", b.userCountry || "");
+      tableId = internalRepairTable(env, country);
+      if (!tableId) return json({ error:"Internal Repair table id not configured" }, 400);
+    } else {
+      return json({ error:"Invalid module" }, 400);
+    }
+
+    if (!b.record_id) return json({ error:"Missing record_id" }, 400);
+    const inputFiles = Array.isArray(b.files) && b.files.length ? b.files : (b.file ? [b.file] : []);
+    if (!inputFiles.length) return json({ error:"No file received" }, 400);
+
+    const fieldMeta = await getFieldMetaByName(env, tableId);
+    const shippingField = fieldMeta["Shipping Document"];
+    if (!shippingField) return json({ error:"Shipping Document field not found" }, 400);
+    const fieldId = shippingField.field_id;
+    if (!fieldId) return json({ error:"Shipping Document field_id not found" }, 400);
+
+    const uploaded = [];
+    for (const file of inputFiles) {
+      uploaded.push(await uploadBitableAttachmentToLark(env, tableId, b.record_id, fieldId, file));
+    }
+
+    const current = await getRecord(env, tableId, b.record_id);
+    const currentValue = current?.fields?.["Shipping Document"];
+    const existing = Array.isArray(currentValue) ? currentValue.filter(x => x && x.file_token) : [];
+    await updateRecord(env, tableId, b.record_id, { "Shipping Document": [...existing, ...uploaded] });
+    return json({ ok:true, uploaded });
+  }
+
   if (p === "/api/upload-spare-order-details-document" && req.method === "POST") {
     const b = await readBody(req);
     const role = norm(b.role);
