@@ -1125,12 +1125,9 @@ async function uploadInternalRepairShippingDocument(){
   const box=scopedEl('irShippingDocumentMsg');
   const setUploadMsg=(text,cls)=>{if(box){box.className='msg '+(cls||'');box.textContent=text;}};
   if(!files.length) return setUploadMsg('Upload Failed: select shipping document file','upload-fail');
-  let recordId=S.internalRepairEdit?.record_id||'';
+  const recordId=S.internalRepairEdit?.record_id||'';
   if(!recordId){
-    setUploadMsg('Saving record before upload...','upload-wait');
-    const saved=await saveInternalRepair({silent:true,keepForm:true});
-    recordId=saved?.record_id||'';
-    if(!recordId) return setUploadMsg('Upload Failed: unable to create Internal Repair record first','upload-fail');
+    return setUploadMsg('Upload Failed: save the Internal Repair record before uploading the Shipping Document','upload-fail');
   }
   try{
     setUploadMsg('Uploading... Please wait','upload-wait');
@@ -1290,13 +1287,10 @@ async function uploadSpareOrderDetailsShippingDocument(){
   const files=inp&&inp.files ? Array.from(inp.files) : [];
   const box=scopedEl('sodShippingDocumentMsg');
   const setUploadMsg=(text,cls)=>{if(box){box.className='msg '+(cls||'');box.textContent=text;}};
-  let recordId=S.spareOrderDetailsEdit?.record_id||'';
+  const recordId=S.spareOrderDetailsEdit?.record_id||'';
   if(!files.length) return setUploadMsg('Upload Failed: select shipping document file','upload-fail');
   if(!recordId){
-    setUploadMsg('Saving record before upload...','upload-wait');
-    const saved=await saveSpareOrderDetails({silent:true,keepForm:true});
-    recordId=saved?.record_id||'';
-    if(!recordId) return setUploadMsg('Upload Failed: unable to create Internal Spare Order record first','upload-fail');
+    return setUploadMsg('Upload Failed: save the Internal Spare Order record before uploading the Shipping Document','upload-fail');
   }
   try{
     setUploadMsg('Uploading... Please wait','upload-wait');
