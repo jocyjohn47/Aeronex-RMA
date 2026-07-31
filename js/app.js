@@ -2707,8 +2707,18 @@ function spareOrderItemsFromFields(f){
   for(let i=0;i<count;i++) items.push({materialCode:codes[i]||'',materialName:names[i]||'',qty:Number(qtys[i]||1)||1});
   return items;
 }
-function orderEditSpareOptions(){
-  return (S.spares||[]).map(x=>{const f=x.fields||{};const o={materialCode:f['Material Code']||'',materialName:f['Material Name']||''};return `<option value="${encodeURIComponent(JSON.stringify(o))}">${esc(o.materialCode)} - ${esc(o.materialName)}</option>`}).join('');
+function orderEditSpareOptions(search=''){
+  const q=String(search||'').trim().toLowerCase();
+  return (S.spares||[]).filter(x=>{
+    const f=x.fields||{};
+    const materialCode=String(f['Material Code']||'');
+    const materialName=String(f['Material Name']||'');
+    return !q||`${materialCode} ${materialName}`.toLowerCase().includes(q);
+  }).map(x=>{const f=x.fields||{};const o={materialCode:f['Material Code']||'',materialName:f['Material Name']||''};return `<option value="${encodeURIComponent(JSON.stringify(o))}">${esc(o.materialCode)} - ${esc(o.materialName)}</option>`}).join('');
+}
+function filterOrderEditSpares(){
+  const sel=$('orderEditSpareSelect'); if(!sel) return;
+  sel.innerHTML=orderEditSpareOptions(val('orderEditSpareSearch'));
 }
 function renderOrderEditItems(){
   const body=$('orderEditItems'); if(!body) return;
@@ -2764,6 +2774,7 @@ async function openSpareOrderEdit(i){
     </div>
     <label>Remarks</label><textarea id="orderEditRemarks">${esc(f['Remarks']||'')}</textarea>
     <h3>Order Items</h3>
+    <div class="row"><input id="orderEditSpareSearch" type="search" placeholder="Search Material Code or Material Name" oninput="filterOrderEditSpares()"></div>
     <div class="row"><select id="orderEditSpareSelect">${orderEditSpareOptions()}</select><input id="orderEditQty" class="qty" type="number" min="1" value="1"><button class="btn-light" onclick="addOrderEditItem()">Add Item</button></div>
     <div class="table-wrap"><table><thead><tr><th>Material Code</th><th>Material Name</th><th>Qty</th><th>Action</th></tr></thead><tbody id="orderEditItems"></tbody></table></div>
     <div class="row"><button class="act" onclick="saveExistingSpareOrder()">Save & Regenerate Order File</button></div><div id="orderEditMsg" class="msg"></div>
