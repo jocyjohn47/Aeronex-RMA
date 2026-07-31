@@ -468,7 +468,7 @@ function ensureAeronexLogoStyles(){
 }
 
 function layout(){ensureAeronexLogoStyles();let n=S.user?.displayName||S.user?.username||'User';document.body.innerHTML=`<header class="topbar"><div class="brand"><img class="brand-logo-img" src="img/dji_aeronex_logo.png" alt="DJI AERONEX" onerror="this.style.display='none';this.insertAdjacentHTML('afterend','<div class=&quot;brand-title&quot;>AERO NEX</div><div class=&quot;brand-sub&quot;>RMA & Spare Order Portal</div>')"></div><nav class="nav">
-<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${adminCenterEnabled()?`<a data-sec="adminCenter" href="#" onclick="show('adminCenter')">🧰 Admin Center</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','flycartCredit','dealers','adminCenter','reportBackup','spareStockUpdate','internalRepair','afterSalesSupport','spareOrderDetailsAdmin','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
+<a class="active" data-sec="dashboard" href="#" onclick="show('dashboard')">⌂ Dashboard</a><a data-sec="spare" href="#" onclick="show('spare')">🛒 Spare Order</a><a data-sec="repairCreate" href="#" onclick="show('repairCreate')">📝 Create Repair Case</a><a data-sec="repairStatus" href="#" onclick="show('repairStatus')">📋 Repair Status</a>${dealerRepairCasesSectionVisible()?`<a data-sec="dealerRepairCase" href="#" onclick="show('dealerRepairCase')">🧰 Dealer Repair Case</a>`:''}<a data-sec="dealers" href="#" onclick="show('dealers')">🏢 Dealer Details</a><a data-sec="portalNotes" href="#" onclick="show('portalNotes')">📄 Portal Notes</a>${adminCenterEnabled()?`<a data-sec="adminCenter" href="#" onclick="show('adminCenter')">🧰 Admin Center</a>`:''}</nav><div class="user" onclick="this.classList.toggle('open')"><div class="avatar">${esc(initials())}</div><div><b>${esc(n)}</b><br><small>${esc(S.user.role||'End user')}</small></div><span>⌄</span><div class="menu"><a href="#" onclick="event.stopPropagation();show('changePassword')">🔒 Change Password</a><a href="#" onclick="event.stopPropagation();logout()">↪ Logout</a></div></div></header><main class="page">${['dashboard','spare','repairCreate','repairStatus','dealerRepairCase','warrantySoftwareStatus','logsDiagnostics','flycartCredit','dealers','adminCenter','reportBackup','spareStockUpdate','internalRepair','afterSalesSupport','spareOrderDetailsAdmin','integration','integrationLogs','portalNotes','changePassword','admin'].map(x=>`<section id="${x}" class="section"></section>`).join('')}</main><footer class="footer">© 2025 AERO NEX FZCO. This portal and its contents are proprietary and confidential.<br>Developed by Jocy John | For support, contact: support@aeronex.ae</footer>`}
 
 async function ensureSpareListLoaded(){
   if(Array.isArray(S.spares) && S.spares.length) return S.spares;
@@ -495,7 +495,7 @@ function show(sec){
         try{renderDealerRepairCase()}catch(err){console.error('renderDealerRepairCase failed',err)}
       });
   }
-  if(sec==='warrantySoftwareStatus'){try{renderWarrantySoftwareStatus()}catch(e){console.error('renderWarrantySoftwareStatus failed',e)}}if(sec==='flycartCredit'){loadFlycartCredit().then(renderFlycartCredit).catch(e=>{console.error('flycartCredit failed',e);try{renderFlycartCredit()}catch(err){}})}if(sec==='logsDiagnostics'){try{renderLogsDiagnostics()}catch(e){console.error('renderLogsDiagnostics failed',e)}}if(sec==='adminCenter'){try{renderAdminCenter()}catch(e){console.error('renderAdminCenter failed',e)}}if(sec==='reportBackup'){try{renderReportBackup()}catch(e){console.error('renderReportBackup failed',e)}}if(sec==='spareStockUpdate'){try{renderSpareStockUpdate()}catch(e){console.error('renderSpareStockUpdate failed',e)}}if(sec==='internalRepair'){loadInternalRepairMeta().then(renderInternalRepair).catch(e=>{console.error('internalRepair failed',e);try{renderInternalRepairError(e)}catch(_){}})}if(sec==='afterSalesSupport'){loadAfterSalesSupport().then(renderAfterSalesSupport).catch(e=>{console.error('afterSalesSupport failed',e);try{renderAfterSalesSupportError(e)}catch(_){}})}if(sec==='spareOrderDetailsAdmin'){loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin).catch(e=>{console.error('spareOrderDetails failed',e);try{renderSpareOrderDetailsError(e)}catch(_){}})}scrollTo(0,0)
+  if(sec==='warrantySoftwareStatus'){try{renderWarrantySoftwareStatus()}catch(e){console.error('renderWarrantySoftwareStatus failed',e)}}if(sec==='flycartCredit'){loadFlycartCredit().then(renderFlycartCredit).catch(e=>{console.error('flycartCredit failed',e);try{renderFlycartCredit()}catch(err){}})}if(sec==='logsDiagnostics'){try{renderLogsDiagnostics()}catch(e){console.error('renderLogsDiagnostics failed',e)}}if(sec==='adminCenter'){try{renderAdminCenter()}catch(e){console.error('renderAdminCenter failed',e)}}if(sec==='reportBackup'){try{renderReportBackup()}catch(e){console.error('renderReportBackup failed',e)}}if(sec==='spareStockUpdate'){try{renderSpareStockUpdate()}catch(e){console.error('renderSpareStockUpdate failed',e)}}if(sec==='internalRepair'){loadInternalRepairMeta().then(renderInternalRepair).catch(e=>{console.error('internalRepair failed',e);try{renderInternalRepairError(e)}catch(_){}})}if(sec==='afterSalesSupport'){loadAfterSalesSupport().then(renderAfterSalesSupport).catch(e=>{console.error('afterSalesSupport failed',e);try{renderAfterSalesSupportError(e)}catch(_){}})}if(sec==='spareOrderDetailsAdmin'){loadSpareOrderDetailsMeta().then(renderSpareOrderDetailsAdmin).catch(e=>{console.error('spareOrderDetails failed',e);try{renderSpareOrderDetailsError(e)}catch(_){}})}if(sec==='integration'){renderKingdeeIntegration()}if(sec==='integrationLogs'){renderKingdeeLogs()}scrollTo(0,0)
 }
 
 function dealerRepairCaseEnabled(){
@@ -1706,6 +1706,9 @@ function adminCenterCards(){
   if(reportsEnabled()){
     cards.push(['💾','Report & Backup','Daily backup status, SFTP settings, retention, and backup history.','reportBackup','Open']);
   }
+  if(currentUserIsAdminTech()){
+    cards.push(['🔗','Integration','Kingdee connection status, testing, and diagnostic logs.','integration','Open']);
+  }
   return cards;
 }
 
@@ -1951,6 +1954,94 @@ async function saveAfterSalesSupport(){
     const d=await api('/api/after-sales-support/save',{method:'POST',body:JSON.stringify({role:S.user.role||'',record_id:$('afterSalesRecordId')?.value||'',fields,files})});
     msg('afterSalesMsg',d.updated?'Support case updated.':'Support case created.',true); S.afterSalesEditingId=d.record_id||''; await loadAfterSalesSupport(); renderAfterSalesSupport();
   }catch(e){msg('afterSalesMsg',e.message||String(e))}
+}
+
+function kingdeeRequestHeaders(){
+  return {
+    'content-type':'application/json',
+    'x-aeronex-role':String(S.user?.role||''),
+    'x-aeronex-user':String(userEmail()||displayName()||'')
+  };
+}
+async function kingdeeApi(path, options={}){
+  const response=await fetch(path,{...options,headers:{...kingdeeRequestHeaders(),...(options.headers||{})}});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok) throw Object.assign(new Error(data.error||`HTTP ${response.status}`),{data,status:response.status});
+  return data;
+}
+function kingdeeDate(value){
+  if(!value)return 'Not tested';
+  const d=new Date(value);return Number.isNaN(d.getTime())?String(value):d.toLocaleString();
+}
+function kingdeeStatusText(item, config){
+  if(!config?.ready)return 'Configuration Required';
+  if(!item)return 'Not Tested';
+  if(item.status==='success')return config.writeEnabled?'Connected (Write Enabled)':'Connected (Read Only)';
+  return 'Connection Failed';
+}
+function kingdeeStatusClass(item, config){
+  if(!config?.ready||!item)return 'warn';
+  return item.status==='success'?'ok':'bad';
+}
+async function renderKingdeeIntegration(){
+  const sec=$('integration');if(!sec)return;
+  if(!currentUserIsAdminTech()){sec.innerHTML='<div class="panel"><h2>Integration</h2><div class="notice">Admin or Technician access only.</div></div>';return}
+  sec.innerHTML='<div class="panel"><h2>Integration</h2><div class="notice">Loading Kingdee integration status...</div></div>';
+  try{
+    const d=await kingdeeApi('/api/kingdee/status');
+    const item=d.lastStatus||null, cfg=d.configuration||{};
+    sec.innerHTML=`<div class="panel"><div class="row" style="justify-content:space-between;align-items:center"><div><h2 style="margin-bottom:4px">Kingdee ERP Integration</h2><div class="muted">Configuration is managed in Cloudflare environment variables and secrets.</div></div><div><button id="kingdeeTestBtn" onclick="runKingdeeTest()">Test Connection</button> <button class="btn-light" onclick="show('integrationLogs')">View Logs</button></div></div>
+      <div class="cards" style="margin-top:18px">
+        <div class="card"><h3>Status</h3><div class="${kingdeeStatusClass(item,cfg)}" style="font-size:22px;font-weight:700">${esc(kingdeeStatusText(item,cfg))}</div><p>${esc(item?.message||'No connection test has been recorded.')}</p></div>
+        <div class="card"><h3>Last Check</h3><div style="font-size:18px;font-weight:700">${esc(kingdeeDate(item?.time))}</div><p class="muted">Request ID: ${esc(item?.requestId||'—')}</p></div>
+        <div class="card"><h3>Response Time</h3><div style="font-size:22px;font-weight:700">${Number(item?.durationMs||0)} ms</div><p class="muted">Latest completed test</p></div>
+        <div class="card"><h3>Log Storage</h3><div style="font-size:18px;font-weight:700">${esc(cfg.logStorage||'Not configured')}</div><p class="muted">Success: 5 days · Error: 15 days · Maximum: 1000</p></div>
+      </div>
+      ${cfg.missing?.length?`<div class="notice"><b>Missing Cloudflare settings:</b> ${cfg.missing.map(esc).join(', ')}</div>`:''}
+      <div id="kingdeeIntegrationMsg" class="msg"></div>
+    </div>`;
+  }catch(e){sec.innerHTML=`<div class="panel"><h2>Integration</h2><div class="notice">${esc(e.message||String(e))}</div><button onclick="renderKingdeeIntegration()">Retry</button></div>`}
+}
+async function runKingdeeTest(){
+  const btn=$('kingdeeTestBtn');if(btn)btn.disabled=true;msg('kingdeeIntegrationMsg','Testing login and read-only queries...');
+  try{await kingdeeApi('/api/kingdee/test-connection',{method:'POST',body:'{}'});await renderKingdeeIntegration()}
+  catch(e){msg('kingdeeIntegrationMsg',e.message||String(e));await renderKingdeeIntegration().catch(()=>{})}
+  finally{if(btn)btn.disabled=false}
+}
+function kingdeeLogFilterQuery(){
+  const p=new URLSearchParams({limit:'50'});
+  const status=$('kingdeeLogStatus')?.value||'';const operation=$('kingdeeLogOperation')?.value||'';const search=$('kingdeeLogSearch')?.value||'';
+  if(status)p.set('status',status);if(operation)p.set('operation',operation);if(search)p.set('search',search);
+  return p.toString();
+}
+function kingdeeLogDetails(item){
+  const details=[
+    ['Request ID',item.requestId],['Time',kingdeeDate(item.time)],['User',item.user],['Operation',item.operation],['Service',item.service],['Result',item.status],['HTTP Status',item.httpStatus||'—'],['Kingdee Code',item.kingdeeCode||item.code],['Duration',`${Number(item.durationMs||0)} ms`],['Retry Count',item.retryCount||0],['Message',item.message],['Suggested Action',item.suggestedAction]
+  ];
+  return `<div style="padding:12px;background:#f8fafc;border-radius:8px">${details.filter(x=>x[1]!==undefined&&x[1]!==null&&x[1]!=='').map(x=>`<div style="margin:5px 0"><b>${esc(x[0])}:</b> ${esc(x[1])}</div>`).join('')}</div>`;
+}
+async function renderKingdeeLogs(){
+  const sec=$('integrationLogs');if(!sec)return;
+  if(!currentUserIsAdminTech()){sec.innerHTML='<div class="panel"><h2>Integration Logs</h2><div class="notice">Admin or Technician access only.</div></div>';return}
+  sec.innerHTML='<div class="panel"><h2>Integration Logs</h2><div class="notice">Loading logs...</div></div>';
+  try{
+    const d=await kingdeeApi('/api/kingdee/logs?'+kingdeeLogFilterQuery());const logs=d.logs||[];
+    const operations=[...new Set(logs.map(x=>x.operation).filter(Boolean))].sort();
+    sec.innerHTML=`<div class="panel"><div class="row" style="justify-content:space-between;align-items:center"><div><h2>Kingdee Integration Logs</h2><div class="muted">Success logs are retained for 5 days; errors for 15 days. Maximum 1000 records.</div></div><button class="btn-light" onclick="show('integration')">Back to Integration</button></div>
+      <div class="row" style="align-items:end;gap:10px;flex-wrap:wrap;margin:16px 0"><div><label>Status</label><select id="kingdeeLogStatus"><option value="">All</option><option value="success">Success</option><option value="error">Error</option></select></div><div><label>Operation</label><select id="kingdeeLogOperation"><option value="">All</option>${operations.map(x=>`<option>${esc(x)}</option>`).join('')}</select></div><div style="min-width:260px"><label>Search Request ID / Message</label><input id="kingdeeLogSearch" placeholder="Search..."></div><button onclick="renderKingdeeLogs()">Apply</button>${isAdmin()?`<button class="btn-light" onclick="exportKingdeeLogs('csv')">Export CSV</button><button class="btn-light" onclick="exportKingdeeLogs('json')">Export JSON</button>`:''}</div>
+      <div class="table-wrap"><table><thead><tr><th>Time</th><th>User</th><th>Operation</th><th>Status</th><th>Duration</th><th>Details</th></tr></thead><tbody>${logs.length?logs.map((x,i)=>`<tr><td>${esc(kingdeeDate(x.time))}</td><td>${esc(x.user||'—')}</td><td>${esc(x.operation||'—')}</td><td><b class="${x.status==='success'?'ok':'bad'}">${esc(x.status||'unknown')}</b></td><td>${Number(x.durationMs||0)} ms</td><td><button class="btn-light" onclick="document.getElementById('kdDetail${i}').classList.toggle('hidden')">View</button></td></tr><tr id="kdDetail${i}" class="hidden"><td colspan="6">${kingdeeLogDetails(x)}</td></tr>`).join(''):`<tr><td colspan="6" class="muted">No log entries.</td></tr>`}</tbody></table></div>
+      <div class="muted" style="margin-top:10px">Showing the latest ${logs.length} matching records.</div></div>`;
+  }catch(e){sec.innerHTML=`<div class="panel"><h2>Integration Logs</h2><div class="notice">${esc(e.message||String(e))}</div><button onclick="renderKingdeeLogs()">Retry</button></div>`}
+}
+async function exportKingdeeLogs(format){
+  if(!isAdmin())return alert('Admin access only.');
+  try{
+    const q=kingdeeLogFilterQuery();
+    const response=await fetch(`/api/kingdee/logs?${q}&format=${encodeURIComponent(format)}`,{headers:kingdeeRequestHeaders()});
+    if(!response.ok){const d=await response.json().catch(()=>({}));throw new Error(d.error||`HTTP ${response.status}`)}
+    const blob=await response.blob(),url=URL.createObjectURL(blob),a=document.createElement('a');
+    a.href=url;a.download=`kingdee-integration-logs.${format}`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }catch(e){alert(e.message||String(e))}
 }
 
 function renderAdminCenter(){
