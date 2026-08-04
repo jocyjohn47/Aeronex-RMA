@@ -38,8 +38,9 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}th,td{b
 
 /* LOGIN PAGE - scoped to index.html */
 body.login-wrap{min-height:100vh;display:grid;grid-template-columns:minmax(0,68fr) minmax(360px,32fr);margin:0;padding:0;background:#f5f8fc;overflow:hidden}
-body.login-wrap .login-visual{min-width:0;height:100vh;overflow:hidden;background:#dfe8f4}
-body.login-wrap .login-visual img{display:block;width:100%;height:100%;object-fit:cover;object-position:center center}
+body.login-wrap .login-visual{min-width:0;height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#f5f8fc}
+body.login-wrap .banner-card{width:100%;height:calc(100vh - 48px);background:#fff;border-radius:22px;box-shadow:0 15px 50px #0d2c5c20;padding:16px;overflow:hidden}
+body.login-wrap .banner-card img{display:block;width:100%;height:100%;object-fit:cover;border-radius:16px;object-position:center center}
 body.login-wrap .login-panel{min-width:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:36px;background:#f5f8fc}
 body.login-wrap .login-card{width:100%;max-width:520px;background:#fff;border-radius:22px;box-shadow:0 15px 50px #0d2c5c20;padding:44px;text-align:center}
 body.login-wrap .login-card h1{font-size:46px;letter-spacing:4px;margin:0 0 14px}
