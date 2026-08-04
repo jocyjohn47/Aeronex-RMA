@@ -2084,10 +2084,14 @@ function dashboardNoticeHtml(){
   const title=String(f.Title||'Important Notice').trim();
   const note=String(f.Note||'').trim();
   if(!note) return '';
-  return `<div style="margin-top:18px;border:1px solid #dbe4f0;border-radius:12px;background:#fff;padding:14px 18px;box-shadow:0 2px 10px rgba(15,23,42,.05)">
-    <div style="font-size:17px;font-weight:700;margin-bottom:6px">📢 ${esc(title)}</div>
-    <div style="display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;line-height:1.45;white-space:pre-line">${esc(note)}</div>
-    <div style="text-align:right;margin-top:6px"><a href="#" onclick="event.preventDefault();openDashboardNotice()">Read More →</a></div>
+  return `<div class="dashboard-notice-card">
+    <div class="dashboard-notice-icon">📢</div>
+    <div class="dashboard-notice-content">
+      <h2>Important Service Notice</h2>
+      <h3>${esc(title)}</h3>
+      <div class="dashboard-notice-preview">${esc(note)}</div>
+    </div>
+    <a class="dashboard-read-more" href="#" onclick="event.preventDefault();openDashboardNotice()">Read More →</a>
   </div>`;
 }
 function openDashboardNotice(){
@@ -2099,48 +2103,56 @@ function openDashboardNotice(){
   showDetailsModal(`📢 ${title}`, `<div style="white-space:pre-wrap;line-height:1.6">${esc(note)}</div>`);
 }
 
-function renderDashboard(){$('dashboard').classList.add('active');$('dashboard').innerHTML=`<div class="hero"><h2>Welcome back, ${esc(S.user.displayName||S.user.username)}</h2><div class="muted">Here's what you can do today</div>${isAdmin()?`<div class="notice"><b>Country:</b> <select style="max-width:260px;display:inline-block;margin-left:10px" onchange="setAdminCountry(this.value)"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select></div>`:''}</div><div class="cards">${[['🛒','Spare Order','Order spare parts from inventory.','spare','Go to Spare Order'],['🔧','Create Repair Case','Submit a new repair request.','repairCreate','Create Case'],['📋','Repair Status','Track repair cases, reports and invoices.','repairStatus','View Status'],['🏢','Dealer Details','View and manage dealer information.','dealers','View Dealers'],['📄','Portal Notes','Important information and announcements.','portalNotes','View Notes']].map(c=>`<div class="card"><div class="ico">${c[0]}</div><h3>${c[1]}</h3><p>${c[2]}</p><a href="#" onclick="show('${c[3]}')">${c[4]} →</a></div>`).join('')}
-<div class="address-grid">
-  <div class="address-box">
-    <h2>UAE Address</h2>
-    <p>
-AERONEX (UAE & Other Region )
-Comapny Name : AERONEX DRONE TRADING LLC
-Address :      C-WING , C706-708
-               DUBAI SILICON OASIS HQ BUILDING
-               DSO , DUBAI , UAE
-Working Time : MON - FRI ( 9AM - 5PM )  SAT & SUN ( CLOSED )
-Email :        support@aeronex.ae
-    </p>
-  </div>
+function renderDashboard(){
+  $('dashboard').classList.add('active');
+  const actions=[
+    ['🛒','Spare Order','Order spare parts from inventory.','spare','Go to Spare Order'],
+    ['🔧','Create Repair Case','Submit a new repair request.','repairCreate','Create Case'],
+    ['📋','Repair Status','Track repair cases, reports and invoices.','repairStatus','View Status'],
+    ['🏢','Dealer Details','View and manage dealer information.','dealers','View Dealers'],
+    ['📄','Portal Notes','Important information and announcements.','portalNotes','View Notes']
+  ];
+  $('dashboard').innerHTML=`
+    <div class="dashboard-head">
+      <div class="hero">
+        <h2>Welcome back, ${esc(S.user.displayName||S.user.username)}</h2>
+        <div class="muted">Here's what you can do today</div>
+      </div>
+      ${isAdmin()?`<div class="dashboard-country"><label>Country</label><select onchange="setAdminCountry(this.value)"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select></div>`:''}
+    </div>
 
-  <div class="address-box">
-    <h2>KSA Address</h2>
-    <p>
-AERONEX  (KSA Only )
-Company Name :  CHARKA MESAA TAYARAH
-Address :       OFFICE NO 403, Al JAWHARA TOWER ,
-                OLAYA STREET. AL OLAYA , RIYAD , KSA .
-Working Time :  SUN - THU ( 9AM - 6 PM ) FRI & SAT ( CLOSED )
-Email :         support.ksa@aeronex.ae
-    </p>
-</div>
+    <h2 class="dashboard-section-title">Quick Actions</h2>
+    <div class="dashboard-actions">
+      ${actions.map(c=>`<div class="dashboard-action-card"><div class="ico">${c[0]}</div><h3>${c[1]}</h3><p>${c[2]}</p><a href="#" onclick="show('${c[3]}')">${c[4]} →</a></div>`).join('')}
+    </div>
 
-<div style="
-  margin-top:20px;
-  text-align:center;
-  font-size:18px;
-  color:#2563eb;
-">
-  For official DJI warranty verification,
-  <a href="https://repair.dji.com/device/Search?re=id&lang=en"
-     target="_blank"
-     rel="noopener">
-     Open DJI Warranty Check →
-  </a>
-</div>
-${dashboardNoticeHtml()}
-</div></div>`}
+    <a class="dashboard-warranty-card" href="https://repair.dji.com/device/Search?re=id&lang=en" target="_blank" rel="noopener">
+      <div class="dashboard-warranty-icon">✓</div>
+      <div class="dashboard-warranty-copy"><h2>Official DJI Warranty Verification</h2><p>Verify your product warranty on the official DJI website.</p></div>
+      <span class="dashboard-warranty-button">Verify Product Warranty ↗</span>
+    </a>
+
+    <h2 class="dashboard-section-title">Service Centers</h2>
+    <div class="dashboard-service-grid">
+      <div class="dashboard-service-card">
+        <h2>🇦🇪 UAE Service Center</h2>
+        <div class="dashboard-service-row"><b>Company</b><span>AERONEX DRONE TRADING LLC</span></div>
+        <div class="dashboard-service-row"><b>Address</b><span>C-WING, C706-708<br>DUBAI SILICON OASIS HQ BUILDING<br>DSO, DUBAI, UAE</span></div>
+        <div class="dashboard-service-row"><b>Working Hours</b><span>MON–FRI: 9 AM–5 PM<br>SAT & SUN: Closed</span></div>
+        <div class="dashboard-service-row"><b>Email</b><a href="mailto:support@aeronex.ae">support@aeronex.ae</a></div>
+      </div>
+      <div class="dashboard-service-card">
+        <h2>🇸🇦 KSA Service Center</h2>
+        <div class="dashboard-service-row"><b>Company</b><span>CHARKA MESAA TAYARAH</span></div>
+        <div class="dashboard-service-row"><b>Address</b><span>OFFICE NO. 403, AL JAWHARA TOWER<br>OLAYA STREET, AL OLAYA<br>RIYADH, KSA</span></div>
+        <div class="dashboard-service-row"><b>Working Hours</b><span>SUN–THU: 9 AM–6 PM<br>FRI & SAT: Closed</span></div>
+        <div class="dashboard-service-row"><b>Email</b><a href="mailto:support.ksa@aeronex.ae">support.ksa@aeronex.ae</a></div>
+      </div>
+    </div>
+
+    ${dashboardNoticeHtml()}
+  `;
+}
 function renderChangePassword(){$('changePassword').innerHTML=`<div class="panel" style="max-width:620px;margin:auto"><h2>Change Password</h2><label>Current Password</label><input id="currentPassword" type="password"><label>New Password</label><input id="newPassword" type="password"><label>Confirm New Password</label><input id="confirmPassword" type="password"><button onclick="changePassword()">Update Password</button><div id="cpMsg" class="msg"></div></div>`}
 
 async function changePassword(){
