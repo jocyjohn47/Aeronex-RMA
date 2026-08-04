@@ -2,6 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AERONEX RMA Portal</title>
 <link rel="icon" type="image/png" href="img/dji_aeronex_logo.png">
 <link rel="stylesheet" href="css/style.css">
@@ -12,22 +13,28 @@
 </style>
 </head>
 <body class="login-wrap">
-<div class="login-visual"><div class="banner-card"><img src="img/login-banner.png" alt=""></div></div>
-<div class="login-panel">
-    <div class="login-card">
-        <div class="login-logo-wrap">
-            <img class="login-logo-img" src="img/dji_aeronex_logo.png" alt="DJI AERONEX">
-            <div class="login-logo-subtitle">RMA &amp; Spare Portal</div>
-        </div>
-        <input id="u" placeholder="Username / Email">
-        <input id="p" type="password" placeholder="Password">
-        <div class="login-actions">
-            <button onclick="login()">Login</button>
-            <button class="btn-light" onclick="forgotPassword()">Forgot Password?</button>
-        </div>
-        <div id="msg" class="msg"></div>
-        <div class="footer">© 2025 AERO NEX FZCO <br>Developed by AERO NEX FZCO <br>Email : support@aeronex.ae</div>
+<div class="login-visual" aria-hidden="true">
+  <div class="banner-card">
+    <div class="login-banner-frame">
+      <img src="img/login-banner.png" alt="">
     </div>
+  </div>
+</div>
+<div class="login-panel">
+  <div class="login-card">
+    <div class="login-logo-wrap">
+      <img class="login-logo-img" src="img/dji_aeronex_logo.png" alt="DJI AERONEX">
+      <div class="login-logo-subtitle">RMA &amp; Spare Portal</div>
+    </div>
+    <input id="u" placeholder="Username / Email">
+    <input id="p" type="password" placeholder="Password">
+    <div class="login-actions">
+      <button onclick="login()">Login</button>
+      <button class="btn-light" onclick="forgotPassword()">Forgot Password?</button>
+    </div>
+    <div id="msg" class="msg"></div>
+    <div class="footer">© 2025 AERO NEX FZCO <br>Developed by AERO NEX FZCO <br>Email : support@aeronex.ae</div>
+  </div>
 </div>
 <script src="config.js"></script>
 <script src="js/app.js"></script>
