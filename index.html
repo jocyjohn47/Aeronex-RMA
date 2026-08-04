@@ -2,27 +2,33 @@
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AERONEX RMA Portal</title>
 <link rel="icon" type="image/png" href="img/dji_aeronex_logo.png">
 <link rel="stylesheet" href="css/style.css">
-<style>
-.login-logo-wrap{text-align:center;margin-bottom:22px}
-.login-logo-subtitle{margin-top:10px;font-size:24px;font-weight:500;color:#2b3d6e}
-.login-logo-img{width:360px;max-width:88%;height:auto;display:block;margin:0 auto 22px auto}
-</style>
 </head>
 <body class="login-wrap">
-<div class="login-card">
-<div class="login-logo-wrap">
-    <img class="login-logo-img" src="img/dji_aeronex_logo.png" alt="DJI AERONEX">
-    <div class="login-logo-subtitle">RMA &amp; Spare Portal</div>
-</div>
-<input id="u" placeholder="Username / Email">
-<input id="p" type="password" placeholder="Password">
-<button onclick="login()">Login</button>
-<button class="btn-light" onclick="forgotPassword()">Forgot Password?</button>
-<div id="msg" class="msg"></div>
-<div class="footer">© 2025 AERO NEX FZCO <br>Developed by AERO NEX FZCO <br>Email : support@aeronex.ae</div>
+<div class="login-page-shell">
+  <div class="login-banner-panel" aria-label="AERONEX promotional banner">
+    <img src="img/login-banner.png" alt="AERONEX Promotion">
+  </div>
+
+  <div class="login-form-panel">
+    <div class="login-card">
+      <div class="login-logo-wrap">
+        <img class="login-logo-img" src="img/dji_aeronex_logo.png" alt="DJI AERONEX">
+        <div class="login-logo-subtitle">RMA &amp; Spare Portal</div>
+      </div>
+      <input id="u" placeholder="Username / Email">
+      <input id="p" type="password" placeholder="Password">
+      <div class="login-actions">
+        <button onclick="login()">Login</button>
+        <button class="btn-light" onclick="forgotPassword()">Forgot Password?</button>
+      </div>
+      <div id="msg" class="msg"></div>
+      <div class="footer">© 2025 AERO NEX FZCO <br>Developed by AERO NEX FZCO <br>Email : support@aeronex.ae</div>
+    </div>
+  </div>
 </div>
 <script src="config.js"></script>
 <script src="js/app.js"></script>
