@@ -309,3 +309,107 @@ td{
   #dashboard .dashboard-notice-icon{width:46px;height:46px}
   #dashboard .dashboard-read-more{grid-column:1;text-align:right}
 }
+
+/* =========================
+   LOGIN PAGE BANNER PATCH
+   Scoped to login page only
+========================= */
+.login-wrap{
+  min-height:100vh;
+  display:block;
+  padding:0;
+  overflow-x:hidden;
+}
+.login-page-shell{
+  min-height:100vh;
+  display:grid;
+  grid-template-columns:minmax(0,1.35fr) minmax(420px,.65fr);
+  background:var(--bg);
+}
+.login-banner-panel{
+  min-width:0;
+  min-height:100vh;
+  overflow:hidden;
+  background:linear-gradient(135deg,#dce8f7,#eef4fb);
+}
+.login-banner-panel img{
+  width:100%;
+  height:100%;
+  min-height:100vh;
+  display:block;
+  object-fit:cover;
+  object-position:center;
+}
+.login-form-panel{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:40px;
+  background:#f7f9fc;
+}
+.login-form-panel .login-card{
+  width:min(520px,100%);
+  max-width:none;
+  padding:44px;
+}
+.login-logo-wrap{
+  text-align:center;
+  margin-bottom:22px;
+}
+.login-logo-subtitle{
+  margin-top:10px;
+  font-size:24px;
+  font-weight:500;
+  color:#2b3d6e;
+}
+.login-form-panel .login-logo-img{
+  width:360px !important;
+  max-width:88% !important;
+  height:auto !important;
+  display:block !important;
+  margin:0 auto 22px !important;
+}
+.login-actions{
+  display:flex;
+  justify-content:center;
+  gap:8px;
+  margin-top:0;
+}
+.login-actions button{
+  width:auto;
+}
+.login-form-panel .footer{
+  padding:22px 0 0;
+}
+@media(max-width:1000px){
+  .login-page-shell{
+    grid-template-columns:1fr 430px;
+  }
+  .login-form-panel{
+    padding:28px;
+  }
+  .login-form-panel .login-card{
+    padding:34px;
+  }
+}
+@media(max-width:760px){
+  .login-page-shell{
+    display:block;
+    min-height:100vh;
+  }
+  .login-banner-panel{
+    display:none;
+  }
+  .login-form-panel{
+    min-height:100vh;
+    padding:20px;
+  }
+  .login-form-panel .login-card{
+    width:100%;
+    padding:30px 24px;
+  }
+  .login-actions{
+    flex-wrap:wrap;
+  }
+}
