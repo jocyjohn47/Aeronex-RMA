@@ -2135,14 +2135,14 @@ function renderDashboard(){
     <h2 class="dashboard-section-title">Service Centers</h2>
     <div class="dashboard-service-grid">
       <div class="dashboard-service-card">
-        <h2>🇦🇪 UAE Service Center</h2>
+        <h2>UAE Service Center( UAE & Other Region)</h2>
         <div class="dashboard-service-row"><b>Company</b><span>AERONEX DRONE TRADING LLC</span></div>
         <div class="dashboard-service-row"><b>Address</b><span>C-WING, C706-708<br>DUBAI SILICON OASIS HQ BUILDING<br>DSO, DUBAI, UAE</span></div>
         <div class="dashboard-service-row"><b>Working Hours</b><span>MON–FRI: 9 AM–5 PM<br>SAT & SUN: Closed</span></div>
         <div class="dashboard-service-row"><b>Email</b><a href="mailto:support@aeronex.ae">support@aeronex.ae</a></div>
       </div>
       <div class="dashboard-service-card">
-        <h2>🇸🇦 KSA Service Center</h2>
+        <h2>KSA Service Center(Only KSA )</h2>
         <div class="dashboard-service-row"><b>Company</b><span>CHARKA MESAA TAYARAH</span></div>
         <div class="dashboard-service-row"><b>Address</b><span>OFFICE NO. 403, AL JAWHARA TOWER<br>OLAYA STREET, AL OLAYA<br>RIYADH, KSA</span></div>
         <div class="dashboard-service-row"><b>Working Hours</b><span>SUN–THU: 9 AM–6 PM<br>FRI & SAT: Closed</span></div>
