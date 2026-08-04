@@ -2059,6 +2059,46 @@ function renderAdminCenter(){
   </div>`;
 }
 
+function dashboardNoticeCountryMatches(value){
+  const noteCountry=String(value||'').trim().toLowerCase();
+  const current=String(selectedCountry()||'').trim().toLowerCase();
+  if(!noteCountry || noteCountry==='all' || noteCountry==='all region' || noteCountry==='all regions') return true;
+  if(noteCountry===current) return true;
+  if(current.includes('ksa') && (noteCountry==='ksa' || noteCountry.includes('saudi'))) return true;
+  if(current.includes('uae') && (noteCountry==='uae' || noteCountry.includes('other region'))) return true;
+  return false;
+}
+function dashboardNoticeRecord(){
+  const rows=Array.isArray(S.notes)?S.notes:[];
+  return rows.find(r=>{
+    const f=r.fields||{};
+    return String(f.Page||'').trim().toUpperCase()==='DASHBOARD NOTICE' &&
+      String(f.Active||'').trim().toLowerCase()==='show' &&
+      dashboardNoticeCountryMatches(f.Country);
+  }) || null;
+}
+function dashboardNoticeHtml(){
+  const row=dashboardNoticeRecord();
+  if(!row) return '';
+  const f=row.fields||{};
+  const title=String(f.Title||'Important Notice').trim();
+  const note=String(f.Note||'').trim();
+  if(!note) return '';
+  return `<div style="margin-top:18px;border:1px solid #dbe4f0;border-radius:12px;background:#fff;padding:14px 18px;box-shadow:0 2px 10px rgba(15,23,42,.05)">
+    <div style="font-size:17px;font-weight:700;margin-bottom:6px">📢 ${esc(title)}</div>
+    <div style="display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;line-height:1.45;white-space:pre-line">${esc(note)}</div>
+    <div style="text-align:right;margin-top:6px"><a href="#" onclick="event.preventDefault();openDashboardNotice()">Read More →</a></div>
+  </div>`;
+}
+function openDashboardNotice(){
+  const row=dashboardNoticeRecord();
+  if(!row) return;
+  const f=row.fields||{};
+  const title=String(f.Title||'Important Notice').trim();
+  const note=String(f.Note||'').trim();
+  showDetailsModal(`📢 ${title}`, `<div style="white-space:pre-wrap;line-height:1.6">${esc(note)}</div>`);
+}
+
 function renderDashboard(){$('dashboard').classList.add('active');$('dashboard').innerHTML=`<div class="hero"><h2>Welcome back, ${esc(S.user.displayName||S.user.username)}</h2><div class="muted">Here's what you can do today</div>${isAdmin()?`<div class="notice"><b>Country:</b> <select style="max-width:260px;display:inline-block;margin-left:10px" onchange="setAdminCountry(this.value)"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select></div>`:''}</div><div class="cards">${[['🛒','Spare Order','Order spare parts from inventory.','spare','Go to Spare Order'],['🔧','Create Repair Case','Submit a new repair request.','repairCreate','Create Case'],['📋','Repair Status','Track repair cases, reports and invoices.','repairStatus','View Status'],['🏢','Dealer Details','View and manage dealer information.','dealers','View Dealers'],['📄','Portal Notes','Important information and announcements.','portalNotes','View Notes']].map(c=>`<div class="card"><div class="ico">${c[0]}</div><h3>${c[1]}</h3><p>${c[2]}</p><a href="#" onclick="show('${c[3]}')">${c[4]} →</a></div>`).join('')}
 <div class="address-grid">
   <div class="address-box">
@@ -2099,7 +2139,7 @@ Email :         support.ksa@aeronex.ae
      Open DJI Warranty Check →
   </a>
 </div>
-
+${dashboardNoticeHtml()}
 </div></div>`}
 function renderChangePassword(){$('changePassword').innerHTML=`<div class="panel" style="max-width:620px;margin:auto"><h2>Change Password</h2><label>Current Password</label><input id="currentPassword" type="password"><label>New Password</label><input id="newPassword" type="password"><label>Confirm New Password</label><input id="confirmPassword" type="password"><button onclick="changePassword()">Update Password</button><div id="cpMsg" class="msg"></div></div>`}
 
@@ -2282,7 +2322,7 @@ function applyDealerToRepairForm(){
   if($('rcCountry')) $('rcCountry').value = normalizeCountryValue(f.Country || selectedCountry());
 }
 
-function renderSpare(){$('spare').innerHTML=`<div class="panel"><h2>Spare Order</h2><div class="notice">Select material by name or material code. Review before submit. No edit after apply; cancel request only.${isAdmin()?`<br><b>Country:</b> <select style="max-width:260px;display:inline-block;margin-left:10px" onchange="setAdminCountry(this.value);renderSpare()"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select>`:''}</div>${dealerSelectHtml('spare')}<div class="grid4"><div><label>Company Name</label><input id="spareCompany" value="${esc(uf('Company Name','AERO NEX'))}" disabled></div><div><label>Contact Name</label><input id="spareContact" value="${esc(uf('Contact Person',''))}" disabled></div><div><label>Billing Address</label><input id="spareAddress" value="${esc(dealerAddress())}" disabled></div><div><label>Country</label><input id="spareCountry" value="${esc(selectedCountry())}" disabled></div></div><div style="max-width:260px"><label>Invoice Currency</label><select id="invoiceCurrency" onchange="drawCart()">${currencyOptions()}</select></div><label>Add from Spare Part List</label><div class="row"><input id="spareSearch" placeholder="Search by Material Code or Material Name..." oninput="renderSpareOptions()"><input id="spareQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addListed()">Add Item</button></div><select id="spareSelect"></select><h3>Custom Spare (if not in list)</h3><div class="row"><input id="customCode" placeholder="Material Code (if known)"><input id="customName" placeholder="Material Name"><input id="customQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addCustom()">Add Custom</button></div><label>Remarks</label><textarea id="spareNotes" placeholder="Optional remarks for this spare order" style="min-height:80px"></textarea><h3>Review Items</h3><div class="table-wrap"><table><thead><tr><th>Material Code</th><th>Material Name</th><th>Compatible Model</th><th>Qty</th><th id="cartUnitPriceHead">Unit Price</th><th id="cartTotalHead">Total</th><th>Action</th></tr></thead><tbody id="cartRows"></tbody></table></div><button onclick="submitOrder()">Submit Order</button> <button class="btn-light" onclick="S.cart=[];drawCart()">Clear All</button><div id="orderMsg" class="msg"></div><h3>My Order History <button class="btn-light" onclick="loadOrders().then(renderOrders)">Refresh</button> ${isAdmin()?`<a class="btn-light" target="_blank" rel="noopener" href="/api/download-spare-orders-report?country=${encodeURIComponent(selectedCountry())}&role=${encodeURIComponent(S.user.role||'')}">Download All Reports</a>`:''}</h3><div class="row" style="align-items:end;gap:12px;flex-wrap:wrap"><div style="min-width:260px;flex:1"><label>Search by Order No or Dealer / Company</label><input id="orderListSearch" value="${esc(S.listUi?.orders?.search||'')}" oninput="setListSearch('orders',this.value)" placeholder="Search order or dealer..."></div><div style="width:150px"><label>Records per page</label><select id="orderPageSize" onchange="setListPageSize('orders',this.value)">${[10,20,30,40,50,100].map(n=>`<option value="${n}" ${Number(S.listUi?.orders?.pageSize||10)===n?'selected':''}>${n}</option>`).join('')}</select></div></div><div id="orderListCount" class="muted" style="margin:10px 0"></div><div class="table-wrap"><table><thead><tr><th>Spare Order No</th><th>Case created</th><th>Dealer / Company</th><th>Status</th><th>Invoice Download</th><th>Payment Receipt</th><th>Final Notes</th></tr></thead><tbody id="orderRows"></tbody></table></div><div id="orderPagination" class="row" style="justify-content:center;align-items:center;margin-top:12px"></div>${renderPageNote(window.AERONEX_SPARE_ORDER_NOTE)}</div>`;renderSpareOptions();drawCart();renderOrders()}
+function renderSpare(){$('spare').innerHTML=`<div class="panel"><h2>Spare Order</h2><div class="notice">Select material by name or material code. Review before submit. No edit after apply; cancel request only.${isAdmin()?`<br><b>Country:</b> <select style="max-width:260px;display:inline-block;margin-left:10px" onchange="setAdminCountry(this.value);renderSpare()"><option ${selectedCountry()==='UAE & Other Region'?'selected':''}>UAE & Other Region</option><option ${selectedCountry()==='KSA - SAUDI ARABIA'?'selected':''}>KSA - SAUDI ARABIA</option></select>`:''}</div>${dealerSelectHtml('spare')}<div class="grid4"><div><label>Company Name</label><input id="spareCompany" value="${esc(uf('Company Name','AERO NEX'))}" disabled></div><div><label>Contact Name</label><input id="spareContact" value="${esc(uf('Contact Person',''))}" disabled></div><div><label>Billing Address</label><input id="spareAddress" value="${esc(dealerAddress())}" disabled></div><div><label>Country</label><input id="spareCountry" value="${esc(selectedCountry())}" disabled></div></div><div style="max-width:260px"><label>Invoice Currency</label><select id="invoiceCurrency" onchange="drawCart()">${currencyOptions()}</select></div><label>Add from Spare Part List</label><div class="row"><input id="spareSearch" placeholder="Search by Material Code or Material Name..." oninput="renderSpareOptions()"><input id="spareQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addListed()">Add Item</button></div><select id="spareSelect"></select><h3>Custom Spare (if not in list)</h3><div class="row"><input id="customCode" placeholder="Material Code (if known)"><input id="customName" placeholder="Material Name"><input id="customQty" class="qty" type="number" min="1" value="1"><button class="act" onclick="addCustom()">Add Custom</button></div><label>Remarks</label><textarea id="spareNotes" placeholder="Optional remarks for this spare order" style="min-height:80px"></textarea><h3>Review Items</h3><div class="table-wrap"><table><thead><tr><th>Material Code</th><th>Material Name</th><th>Compatible Model</th><th>Qty</th><th id="cartUnitPriceHead">Unit Price</th><th id="cartTotalHead">Total</th><th>Action</th></tr></thead><tbody id="cartRows"></tbody></table></div><button id="submitSpareOrderBtn" onclick="submitOrder()">Submit Order</button> <button class="btn-light" onclick="S.cart=[];drawCart()">Clear All</button><div id="orderMsg" class="msg"></div><h3>My Order History <button class="btn-light" onclick="loadOrders().then(renderOrders)">Refresh</button> ${isAdmin()?`<a class="btn-light" target="_blank" rel="noopener" href="/api/download-spare-orders-report?country=${encodeURIComponent(selectedCountry())}&role=${encodeURIComponent(S.user.role||'')}">Download All Reports</a>`:''}</h3><div class="row" style="align-items:end;gap:12px;flex-wrap:wrap"><div style="min-width:260px;flex:1"><label>Search by Order No or Dealer / Company</label><input id="orderListSearch" value="${esc(S.listUi?.orders?.search||'')}" oninput="setListSearch('orders',this.value)" placeholder="Search order or dealer..."></div><div style="width:150px"><label>Records per page</label><select id="orderPageSize" onchange="setListPageSize('orders',this.value)">${[10,20,30,40,50,100].map(n=>`<option value="${n}" ${Number(S.listUi?.orders?.pageSize||10)===n?'selected':''}>${n}</option>`).join('')}</select></div></div><div id="orderListCount" class="muted" style="margin:10px 0"></div><div class="table-wrap"><table><thead><tr><th>Spare Order No</th><th>Case created</th><th>Dealer / Company</th><th>Status</th><th>Invoice Download</th><th>Payment Receipt</th><th>Final Notes</th></tr></thead><tbody id="orderRows"></tbody></table></div><div id="orderPagination" class="row" style="justify-content:center;align-items:center;margin-top:12px"></div>${renderPageNote(window.AERONEX_SPARE_ORDER_NOTE)}</div>`;renderSpareOptions();drawCart();renderOrders()}
 function renderSpareOptions(){let q=($('spareSearch')?.value||'').toLowerCase(),s=$('spareSelect');if(!s)return;s.innerHTML=S.spares.filter(x=>{let f=x.fields||{};return `${f['Material Code']||''} ${f['Material Name']||''} ${f['Compatible Model']||''}`.toLowerCase().includes(q)}).map(x=>{let f=x.fields||{},o={materialCode:f['Material Code']||'',materialName:f['Material Name']||'',compatibleModel:f['Compatible Model']||'',priceUSD:f['Price (USD ) Without Tax & Duty']||'',priceAED:f['AED (Without Tax & Duty)']||'',priceSAR:f['SAR (Without Tax & Duty)']||'',price:f['Price (USD ) Without Tax & Duty']||'',stock:f['Local Stock']||''};return `<option value="${encodeURIComponent(JSON.stringify(o))}">${esc(o.materialCode)} - ${esc(o.materialName)} ${o.compatibleModel?'('+esc(o.compatibleModel)+')':''}</option>`}).join('')}
 function addListed(){let v=$('spareSelect').value;if(!v)return msg('orderMsg','Select material first');let o=JSON.parse(decodeURIComponent(v));o.qty=$('spareQty').value||'1';S.cart.push(o);drawCart()}
 function addCustom(){let n=$('customName').value.trim();if(!n)return msg('orderMsg','Enter custom material name');S.cart.push({materialCode:$('customCode').value.trim(),materialName:n,compatibleModel:'Custom',priceUSD:0,priceAED:0,priceSAR:0,price:0,stock:'-',qty:$('customQty').value||'1'});$('customCode').value='';$('customName').value='';drawCart()}
@@ -2439,9 +2479,12 @@ async function generateAndUploadPi(orderResult,orderData,items){
 
 async function submitOrder(){
   if(SPARE_SUBMITTING) return;
+  const btn = $('submitSpareOrderBtn');
   SPARE_SUBMITTING = true;
+  if(btn) btn.disabled = true;
+  let succeeded = false;
   try{
-    if(!S.cart.length) return msg('orderMsg','Add at least one item');
+    if(!S.cart.length) throw new Error('Add at least one item');
     const currency = selectedInvoiceCurrency();
     const pricedItems = S.cart.map(x=>{
       const qty = cleanPrice(x.qty || 1) || 1;
@@ -2451,6 +2494,7 @@ async function submitOrder(){
     let p={companyName:($('spareCompany')?.value||uf('Company Name','AERO NEX')),contactName:($('spareContact')?.value||uf('Contact Person','')),contactEmail:userEmail(),trnNo:uf('TRN NO','')||dealerTrn(),billingAddress:($('spareAddress')?.value||dealerAddress()),invoiceCurrency:currency,country:($('spareCountry')?.value||selectedCountry()),items:pricedItems,remarks:(($('spareNotes')&&$('spareNotes').value)||'').trim()};
     let d=await api('/api/submit-spare',{method:'POST',body:JSON.stringify(p)});
     try{await generateAndUploadPi(d,p,pricedItems);msg('orderMsg','Order submitted with PI Excel file: '+d.orderNo,true)}catch(piErr){console.error('PI generation failed',piErr);msg('orderMsg','Order submitted, but PI Excel generation failed: '+(piErr.message||piErr),false)}
+    succeeded = true;
     submitSuccessPopup('Spare Order', d.orderNo);
     S.cart=[];
     drawCart();
@@ -2459,10 +2503,12 @@ async function submitOrder(){
   }catch(e){
     msg('orderMsg',e.message);
   }finally{
-    SPARE_SUBMITTING = false;
+    if(!succeeded){
+      SPARE_SUBMITTING = false;
+      if(btn) btn.disabled = false;
+    }
   }
 }
-
 
 
 
@@ -3000,25 +3046,19 @@ function renderRepairCreate(){
     <div class="grid4"><div><label>Country *</label><select id="rcCountry"><option>UAE & Other Region</option><option>KSA - SAUDI ARABIA</option></select></div><div><label>Model No *</label><input id="rcModel"></div><div><label>Serial No *</label><input id="rcSerial"></div><div><label>${isKsaForm?'Date Of Activation':'Date of Purchase / Activation'} *</label><input id="rcDate" type="date"></div></div>
     ${isKsaForm?`<div class="grid3"><div><label>Warranty Status</label><select id="rcWarranty"><option>Under Warranty</option><option>Out of Warranty</option><option>Unknown</option></select></div><div><label>GACA Document</label><input id="gacaDocument" type="file"></div><div><label>Log for Drone and RC Link</label><input id="logFileLink" placeholder="Paste log link"></div></div><label>Issue Video and Pictures Link</label><input id="issueMediaLink" placeholder="Paste video/picture link"><label>Issue Description *</label><textarea id="rcDetails"></textarea>`:`<label>Details Of Issue *</label><textarea id="rcDetails"></textarea><div class="grid3"><div><label>Upload all required details link</label><input id="requiredDetailsLink" placeholder="Paste link here"></div><div><label>Log File Link</label><input id="logFileLink" placeholder="Paste log file link here"></div><div><label>Notes</label><input id="rcRemarks"></div></div>`}
     ${isKsaForm?`<div class="grid3"><div><label>Notes</label><input id="rcRemarks"></div><div><label>Notes</label><input id="rcNotes"></div><div></div></div>`:`<label>Notes</label><input id="rcNotes">`}
-    <button onclick="submitRepair()">Submit Repair Case</button><div id="repairMsg" class="msg"></div>${renderPageNote(window.AERONEX_REPAIR_CASE_NOTE)}</div>`;
+    <button id="submitRepairCaseBtn" onclick="submitRepair()">Submit Repair Case</button><div id="repairMsg" class="msg"></div>${renderPageNote(window.AERONEX_REPAIR_CASE_NOTE)}</div>`;
   $('rcCountry').value=selectedCountry().includes('KSA')?'KSA - SAUDI ARABIA':'UAE & Other Region';
 }
 async function submitRepair(){
   if(REPAIR_SUBMITTING) return;
+  const btn = $('submitRepairCaseBtn');
   REPAIR_SUBMITTING = true;
-
-  const btn = (typeof event !== 'undefined' && event && event.target) ? event.target : null;
-  if(btn){
-    btn.disabled = true;
-    btn.textContent = 'Submitting...';
-  }
+  if(btn) btn.disabled = true;
+  let succeeded = false;
 
   try{
     for(let id of ['rcAddress','rcCountry','rcModel','rcSerial','rcDate','rcDetails']) {
-      if(!$(id).value.trim()) {
-        msg('repairMsg','Please fill required fields');
-        return;
-      }
+      if(!$(id).value.trim()) throw new Error('Please fill required fields');
     }
 
     const isKsaForm = $('rcCountry').value.includes('KSA');
@@ -3045,6 +3085,7 @@ async function submitRepair(){
     };
 
     let d=await api('/api/repair-case',{method:'POST',body:JSON.stringify(p)});
+    succeeded = true;
     msg('repairMsg','Repair case created',true);
     submitSuccessPopup('Repair Case', d.caseNo || d.repairCase || d.orderNo || d.id || '');
     await loadRepairs();
@@ -3052,10 +3093,9 @@ async function submitRepair(){
   }catch(e){
     msg('repairMsg',e.message || 'Submit failed');
   }finally{
-    REPAIR_SUBMITTING = false;
-    if(btn){
-      btn.disabled = false;
-      btn.textContent = 'Submit Repair Case';
+    if(!succeeded){
+      REPAIR_SUBMITTING = false;
+      if(btn) btn.disabled = false;
     }
   }
 }
@@ -3180,6 +3220,7 @@ async function initApp(){
   try{await loadRepairs()}catch{}
   try{S.dealers=await api('/api/dealers')}catch{}
   try{S.notes=await api('/api/portal-notes')}catch{}
+  renderDashboard();
 
   renderSpare();
   renderRepairCreate();
