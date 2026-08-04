@@ -174,6 +174,21 @@ async function listRecords(env, tableId) {
   return rows;
 }
 
+function recordCreatedMillis(row){
+  const raw = row?.created_time || row?.createdTime || row?.fields?.["Case created"] || row?.fields?.["Case Created"] || 0;
+  const n = Number(raw);
+  if (Number.isFinite(n) && n > 0) return n > 100000000000 ? n : n * 1000;
+  const parsed = Date.parse(String(raw || ''));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+function recentRecord(rows, maxAgeMs, matcher){
+  const now = Date.now();
+  return (rows || []).find(row => {
+    const created = recordCreatedMillis(row);
+    return created && now - created >= 0 && now - created <= maxAgeMs && matcher(row.fields || {});
+  }) || null;
+}
+
 async function getFieldTypes(env, tableId) {
   if (!tableId) return {};
   const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields`);
@@ -2057,6 +2072,30 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     const tableId = spareTable(env, country);
     const items = b.items || b.cart || [];
 
+    // Duplicate guard for accidental double-click/browser retry.
+    // Match the same dealer and exact submitted material/quantity set within two minutes.
+    const normalizedItems = items.map(i => ({
+      code: lower(i.materialCode || i["Material Code"] || ""),
+      name: lower(i.materialName || i["Material Name"] || ""),
+      qty: String(i.qty || i.Qty || 1).trim()
+    }));
+    const submittedCodes = normalizedItems.map(i => i.code).filter(Boolean).join(", ");
+    const submittedNames = normalizedItems.map(i => i.name).filter(Boolean).join(", ");
+    const submittedQty = normalizedItems.map(i => i.qty).join(", ");
+    const recentRows = await listRecords(env, tableId);
+    const duplicate = recentRecord(recentRows, 2 * 60 * 1000, f =>
+      lower(fieldText(f["Company Name"])) === lower(b.companyName || "") &&
+      lower(fieldText(f["Contact Name"])) === lower(b.contactName || "") &&
+      lower(fieldText(f["Material Code"])) === submittedCodes &&
+      lower(fieldText(f["Material Name"])) === submittedNames &&
+      String(fieldText(f["Qty"]) || "").trim() === submittedQty &&
+      lower(fieldText(f["Status"])) === "submitted"
+    );
+    if (duplicate) {
+      const existingNo = assertValidSpareOrderNo(spareOrderNo(duplicate.fields || {}));
+      return json({ ok:true, duplicatePrevented:true, orderNo:existingNo, tableId, record_id:duplicate.record_id, piGenerationRequired:true });
+    }
+
     // Temporary fallback only. Lark row is the authority for final order number.
     const fallbackNo = makeSpareOrderNo(country);
 
@@ -2146,6 +2185,21 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     const tableId = repairTable(env, country);
     const prefix = lower(country).includes("ksa") ? "KSARMA" : "DXBRMA";
     const no = `${prefix}${new Date().toISOString().replace(/\D/g, "").slice(0, 12)}`;
+
+    // Duplicate guard for accidental double-click/browser retry.
+    const recentRepairs = await listRecords(env, tableId);
+    const duplicateRepair = recentRecord(recentRepairs, 2 * 60 * 1000, f =>
+      lower(fieldText(f["Company Name"] || f["Name"])) === lower(b.companyName || "") &&
+      lower(fieldText(f["Model No"])) === lower(b.modelNo || b.model || "") &&
+      lower(fieldText(f["Serial No"])) === lower(b.serialNo || b.serial || "") &&
+      lower(fieldText(f["Details Of Issue"] || f["Issue Description"])) === lower(b.details || b.issueDescription || b.issue || b.description || "") &&
+      lower(fieldText(f["Status"])) === "submitted"
+    );
+    if (duplicateRepair) {
+      const existingFields = duplicateRepair.fields || {};
+      const existingNo = fieldText(existingFields["REPAIR CASE"] || existingFields["Repair Case"] || existingFields["Repair Case No"]);
+      return json({ ok:true, duplicatePrevented:true, repairNo:existingNo, caseNo:existingNo, record_id:duplicateRepair.record_id, tableId });
+    }
 
     const uploadRequiredLink = b.requiredDetailsLink || b.uploadRequiredDetailsLink || b.uploadAllRequiredDetailsLink || "";
     const logLink = b.logFileLink || b.logFile || "";
