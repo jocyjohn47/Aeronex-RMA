@@ -40,10 +40,10 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}th,td{b
 body.login-wrap{
   min-height:100vh;
   display:grid;
-  grid-template-columns:minmax(0,900px) 420px;
+  grid-template-columns:minmax(0,960px) 390px;
   justify-content:center;
   align-items:center;
-  column-gap:48px;
+  column-gap:36px;
   margin:0;
   padding:32px;
   background:#f5f8fc;
@@ -60,7 +60,7 @@ body.login-wrap .login-visual{
 }
 body.login-wrap .banner-card{
   width:100%;
-  max-width:900px;
+  max-width:960px;
   background:#fff;
   border:1px solid #e4ebf4;
   border-radius:20px;
@@ -82,7 +82,7 @@ body.login-wrap .login-banner-frame img{
   object-position:center center;
 }
 body.login-wrap .login-panel{
-  width:420px;
+  width:390px;
   min-width:0;
   display:flex;
   align-items:center;
@@ -91,12 +91,12 @@ body.login-wrap .login-panel{
   background:transparent;
 }
 body.login-wrap .login-card{
-  width:420px;
-  max-width:420px;
+  width:390px;
+  max-width:390px;
   background:#fff;
   border-radius:22px;
   box-shadow:0 15px 50px rgba(13,44,92,.13);
-  padding:36px 32px;
+  padding:34px 30px;
   text-align:center;
 }
 body.login-wrap .login-card h1{font-size:46px;letter-spacing:4px;margin:0 0 14px}
@@ -106,8 +106,8 @@ body.login-wrap .login-actions{display:flex;justify-content:center;gap:8px;flex-
 
 @media(max-width:1450px){
   body.login-wrap{
-    grid-template-columns:minmax(0,1fr) 420px;
-    column-gap:32px;
+    grid-template-columns:minmax(0,1fr) 390px;
+    column-gap:28px;
     padding:24px;
   }
 }
