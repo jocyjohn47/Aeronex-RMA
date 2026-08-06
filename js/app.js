@@ -2024,7 +2024,7 @@ async function renderKingdeeIntegration(){
 }
 async function runKingdeeTest(){
   const btn=$('kingdeeTestBtn');if(btn)btn.disabled=true;msg('kingdeeIntegrationMsg','Testing connection...');
-  try{await kingdeeApi('/api/kingdee/test-connection',{method:'POST',body:'{}'});await renderKingdeeIntegration()}
+  try{await kingdeeApi('/api/kingdee/test-connection',{method:'POST',body:JSON.stringify({action:'connection-test',timestamp:new Date().toISOString(),source:'dashboard'})});await renderKingdeeIntegration()}
   catch(e){msg('kingdeeIntegrationMsg',e.message||String(e));await renderKingdeeIntegration().catch(()=>{})}
   finally{if(btn)btn.disabled=false}
 }
