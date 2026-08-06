@@ -1983,27 +1983,41 @@ function kingdeeStatusClass(item, config){
   if(!config?.ready||!item)return 'warn';
   return item.status==='success'?'ok':'bad';
 }
+function kingdeeLogMessage(item){
+  const raw=String(item?.message||'').trim();
+  if(raw)return raw;
+  return item?.status==='success'?'Connection successful':'Connection failed';
+}
+function openKingdeeLogDetails(index, source='recent'){
+  const rows=source==='all'?(S.kingdeeAllLogs||[]):(S.kingdeeRecentLogs||[]);
+  const item=rows[index];if(!item)return;
+  showDetailsModal(`Connection Log Details - ${kingdeeLogMessage(item)}`,kingdeeLogDetails(item));
+}
+function kingdeeRecentLogsTable(logs){
+  return `<div class="table-wrap"><table><thead><tr><th>Date & Time</th><th>Result</th><th>Response</th><th>User</th><th>Message</th></tr></thead><tbody>${logs.length?logs.map((x,i)=>`<tr><td>${esc(kingdeeDate(x.time))}</td><td><b class="${x.status==='success'?'ok':'bad'}">${esc(x.status==='success'?'Success':'Error')}</b></td><td>${x.durationMs===undefined||x.durationMs===null?'—':`${Number(x.durationMs)} ms`}</td><td>${esc(x.user||'—')}</td><td>${esc(kingdeeLogMessage(x))} <a href="#" style="color:var(--blue);font-weight:700" onclick="openKingdeeLogDetails(${i},'recent');return false;">(View Details)</a></td></tr>`).join(''):`<tr><td colspan="5" class="muted">No connection logs available.</td></tr>`}</tbody></table></div>`;
+}
 async function renderKingdeeIntegration(){
   const sec=$('integration');if(!sec)return;
   if(!currentUserIsAdminTech()){sec.innerHTML='<div class="panel"><h2>Integration</h2><div class="notice">Admin or Technician access only.</div></div>';return}
-  sec.innerHTML='<div class="panel"><h2>Integration</h2><div class="notice">Loading Kingdee integration status...</div></div>';
+  sec.innerHTML='<div class="panel"><h2>Integration</h2><div class="notice">Loading integration status...</div></div>';
   try{
-    const d=await kingdeeApi('/api/kingdee/status');
-    const item=d.lastStatus||null, cfg=d.configuration||{};
-    sec.innerHTML=`<div class="panel"><div class="row" style="justify-content:space-between;align-items:center"><div><h2 style="margin-bottom:4px">Kingdee ERP Integration</h2><div class="muted">Configuration is managed in Cloudflare environment variables and secrets.</div></div><div><button id="kingdeeTestBtn" onclick="runKingdeeTest()">Test Connection</button> <button class="btn-light" onclick="show('integrationLogs')">View Logs</button></div></div>
+    const [d,logData]=await Promise.all([kingdeeApi('/api/kingdee/status'),kingdeeApi('/api/kingdee/logs?limit=5')]);
+    const item=d.lastStatus||null,cfg=d.configuration||{},logs=logData.logs||[];S.kingdeeRecentLogs=logs;
+    sec.innerHTML=`<div class="panel"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Integration</h2><button id="kingdeeTestBtn" onclick="runKingdeeTest()">Test Connection</button></div>
       <div class="cards" style="margin-top:18px">
-        <div class="card"><h3>Status</h3><div class="${kingdeeStatusClass(item,cfg)}" style="font-size:22px;font-weight:700">${esc(kingdeeStatusText(item,cfg))}</div><p>${esc(item?.message||'No connection test has been recorded.')}</p></div>
-        <div class="card"><h3>Last Check</h3><div style="font-size:18px;font-weight:700">${esc(kingdeeDate(item?.time))}</div><p class="muted">Request ID: ${esc(item?.requestId||'—')}</p></div>
-        <div class="card"><h3>Response Time</h3><div style="font-size:22px;font-weight:700">${Number(item?.durationMs||0)} ms</div><p class="muted">Latest completed test</p></div>
-        <div class="card"><h3>Log Storage</h3><div style="font-size:18px;font-weight:700">${esc(cfg.logStorage||'Not configured')}</div><p class="muted">Success: 5 days · Error: 15 days · Maximum: 1000</p></div>
+        <div class="card"><h3>Status</h3><div class="${kingdeeStatusClass(item,cfg)}" style="font-size:22px;font-weight:700">${esc(kingdeeStatusText(item,cfg))}</div></div>
+        <div class="card"><h3>Last Check</h3><div style="font-size:18px;font-weight:700">${esc(item?.time?kingdeeDate(item.time):'Never')}</div></div>
+        <div class="card"><h3>Response Time</h3><div style="font-size:22px;font-weight:700">${item?.durationMs===undefined||item?.durationMs===null?'—':`${Number(item.durationMs)} ms`}</div></div>
+        <div class="card"><h3>Log Storage</h3><div style="font-size:18px;font-weight:700">${esc(cfg.logStorage||'Enabled')}</div></div>
       </div>
-      ${cfg.missing?.length?`<div class="notice"><b>Missing Cloudflare settings:</b> ${cfg.missing.map(esc).join(', ')}</div>`:''}
       <div id="kingdeeIntegrationMsg" class="msg"></div>
+      <div class="row" style="justify-content:space-between;align-items:center;margin:22px 0 8px"><h3 style="margin:0">Recent Connection Logs</h3><a href="#" style="color:var(--blue);font-weight:800" onclick="show('integrationLogs');return false;">View All →</a></div>
+      ${kingdeeRecentLogsTable(logs)}
     </div>`;
   }catch(e){sec.innerHTML=`<div class="panel"><h2>Integration</h2><div class="notice">${esc(e.message||String(e))}</div><button onclick="renderKingdeeIntegration()">Retry</button></div>`}
 }
 async function runKingdeeTest(){
-  const btn=$('kingdeeTestBtn');if(btn)btn.disabled=true;msg('kingdeeIntegrationMsg','Testing login and read-only queries...');
+  const btn=$('kingdeeTestBtn');if(btn)btn.disabled=true;msg('kingdeeIntegrationMsg','Testing connection...');
   try{await kingdeeApi('/api/kingdee/test-connection',{method:'POST',body:'{}'});await renderKingdeeIntegration()}
   catch(e){msg('kingdeeIntegrationMsg',e.message||String(e));await renderKingdeeIntegration().catch(()=>{})}
   finally{if(btn)btn.disabled=false}
@@ -2025,11 +2039,11 @@ async function renderKingdeeLogs(){
   if(!currentUserIsAdminTech()){sec.innerHTML='<div class="panel"><h2>Integration Logs</h2><div class="notice">Admin or Technician access only.</div></div>';return}
   sec.innerHTML='<div class="panel"><h2>Integration Logs</h2><div class="notice">Loading logs...</div></div>';
   try{
-    const d=await kingdeeApi('/api/kingdee/logs?'+kingdeeLogFilterQuery());const logs=d.logs||[];
+    const d=await kingdeeApi('/api/kingdee/logs?'+kingdeeLogFilterQuery());const logs=d.logs||[];S.kingdeeAllLogs=logs;
     const operations=[...new Set(logs.map(x=>x.operation).filter(Boolean))].sort();
-    sec.innerHTML=`<div class="panel"><div class="row" style="justify-content:space-between;align-items:center"><div><h2>Kingdee Integration Logs</h2><div class="muted">Success logs are retained for 5 days; errors for 15 days. Maximum 1000 records.</div></div><button class="btn-light" onclick="show('integration')">Back to Integration</button></div>
+    sec.innerHTML=`<div class="panel"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Connection Logs</h2><button class="btn-light" onclick="show('integration')">Back to Integration</button></div>
       <div class="row" style="align-items:end;gap:10px;flex-wrap:wrap;margin:16px 0"><div><label>Status</label><select id="kingdeeLogStatus"><option value="">All</option><option value="success">Success</option><option value="error">Error</option></select></div><div><label>Operation</label><select id="kingdeeLogOperation"><option value="">All</option>${operations.map(x=>`<option>${esc(x)}</option>`).join('')}</select></div><div style="min-width:260px"><label>Search Request ID / Message</label><input id="kingdeeLogSearch" placeholder="Search..."></div><button onclick="renderKingdeeLogs()">Apply</button>${isAdmin()?`<button class="btn-light" onclick="exportKingdeeLogs('csv')">Export CSV</button><button class="btn-light" onclick="exportKingdeeLogs('json')">Export JSON</button>`:''}</div>
-      <div class="table-wrap"><table><thead><tr><th>Time</th><th>User</th><th>Operation</th><th>Status</th><th>Duration</th><th>Details</th></tr></thead><tbody>${logs.length?logs.map((x,i)=>`<tr><td>${esc(kingdeeDate(x.time))}</td><td>${esc(x.user||'—')}</td><td>${esc(x.operation||'—')}</td><td><b class="${x.status==='success'?'ok':'bad'}">${esc(x.status||'unknown')}</b></td><td>${Number(x.durationMs||0)} ms</td><td><button class="btn-light" onclick="document.getElementById('kdDetail${i}').classList.toggle('hidden')">View</button></td></tr><tr id="kdDetail${i}" class="hidden"><td colspan="6">${kingdeeLogDetails(x)}</td></tr>`).join(''):`<tr><td colspan="6" class="muted">No log entries.</td></tr>`}</tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>Date & Time</th><th>Result</th><th>Response</th><th>User</th><th>Message</th></tr></thead><tbody>${logs.length?logs.map((x,i)=>`<tr><td>${esc(kingdeeDate(x.time))}</td><td><b class="${x.status==='success'?'ok':'bad'}">${esc(x.status==='success'?'Success':'Error')}</b></td><td>${x.durationMs===undefined||x.durationMs===null?'—':`${Number(x.durationMs)} ms`}</td><td>${esc(x.user||'—')}</td><td>${esc(kingdeeLogMessage(x))} <a href="#" style="color:var(--blue);font-weight:700" onclick="openKingdeeLogDetails(${i},'all');return false;">(View Details)</a></td></tr>`).join(''):`<tr><td colspan="5" class="muted">No log entries.</td></tr>`}</tbody></table></div>
       <div class="muted" style="margin-top:10px">Showing the latest ${logs.length} matching records.</div></div>`;
   }catch(e){sec.innerHTML=`<div class="panel"><h2>Integration Logs</h2><div class="notice">${esc(e.message||String(e))}</div><button onclick="renderKingdeeLogs()">Retry</button></div>`}
 }
