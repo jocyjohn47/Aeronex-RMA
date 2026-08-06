@@ -11,7 +11,7 @@ export function configurationStatus(env = {}) {
     ready: missing.length === 0 && protocolValid,
     missing,
     protocolValid,
-    lcid: Number(env.KINGDEE_LCID || 1033),
+    lcid: Number(env.KINGDEE_LCID || 2052),
     writeEnabled: String(env.KINGDEE_ENABLE_RMA_SALES_ORDER_WRITE || "false").toLowerCase() === "true",
     logStorage: env.KINGDEE_LOGS ? "Cloudflare KV" : "Not configured",
   };
@@ -26,7 +26,7 @@ export function kingdeeConfig(env = {}) {
   return {
     baseUrl,
     acctId: required("KINGDEE_ACCT_ID"), username: required("KINGDEE_USERNAME"), appId: required("KINGDEE_APP_ID"), appSecret: required("KINGDEE_APP_SECRET"),
-    lcid: Number(env.KINGDEE_LCID || 1033), timeoutMs: Math.max(5000, Number(env.KINGDEE_REQUEST_TIMEOUT || 30) * 1000),
+    lcid: Number(env.KINGDEE_LCID || 2052), timeoutMs: Math.max(5000, Number(env.KINGDEE_REQUEST_TIMEOUT || 30) * 1000),
     probes: [
       { operation: "Customer Query", formId: env.KINGDEE_TEST_CUSTOMER_FORM_ID || "BD_Customer", field: env.KINGDEE_TEST_CUSTOMER_FIELD || "FNumber" },
       { operation: "Material Query", formId: env.KINGDEE_TEST_MATERIAL_FORM_ID || "BD_MATERIAL", field: env.KINGDEE_TEST_MATERIAL_FIELD || "FNumber" },
