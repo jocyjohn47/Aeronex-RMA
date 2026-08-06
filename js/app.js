@@ -2003,15 +2003,21 @@ async function renderKingdeeIntegration(){
   try{
     const [d,logData]=await Promise.all([kingdeeApi('/api/kingdee/status'),kingdeeApi('/api/kingdee/logs?limit=5')]);
     const item=d.lastStatus||null,cfg=d.configuration||{},logs=logData.logs||[];S.kingdeeRecentLogs=logs;
-    sec.innerHTML=`<div class="panel"><div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin:0">Integration</h2><button id="kingdeeTestBtn" onclick="runKingdeeTest()">Test Connection</button></div>
-      <div class="cards" style="margin-top:18px">
-        <div class="card"><h3>Status</h3><div class="${kingdeeStatusClass(item,cfg)}" style="font-size:22px;font-weight:700">${esc(kingdeeStatusText(item,cfg))}</div></div>
-        <div class="card"><h3>Last Check</h3><div style="font-size:18px;font-weight:700">${esc(item?.time?kingdeeDate(item.time):'Never')}</div></div>
-        <div class="card"><h3>Response Time</h3><div style="font-size:22px;font-weight:700">${item?.durationMs===undefined||item?.durationMs===null?'—':`${Number(item.durationMs)} ms`}</div></div>
-        <div class="card"><h3>Log Storage</h3><div style="font-size:18px;font-weight:700">${esc(cfg.logStorage||'Enabled')}</div></div>
+    const logStorageText=String(cfg.logStorage||'').trim();
+    const logStorageDisplay=!logStorageText||/not configured/i.test(logStorageText)?'Disabled':logStorageText;
+    sec.innerHTML=`<div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">
+        <h2 style="margin:0">Integration</h2>
+        <button id="kingdeeTestBtn" style="flex:0 0 auto;width:auto;min-width:150px" onclick="runKingdeeTest()">Test Connection</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(180px,240px));gap:16px;margin:18px 0 0">
+        <div style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;min-height:110px;box-shadow:0 6px 18px #0b3f7d0d"><h3 style="margin:0 0 12px">Status</h3><div class="${kingdeeStatusClass(item,cfg)}" style="font-size:20px;font-weight:800">${esc(kingdeeStatusText(item,cfg))}</div></div>
+        <div style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;min-height:110px;box-shadow:0 6px 18px #0b3f7d0d"><h3 style="margin:0 0 12px">Last Check</h3><div style="font-size:18px;font-weight:800">${esc(item?.time?kingdeeDate(item.time):'Never')}</div></div>
+        <div style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;min-height:110px;box-shadow:0 6px 18px #0b3f7d0d"><h3 style="margin:0 0 12px">Response Time</h3><div style="font-size:20px;font-weight:800">${item?.durationMs===undefined||item?.durationMs===null?'—':`${Number(item.durationMs)} ms`}</div></div>
+        <div style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;min-height:110px;box-shadow:0 6px 18px #0b3f7d0d"><h3 style="margin:0 0 12px">Log Storage</h3><div style="font-size:18px;font-weight:800">${esc(logStorageDisplay)}</div></div>
       </div>
       <div id="kingdeeIntegrationMsg" class="msg"></div>
-      <div class="row" style="justify-content:space-between;align-items:center;margin:22px 0 8px"><h3 style="margin:0">Recent Connection Logs</h3><a href="#" style="color:var(--blue);font-weight:800" onclick="show('integrationLogs');return false;">View All →</a></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;margin:24px 0 8px"><h3 style="margin:0">Recent Connection Logs</h3><a href="#" style="color:var(--blue);font-weight:800;white-space:nowrap" onclick="show('integrationLogs');return false;">View All →</a></div>
       ${kingdeeRecentLogsTable(logs)}
     </div>`;
   }catch(e){sec.innerHTML=`<div class="panel"><h2>Integration</h2><div class="notice">${esc(e.message||String(e))}</div><button onclick="renderKingdeeIntegration()">Retry</button></div>`}
