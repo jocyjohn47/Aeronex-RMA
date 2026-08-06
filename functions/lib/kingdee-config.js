@@ -2,12 +2,15 @@ const REQUIRED = ["KINGDEE_BASE_URL", "KINGDEE_ACCT_ID", "KINGDEE_USERNAME", "KI
 export function configurationStatus(env = {}) {
   const fields = REQUIRED.map(name => ({ name, configured: Boolean(String(env[name] || "").trim()) }));
   const missing = fields.filter(x => !x.configured).map(x => x.name);
-  let httpsValid = false;
-  try { httpsValid = new URL(String(env.KINGDEE_BASE_URL || "")).protocol === "https:"; } catch {}
+  let protocolValid = false;
+  try {
+    const protocol = new URL(String(env.KINGDEE_BASE_URL || "")).protocol;
+    protocolValid = protocol === "http:" || protocol === "https:";
+  } catch {}
   return {
-    ready: missing.length === 0 && httpsValid,
+    ready: missing.length === 0 && protocolValid,
     missing,
-    httpsValid,
+    protocolValid,
     lcid: Number(env.KINGDEE_LCID || 1033),
     writeEnabled: String(env.KINGDEE_ENABLE_RMA_SALES_ORDER_WRITE || "false").toLowerCase() === "true",
     logStorage: env.KINGDEE_LOGS ? "Cloudflare KV" : "Not configured",
@@ -16,7 +19,10 @@ export function configurationStatus(env = {}) {
 export function kingdeeConfig(env = {}) {
   const required = name => { const v = String(env[name] || "").trim(); if (!v) throw Object.assign(new Error(`${name} is not configured`), { code: "configuration_missing" }); return v; };
   const baseUrl = required("KINGDEE_BASE_URL").replace(/\/+$/, "");
-  if (new URL(baseUrl).protocol !== "https:") throw Object.assign(new Error("KINGDEE_BASE_URL must use HTTPS"), { code: "https_required" });
+  const protocol = new URL(baseUrl).protocol;
+  if (protocol !== "http:" && protocol !== "https:") {
+    throw Object.assign(new Error("KINGDEE_BASE_URL must use HTTP or HTTPS"), { code: "invalid_protocol", status: 400 });
+  }
   return {
     baseUrl,
     acctId: required("KINGDEE_ACCT_ID"), username: required("KINGDEE_USERNAME"), appId: required("KINGDEE_APP_ID"), appSecret: required("KINGDEE_APP_SECRET"),
