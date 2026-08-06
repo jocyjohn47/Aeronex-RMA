@@ -2293,7 +2293,28 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
       });
     }
 
-    return json({ ok: true, repairNo: no, caseNo: no, result: result.data, sentFields: Object.keys(sendFields) });
+    // Return the exact final case number stored by Lark. This is important when
+    // the case field is an auto-number/formula field and differs from the
+    // temporary value used during record creation.
+    let savedCaseNo = "";
+    if (recordId) {
+      for (let attempt = 0; attempt < 3 && !savedCaseNo; attempt++) {
+        if (attempt) await new Promise(resolve => setTimeout(resolve, 250));
+        try {
+          const savedRecord = await getRecord(env, tableId, recordId);
+          const savedFields = savedRecord?.fields || {};
+          savedCaseNo = fieldText(firstField(savedFields, [
+            "REPAIR CASE",
+            "Repair Case",
+            "Repair Case No",
+            "Case Register No"
+          ]));
+        } catch (_) {}
+      }
+    }
+    if (!savedCaseNo) savedCaseNo = no;
+
+    return json({ ok: true, repairNo: savedCaseNo, caseNo: savedCaseNo, record_id: recordId, tableId, result: result.data, sentFields: Object.keys(sendFields) });
   }
 
   if (p === "/api/upload-invoice" && req.method === "POST") {
