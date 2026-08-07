@@ -1708,8 +1708,11 @@ async function handle(req, env) {
     const fieldTypes = await getFieldTypes(env, env.DEALER_REPAIR_CASE_TABLE_ID);
     const sendFields = {};
     for (const [k, v] of Object.entries(fields)) {
-      if (fieldTypes[k]) sendFields[k] = k === "Upload Repair Data" ? toLarkUrlValue(v, "Upload Repair Data") : v;
+      if (fieldTypes[k] && v !== undefined && v !== null && v !== "") {
+        sendFields[k] = k === "Upload Repair Data" ? toLarkUrlValue(v, "Upload Repair Data") : v;
+      }
     }
+    if (!Object.keys(sendFields).length) return json({ ok:true, caseNo:dealerRepairCaseNo(row.fields || {}), updated:[], noChanges:true });
     const rec = await updateRecord(env, env.DEALER_REPAIR_CASE_TABLE_ID, recordId, sendFields);
     return json({ ok: true, caseNo: dealerRepairCaseNo(row.fields || {}), record: rec });
   }
@@ -1820,8 +1823,11 @@ async function handle(req, env) {
     if (!tableId) return json({ error:"AFTER_SALES_SUPPORT_TABLE_ID not configured" }, 400);
     const fieldTypes = await getFieldTypes(env, tableId);
     const fields = prepareFieldsForTable(fieldTypes, body.fields || {});
-    if (!Object.keys(fields).length) return json({ error:"No valid fields to save" }, 400);
     let recordId = norm(body.record_id);
+    if (!Object.keys(fields).length) {
+      if (recordId) return json({ ok:true, updated:true, created:false, record_id:recordId, updatedFields:[], noChanges:true });
+      return json({ error:"No valid fields to save" }, 400);
+    }
     let updated = false;
     if (recordId) {
       await updateRecord(env, tableId, recordId, fields);
@@ -1894,6 +1900,7 @@ async function handle(req, env) {
     if (!tableId) return json({ error:"Internal Repair table id not configured" }, 400);
     const fieldTypes = await getFieldTypes(env, tableId);
     const fields = prepareFieldsForTable(fieldTypes, b.fields || {});
+    if (!Object.keys(fields).length && norm(b.record_id)) return json({ ok:true, updated:true, record_id:norm(b.record_id), updatedFields:[], noChanges:true });
     if (!Object.keys(fields).length) return json({ error:"No valid fields to save" }, 400);
 
     // Update-only protection: if the browser loses record_id, identify the
@@ -2009,6 +2016,9 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
       }
     }
     const fields = prepareFieldsForTable(fieldTypes, incomingFields);
+    if (!Object.keys(fields).length && norm(b.record_id)) {
+      return json({ ok:true, record_id:norm(b.record_id), updated:[], noChanges:true });
+    }
     if (!Object.keys(fields).length) {
       return json({ error:"No valid fields to save", received:Object.keys(b.fields || {}), available:Object.keys(fieldTypes || {}) }, 400);
     }
@@ -2220,8 +2230,8 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
       "Remarks": b.remarks || ""
     };
     const fieldTypes = await getFieldTypes(env, tableId);
-    const fields = {};
-    for (const [k,v] of Object.entries(requested)) if (fieldTypes[k]) fields[k]=v;
+    const fields = prepareFieldsForTable(fieldTypes, requested);
+    if (!Object.keys(fields).length) return json({ ok:true, updated:false, noChanges:true, orderNo, tableId, record_id:recordId });
     await updateRecord(env, tableId, recordId, fields);
     return json({ ok:true, updated:true, orderNo, tableId, record_id:recordId });
   }
@@ -2411,8 +2421,10 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     if (fieldTypes["DJI Case NO"]) fields["DJI Case NO"] = b.djiCaseNo || "";
     else if (fieldTypes["DJI case NO"]) fields["DJI case NO"] = b.djiCaseNo || "";
     if (fieldTypes["Dealer Credit No"]) fields["Dealer Credit No"] = b.dealerCreditNo || "";
-    await updateRecord(env, b.tableId, b.record_id, fields);
-    return json({ ok:true, updated:Object.keys(fields) });
+    const safeFields = prepareFieldsForTable(fieldTypes, fields);
+    if (!Object.keys(safeFields).length) return json({ ok:true, updated:[], noChanges:true });
+    await updateRecord(env, b.tableId, b.record_id, safeFields);
+    return json({ ok:true, updated:Object.keys(safeFields) });
   }
 
   if (p === "/api/upload-dealer-cn" && req.method === "POST") {
@@ -2565,7 +2577,7 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     const fieldTypes = await getFieldTypes(env, b.tableId);
     const incoming = { "Invoice Amount":b.invoiceAmount, "Case Close Comment":b.caseCloseComment };
     const fields = prepareFieldsForTable(fieldTypes, incoming);
-    if (!Object.keys(fields).length) return json({ error:"No valid fields to save" }, 400);
+    if (!Object.keys(fields).length) return json({ ok:true, updated:[], noChanges:true });
     await updateRecord(env, b.tableId, b.record_id, fields);
     return json({ ok:true, updated:Object.keys(fields) });
   }
