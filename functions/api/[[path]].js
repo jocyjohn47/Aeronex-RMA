@@ -1089,18 +1089,31 @@ function reportWorkbookBytes(label, rows, filters) {
   return `<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif}table{border-collapse:collapse;margin-bottom:18px}th,td{border:1px solid #999;padding:6px;mso-number-format:'\\@'}th{background:#d9eaf7;font-weight:bold}.meta th{background:#eef3fb;text-align:left}</style></head><body><h2>${reportEsc(label)}</h2><table class="meta">${filterRows}</table><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></body></html>`;
 }
 
+const BACKUP_SETTINGS_KEY = "rma-backup-settings-v1";
+const BACKUP_HISTORY_KEY = "rma-backup-history-v1";
+const BACKUP_LOGS_KEY = "rma-backup-logs-v1";
+
+async function backupKvRead(env, key, fallback) {
+  if (!env.KINGDEE_LOGS) return fallback;
+  try {
+    const raw = await env.KINGDEE_LOGS.get(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch { return fallback; }
+}
+
+async function backupKvWrite(env, key, value) {
+  if (!env.KINGDEE_LOGS) throw new Error("KINGDEE_LOGS KV binding missing. Cannot save backup configuration/logs.");
+  await env.KINGDEE_LOGS.put(key, JSON.stringify(value));
+}
+
 async function getBackupSettings(env) {
-  if (!env.LOGS_BUCKET) return {};
-  const obj = await env.LOGS_BUCKET.get("backup/settings.json");
-  if (!obj) return {};
-  try { return JSON.parse(await obj.text()); } catch { return {}; }
+  return await backupKvRead(env, BACKUP_SETTINGS_KEY, {});
 }
 
 async function saveBackupSettings(env, settings) {
-  if (!env.LOGS_BUCKET) throw new Error("LOGS_BUCKET binding missing. Cannot save backup settings.");
   const safe = {
-    protocol: norm(settings.protocol || "sftp"),
-    host: norm(settings.host),
+    protocol: norm(settings.protocol || "ftps"),
+    host: norm(settings.host).replace(/^ftps?:\/\//i, "").replace(/\/$/, ""),
     port: norm(settings.port),
     username: norm(settings.username),
     remoteFolder: norm(settings.remoteFolder),
@@ -1110,7 +1123,7 @@ async function saveBackupSettings(env, settings) {
     retention: [3,7].includes(Number(settings.retentionDays)) ? Number(settings.retentionDays) : 3,
     updatedAt: new Date().toISOString()
   };
-  await env.LOGS_BUCKET.put("backup/settings.json", JSON.stringify(safe, null, 2), { httpMetadata: { contentType:"application/json" } });
+  await backupKvWrite(env, BACKUP_SETTINGS_KEY, safe);
   return safe;
 }
 
@@ -1172,18 +1185,27 @@ async function ftpCommand(writer, reader, command, expectedCodes) {
 async function testFtpsExplicitConnection({ host, port, username, password }) {
   if (!username) throw new Error("NAS username is required");
   if (!password) throw new Error("Cloudflare secret NAS_BACKUP_PASSWORD is not configured");
-  let socket = connect({ hostname:host, port }, { secureTransport:"starttls", allowHalfOpen:true });
-  await Promise.race([socket.opened, socketTimeout(8000, "FTPS TCP connection timed out")]);
+  const cleanHost = norm(host).replace(/^ftps?:\/\//i, "").replace(/\/$/, "");
+  let socket = connect({ hostname:cleanHost, port }, { secureTransport:"starttls", allowHalfOpen:true });
+  await Promise.race([socket.opened, socketTimeout(10000, "FTPS TCP connection timed out")]);
   let reader = socket.readable.getReader();
   let writer = socket.writable.getWriter();
+  let authTlsReply = "";
   try {
-    const welcome = await readFtpReply(reader);
+    const welcome = await readFtpReply(reader, 10000);
     if (welcome.code !== "220") throw new Error(`FTPS server did not return 220: ${welcome.text.slice(0, 300)}`);
-    await ftpCommand(writer, reader, "AUTH TLS", ["234", "334"]);
+    const auth = await ftpCommand(writer, reader, "AUTH TLS", ["234", "334"]);
+    authTlsReply = auth.text;
     reader.releaseLock();
     writer.releaseLock();
-    socket = socket.startTls();
-    await Promise.race([socket.opened, socketTimeout(8000, "FTPS TLS handshake timed out")]);
+    try {
+      const secureSocket = socket.startTls();
+      socket = secureSocket;
+      await Promise.race([secureSocket.opened, socketTimeout(12000, "FTPS TLS handshake timed out")]);
+    } catch (e) {
+      const detail = e?.message || String(e);
+      throw new Error(`FTPS TLS handshake failed after AUTH TLS (${authTlsReply.slice(0,120)}). Cloudflare validates the NAS TLS certificate. Use a NAS/DDNS hostname that matches the QNAP certificate instead of a raw WAN IP if the certificate is issued to a hostname. Detail: ${detail}`);
+    }
     reader = socket.readable.getReader();
     writer = socket.writable.getWriter();
     const userReply = await ftpCommand(writer, reader, `USER ${username}`, ["230", "331"]);
@@ -1193,7 +1215,7 @@ async function testFtpsExplicitConnection({ host, port, username, password }) {
     const pwd = await ftpCommand(writer, reader, "PWD", ["257"]);
     let folders = [];
     let folderListingError = "";
-    try { folders = await listFtpsFolders({ host, writer, reader }); }
+    try { folders = await listFtpsFolders({ host:cleanHost, writer, reader }); }
     catch (e) { folderListingError = e.message || String(e); }
     try { await ftpCommand(writer, reader, "QUIT", ["221"]); } catch {}
     return { ok:true, status:"Connected", protocol:"ftps", tls:"Explicit TLS", authenticated:true, dataProtection:"Private", serverReply:pwd.text.slice(0, 300), folders, folderListingError };
@@ -1269,41 +1291,25 @@ async function listFtpsFolders({ host, writer, reader }) {
 }
 
 async function appendBackupHistory(env, entry) {
-  if (!env.LOGS_BUCKET) return;
-  const key = `backup/history/${new Date().toISOString().replace(/[:.]/g,"-")}.json`;
-  await env.LOGS_BUCKET.put(key, JSON.stringify(entry, null, 2), { httpMetadata: { contentType:"application/json" } });
+  const items = await backupKvRead(env, BACKUP_HISTORY_KEY, []);
+  const next = [entry, ...(Array.isArray(items) ? items : [])].slice(0, 20);
+  await backupKvWrite(env, BACKUP_HISTORY_KEY, next);
 }
 
 async function listBackupHistory(env) {
-  if (!env.LOGS_BUCKET) return [];
-  const listed = await env.LOGS_BUCKET.list({ prefix:"backup/history/", limit:20 });
-  const objs = (listed.objects || []).sort((a,b)=>String(b.uploaded||"").localeCompare(String(a.uploaded||""))).slice(0,3);
-  const out = [];
-  for (const obj of objs) {
-    try {
-      const r = await env.LOGS_BUCKET.get(obj.key);
-      out.push(JSON.parse(await r.text()));
-    } catch {}
-  }
-  return out;
+  const items = await backupKvRead(env, BACKUP_HISTORY_KEY, []);
+  return (Array.isArray(items) ? items : []).slice(0, 7);
 }
 
-
 async function appendBackupLog(env, entry) {
-  if (!env.LOGS_BUCKET) return;
-  const key = `backup/logs/${new Date().toISOString().replace(/[:.]/g,"-")}-${Math.random().toString(36).slice(2,8)}.json`;
-  await env.LOGS_BUCKET.put(key, JSON.stringify(entry, null, 2), { httpMetadata:{ contentType:"application/json" } });
+  const items = await backupKvRead(env, BACKUP_LOGS_KEY, []);
+  const next = [entry, ...(Array.isArray(items) ? items : [])].slice(0, 50);
+  await backupKvWrite(env, BACKUP_LOGS_KEY, next);
 }
 
 async function listBackupLogs(env) {
-  if (!env.LOGS_BUCKET) return [];
-  const listed = await env.LOGS_BUCKET.list({ prefix:"backup/logs/", limit:50 });
-  const keys = (listed.objects || []).map(x=>x.key).sort().reverse().slice(0,30);
-  const out = [];
-  for (const key of keys) {
-    try { const obj=await env.LOGS_BUCKET.get(key); if(obj) out.push(JSON.parse(await obj.text())); } catch {}
-  }
-  return out;
+  const items = await backupKvRead(env, BACKUP_LOGS_KEY, []);
+  return (Array.isArray(items) ? items : []).slice(0, 30);
 }
 
 async function writeErrorLog(env, entry) {
