@@ -1638,7 +1638,7 @@ function backupDetailsHtml(item){
     ['Remote Folder',item.remoteFolder||item.destination||'—'],['Duration',item.durationMs!=null?item.durationMs+' ms':(item.duration||'—')],
     ['Records',item.records??'—'],['Attachments',item.attachments??'—'],['Size',item.size||'—'],['Message',item.message||item.note||item.error||'—']
   ];
-  return `<div class="table-wrap"><table><tbody>${rows.map(r=>`<tr><th style="width:180px;text-align:left">${esc(r[0])}</th><td>${esc(String(r[1]))}</td></tr>`).join('')}</tbody></table></div>`;
+  return `<div class="backup-log-details">${rows.map(r=>`<div class="backup-log-detail-row"><div class="backup-log-detail-label">${esc(r[0])}</div><div class="backup-log-detail-value">${esc(String(r[1]))}</div></div>`).join('')}</div>`;
 }
 function openBackupLogDetails(i,kind){const arr=kind==='history'?(reportBackupStatusCache.history||[]):(reportBackupStatusCache.logs||[]);const item=arr[i];if(item)showDetailsModal(kind==='history'?'Backup Run Details':'Backup / NAS Log Details',backupDetailsHtml(item));}
 async function loadReportBackupStatus(){
@@ -2769,7 +2769,12 @@ function ensureDetailsModalStyles(){
     .details-all-fields th{background:#eef6ff;color:#0f2a5f;width:260px;min-width:260px;max-width:260px;white-space:nowrap;word-break:normal;overflow-wrap:normal}
     .details-all-fields td{color:#0f172a;word-break:break-word;overflow-wrap:anywhere}
     .details-modal textarea{width:100%;box-sizing:border-box}.upload-ok{color:#15803d;font-weight:700}.upload-fail{color:#b91c1c;font-weight:700}.upload-wait{color:#1d4ed8;font-weight:700}
-    @media(max-width:820px){.details-kv{grid-template-columns:1fr}.details-modal{width:98vw}.details-modal-body{padding:12px}.details-all-fields th{width:180px;min-width:180px;max-width:180px}}
+    .backup-log-details{width:100%;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;background:#fff}
+    .backup-log-detail-row{display:grid;grid-template-columns:190px minmax(0,1fr);width:100%;border-bottom:1px solid #e2e8f0}
+    .backup-log-detail-row:last-child{border-bottom:0}
+    .backup-log-detail-label{padding:10px 12px;background:#eef6ff;color:#0f2a5f;font-weight:700;white-space:nowrap;word-break:normal;overflow-wrap:normal}
+    .backup-log-detail-value{padding:10px 12px;color:#0f172a;min-width:0;white-space:normal;word-break:normal;overflow-wrap:anywhere}
+    @media(max-width:820px){.details-kv{grid-template-columns:1fr}.details-modal{width:98vw}.details-modal-body{padding:12px}.details-all-fields th{width:180px;min-width:180px;max-width:180px}.backup-log-detail-row{grid-template-columns:150px minmax(0,1fr)}}
   `;
   document.head.appendChild(s);
 }
