@@ -1597,19 +1597,64 @@ function reportBackupSettingsPayload(){
     host: $('backupNasHost')?.value || '',
     port: $('backupNasPort')?.value || '',
     username: $('backupNasUser')?.value || '',
-    secret: $('backupNasSecret')?.value || '',
-    remoteFolder: $('backupNasFolder')?.value || ''
+    remoteFolder: $('backupNasFolder')?.value || '',
+    scheduleTime: $('backupScheduleTime')?.value || '04:00',
+    retentionDays: Number($('backupRetentionDays')?.value || 3)
   };
 }
 
 async function saveReportBackupSettings(){
-  try{const d=await api('/api/report-backup/settings?role='+encodeURIComponent(S.user?.role||''),{method:'POST',body:JSON.stringify(reportBackupSettingsPayload())});msg('backupMsg','Backup settings saved.',true)}catch(e){msg('backupMsg',e.message)}
+  try{const d=await api('/api/report-backup/settings?role='+encodeURIComponent(S.user?.role||''),{method:'POST',body:JSON.stringify(reportBackupSettingsPayload())});msg('backupMsg','Backup settings saved.',true);await loadReportBackupStatus()}catch(e){msg('backupMsg',e.message)}
 }
 async function testReportBackupNas(){
-  try{const d=await api('/api/report-backup/test-nas?role='+encodeURIComponent(S.user?.role||''),{method:'POST',body:JSON.stringify(reportBackupSettingsPayload())});msg('backupMsg',(d.status||'Test completed')+(d.note?' - '+d.note:''),!!d.ok)}catch(e){msg('backupMsg',e.message)}
+  try{
+    const d=await api('/api/report-backup/test-nas?role='+encodeURIComponent(S.user?.role||''),{method:'POST',body:JSON.stringify(reportBackupSettingsPayload())});
+    const detail=d.ok ? ((d.authenticated===true?'Authenticated':'Reachable')+(d.tls?' / '+d.tls:'')+(d.durationMs!=null?' / '+d.durationMs+' ms':'')) : (d.error||'Connection failed');
+    msg('backupMsg',(d.status||'Test completed')+' - '+detail,!!d.ok);
+    const folder=$('backupNasFolder');
+    if(folder && d.ok && d.protocol==='ftps'){
+      const current=folder.value || '';
+      const folders=Array.isArray(d.folders)?d.folders:[];
+      folder.innerHTML='<option value="">Select NAS folder</option>'+folders.map(name=>`<option value="/${esc(name)}">${esc(name)}</option>`).join('');
+      folder.disabled=false;
+      if(current && [...folder.options].some(o=>o.value===current)) folder.value=current;
+      if(d.folderListingError && !folders.length) msg('backupMsg',(d.status||'Connected')+' - '+detail+' - Folder listing: '+d.folderListingError,true);
+    }
+    reportBackupStatusCache.logs=d.logs||reportBackupStatusCache.logs;
+    await loadReportBackupStatus();
+  }catch(e){msg('backupMsg',e.message)}
 }
 async function runReportBackupNow(){
-  try{const d=await api('/api/report-backup/backup-now?role='+encodeURIComponent(S.user?.role||''),{method:'POST',body:JSON.stringify({})});msg('backupMsg',(d.status||'Backup requested')+(d.error?' - '+d.error:''),!!d.ok)}catch(e){msg('backupMsg',e.message)}
+  try{const d=await api('/api/report-backup/backup-now?role='+encodeURIComponent(S.user?.role||''),{method:'POST',body:JSON.stringify({})});msg('backupMsg',(d.status||'Backup requested')+(d.error?' - '+d.error:''),!!d.ok);await loadReportBackupStatus()}catch(e){msg('backupMsg',e.message)}
+}
+
+
+let reportBackupStatusCache={history:[],logs:[]};
+function backupDate(v){try{return v?new Date(v).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'}):'—'}catch{return String(v||'—')}}
+function backupDetailsHtml(item){
+  const rows=[
+    ['Date & Time',backupDate(item.date||item.time)],['Operation',item.operation||item.trigger||'Backup'],['Result',item.status||'—'],
+    ['Protocol',String(item.protocol||'').toUpperCase()||'—'],['Host',item.host||'—'],['Port',item.port||'—'],['Username',item.username||'—'],
+    ['Remote Folder',item.remoteFolder||item.destination||'—'],['Duration',item.durationMs!=null?item.durationMs+' ms':(item.duration||'—')],
+    ['Records',item.records??'—'],['Attachments',item.attachments??'—'],['Size',item.size||'—'],['Message',item.message||item.note||item.error||'—']
+  ];
+  return `<div class="table-wrap"><table><tbody>${rows.map(r=>`<tr><th style="width:180px;text-align:left">${esc(r[0])}</th><td>${esc(String(r[1]))}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function openBackupLogDetails(i,kind){const arr=kind==='history'?(reportBackupStatusCache.history||[]):(reportBackupStatusCache.logs||[]);const item=arr[i];if(item)showDetailsModal(kind==='history'?'Backup Run Details':'Backup / NAS Log Details',backupDetailsHtml(item));}
+async function loadReportBackupStatus(){
+  try{
+    const d=await api('/api/report-backup/status?role='+encodeURIComponent(S.user?.role||''));
+    reportBackupStatusCache=d||{history:[],logs:[]};
+    const set=(id,v)=>{const el=$(id);if(el)el.value=v??'—'};
+    set('backupStatusValue',d.status||'Not configured');set('backupLastTime',d.lastBackupTime||'-');set('backupDurationValue',d.backupDuration||'-');
+    set('backupNasConnectionValue',d.nasConnectionStatus||'Not configured');set('backupRecordsValue',d.totalRecords||'-');set('backupAttachmentsValue',d.totalAttachments||'-');set('backupSizeValue',d.backupSize||'-');
+    set('backupRetentionStatus',`Last ${Number(d.settings?.retentionDays||3)} days`);
+    if($('backupNasProtocol')) $('backupNasProtocol').value=d.settings?.protocol||'ftps'; if($('backupNasHost')) $('backupNasHost').value=d.settings?.host||''; if($('backupNasPort')) $('backupNasPort').value=d.settings?.port||((d.settings?.protocol||'ftps')==='ftps'?'21':'22'); if($('backupNasUser')) $('backupNasUser').value=d.settings?.username||'';
+    if($('backupScheduleTime')) $('backupScheduleTime').value=d.settings?.scheduleTime||'04:00'; if($('backupRetentionDays')) $('backupRetentionDays').value=String(d.settings?.retentionDays||3);
+    const folder=$('backupNasFolder'); if(folder&&d.settings?.remoteFolder){folder.innerHTML=`<option value="${esc(d.settings.remoteFolder)}">${esc(d.settings.remoteFolder)}</option>`;folder.value=d.settings.remoteFolder;}
+    const h=$('backupHistoryBody'); const hist=Array.isArray(d.history)?d.history:[]; if(h)h.innerHTML=hist.length?hist.map((x,i)=>`<tr><td>${esc(backupDate(x.date))}</td><td><b class="${String(x.status).toLowerCase()==='success'?'ok':String(x.status).toLowerCase()==='failed'?'bad':''}">${esc(x.status||'—')}</b></td><td>${esc(x.trigger||'Manual')}</td><td>${esc(String(x.records??'—'))}</td><td>${esc(String(x.attachments??'—'))}</td><td>${esc(x.size||'—')}</td><td>${esc(x.destination||'—')}</td><td><a href="#" style="color:var(--blue);font-weight:700" onclick="openBackupLogDetails(${i},'history');return false;">View Details</a></td></tr>`).join(''):'<tr><td colspan="8" class="muted">No backup history yet.</td></tr>';
+    const l=$('backupLogsBody'); const logs=Array.isArray(d.logs)?d.logs:[]; if(l)l.innerHTML=logs.length?logs.map((x,i)=>`<tr><td>${esc(backupDate(x.time||x.date))}</td><td>${esc(x.operation||'Backup')}</td><td><b class="${x.status==='success'?'ok':'bad'}">${esc(x.status==='success'?'Success':'Error')}</b></td><td>${x.durationMs!=null?esc(String(x.durationMs)+' ms'):'—'}</td><td>${esc(x.message||x.error||x.note||'—')}</td><td><a href="#" style="color:var(--blue);font-weight:700" onclick="openBackupLogDetails(${i},'logs');return false;">View Details</a></td></tr>`).join(''):'<tr><td colspan="6" class="muted">No logs yet.</td></tr>';
+  }catch(e){msg('backupMsg',e.message)}
 }
 
 function renderReportBackup(){
@@ -1620,7 +1665,7 @@ function renderReportBackup(){
     return;
   }
   sec.innerHTML=`<div class="panel"><h2>Report & Backup</h2>
-    <div class="notice">Reports export directly from Lark tables. Backup is planned every day at 04:00 AM with retention for the latest 3 successful backups.</div>
+    <div class="notice">Reports export directly from Lark tables. NAS backup runs once daily at the selected time. Keep the last 3 or 7 days of successful backups.</div>
 
     <div class="panel" style="box-shadow:none;margin:16px 0 18px 0;padding:20px;border:1px solid #dbe3ef">
       <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:18px">
@@ -1654,24 +1699,25 @@ function renderReportBackup(){
         </div>
       </div>
       <div class="grid4">
-        <div><label>Status</label><input value="Not configured" disabled></div>
-        <div><label>Last Backup Time</label><input value="-" disabled></div>
-        <div><label>Backup Duration</label><input value="-" disabled></div>
-        <div><label>NAS Connection Status</label><input value="Not tested" disabled></div>
-        <div><label>Total Records</label><input value="-" disabled></div>
-        <div><label>Total Attachments</label><input value="-" disabled></div>
-        <div><label>Backup Size</label><input value="-" disabled></div>
-        <div><label>Retention</label><input value="Latest 3 successful backups" disabled></div>
+        <div><label>Status</label><input id="backupStatusValue" value="Not configured" disabled></div>
+        <div><label>Last Backup Time</label><input id="backupLastTime" value="-" disabled></div>
+        <div><label>Backup Duration</label><input id="backupDurationValue" value="-" disabled></div>
+        <div><label>NAS Connection Status</label><input id="backupNasConnectionValue" value="Not tested" disabled></div>
+        <div><label>Total Records</label><input id="backupRecordsValue" value="-" disabled></div>
+        <div><label>Total Attachments</label><input id="backupAttachmentsValue" value="-" disabled></div>
+        <div><label>Backup Size</label><input id="backupSizeValue" value="-" disabled></div>
+        <div><label>Retention</label><input id="backupRetentionStatus" value="Last 3 days" disabled></div>
       </div>
       <h3>Backup Settings</h3>
       <div class="grid3">
-        <div><label>NAS Protocol</label><select id="backupNasProtocol"><option value="sftp">SFTP / SSH</option><option value="smb">SMB / CIFS</option><option value="nfs">NFS</option><option value="webdav">WebDAV / HTTPS</option></select></div>
+        <div><label>NAS Protocol</label><select id="backupNasProtocol" onchange="if($('backupNasPort')) $('backupNasPort').value=this.value==='ftps'?'21':'22'"><option value="ftps">FTPS (Explicit TLS)</option><option value="sftp">SFTP</option></select></div>
         <div><label>NAS Host</label><input id="backupNasHost" placeholder="NAS IP or hostname"></div>
-        <div><label>Port</label><input id="backupNasPort" value="22"></div>
+        <div><label>Port</label><input id="backupNasPort" value="21"></div>
         <div><label>Username</label><input id="backupNasUser" placeholder="backup_user"></div>
-        <div><label>Password / SSH Key</label><input id="backupNasSecret" type="password" placeholder="Password or key reference"></div>
-        <div><label>Remote Folder</label><input id="backupNasFolder" placeholder="/AERONEX_RMA_Backup"></div>
-        <div><label>Schedule</label><input value="Daily at 04:00 AM" disabled></div>
+        <div><label>Credential</label><input value="Configured securely in Cloudflare (NAS_BACKUP_PASSWORD)" disabled></div>
+        <div><label>Remote Folder</label><select id="backupNasFolder" disabled><option value="">Test connection to load folders</option></select></div>
+        <div><label>Daily Backup Time</label><input id="backupScheduleTime" type="time" value="04:00"></div>
+        <div><label>Keep Backups</label><select id="backupRetentionDays"><option value="3">Last 3 days</option><option value="7">Last 7 days</option></select></div>
         <div><label>Contents</label><input value="Tables, attachments, XLSX, CSV, JSON, manifest" disabled></div>
         <div><label>Verification</label><input value="Manifest + latest successful backup only" disabled></div>
       </div>
@@ -1681,12 +1727,13 @@ function renderReportBackup(){
         <button class="btn-light" onclick="saveReportBackupSettings()">Save Settings</button>
         <span id="backupMsg" class="msg"></span>
       </p>
-      <h3>Last 3 Backup History</h3>
-      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Status</th><th>Records</th><th>Attachments</th><th>Size</th><th>Destination</th><th>Error</th></tr></thead><tbody><tr><td colspan="7" class="muted">No backup history yet.</td></tr></tbody></table></div>
-      <h3>Backup Log Viewer</h3>
-      <pre style="white-space:pre-wrap;background:#f6f8fb;border:1px solid #dbe3ef;border-radius:10px;padding:12px;max-height:220px;overflow:auto">No logs yet.</pre>
+      <h3>Backup History</h3>
+      <div class="table-wrap"><table><thead><tr><th>Date & Time</th><th>Status</th><th>Trigger</th><th>Records</th><th>Attachments</th><th>Size</th><th>Destination</th><th>Details</th></tr></thead><tbody id="backupHistoryBody"><tr><td colspan="8" class="muted">No backup history yet.</td></tr></tbody></table></div>
+      <h3>Backup & NAS Logs</h3>
+      <div class="table-wrap"><table><thead><tr><th>Date & Time</th><th>Operation</th><th>Result</th><th>Response</th><th>Message</th><th>Details</th></tr></thead><tbody id="backupLogsBody"><tr><td colspan="6" class="muted">No logs yet.</td></tr></tbody></table></div>
     </div>
   </div>`;
+  loadReportBackupStatus();
 }
 
 function adminCenterCards(){
@@ -1712,7 +1759,7 @@ function adminCenterCards(){
     cards.push(['🧾','Logs & Diagnostics','Check error logs and Lark table diagnostics.','logsDiagnostics','Open']);
   }
   if(reportsEnabled()){
-    cards.push(['💾','Report & Backup','Daily backup status, SFTP settings, retention, and backup history.','reportBackup','Open']);
+    cards.push(['💾','Report & Backup','Daily backup status, NAS settings, retention, and backup history.','reportBackup','Open']);
   }
   if(currentUserIsAdminTech()){
     cards.push(['🔗','Integration','Kingdee connection status, testing, and diagnostic logs.','integration','Open']);
