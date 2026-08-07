@@ -876,16 +876,23 @@ function selectHtml(meta, id, fieldName, current){
   return `<select id="${id}" ${multi?'multiple size="4"':''}>${metaOptions(meta, fieldName, current)}</select>`;
 }
 function internalRepairFieldsForCountry(country){
-  const k=String(country||'').toLowerCase().includes('ksa');
   return {
-    warranty:k?'Warranty Status':'Warranry Status',
-    material:k?'Material Consumed':'Material  Consumed',
-    remark:k?'Remarks':'Remark',
-    djiStatus:k?'DJI Repair status':'DJI Repair Status',
-    sendTracking:k?'Shipping Tracking No - Sending':'Shiping Tracking No-Sending',
-    recvTracking:'Shiping Tracking No -Receiving',
-    recvCost:k?'Shipping Cost - Receiving From DJI':'Shipment Cost - Receive from DJI'
+    warranty:'Warranty Status',
+    material:'Material Consumed',
+    remark:'Internal Remarks',
+    djiStatus:'DJI Repair Status',
+    sendTracking:'Shipment Tracking No - Send',
+    sendCost:'Shipment Cost - Sent',
+    recvTracking:'Shipment Tracking No - Receive',
+    recvCost:'Shipment Cost - Receive'
   };
+}
+function internalRepairWarrantyValue(v){
+  const s=String(v||'').trim();
+  const k=s.toLowerCase();
+  if(k==='yes'||k==='warranty') return 'Warranty';
+  if(k==='no'||k==='no warranty'||k==='out of warranty') return 'No Warranty';
+  return s;
 }
 async function loadInternalRepairMeta(){
   const country=internalRepairCountryQuery();
@@ -922,21 +929,20 @@ async function openInternalRepairFromRepair(recordId){
     const rf=r.fields||{};
     return repairCaseNo && String(rf['Repair Case']||'').trim().toLowerCase()===String(repairCaseNo).trim().toLowerCase();
   });
+  const shared={
+    'Repair Case':repairCaseNo,
+    'Case created':f['Case created']||'',
+    'Company Name':f['Company Name']||f['Dealer Name']||'',
+    'Model No':f['Model No']||'',
+    'Serial No':f['Serial No']||'',
+    'Warranty Status':internalRepairWarrantyValue(f['Warranty Status'])
+  };
   if(existing){
-    S.internalRepairEdit=existing;
+    S.internalRepairEdit={...existing,fields:{...(existing.fields||{}),...Object.fromEntries(Object.entries(shared).filter(([,v])=>v!==''))}};
     S.internalRepairPrefill=null;
   }else{
     S.internalRepairEdit=null;
-    S.internalRepairPrefill={
-      'Repair Case': repairCaseNo,
-      'Company Name': f['Company Name']||f['Dealer Name']||'',
-      'Product Model': f['Model No']||'',
-      'Serial No': f['Serial No']||'',
-      'Warranty Status': f['Warranty Status']||'',
-      'Warranry Status': f['Warranty Status']||'',
-      'Remark': f['Details Of Issue']||f['Issue Description']||f['Remarks']||'',
-      'Remarks': f['Details Of Issue']||f['Issue Description']||f['Remarks']||''
-    };
+    S.internalRepairPrefill=shared;
   }
   S.returnToRepairStatus = true;
   show('internalRepair');
@@ -980,7 +986,7 @@ function renderInternalRepair(){
     <div class="row" style="align-items:end;gap:12px;flex-wrap:wrap"><div style="min-width:260px;flex:1"><label>Search by Case No or Company</label><input value="${esc(ui.search||'')}" oninput="setListSearch('internalRepair',this.value)" placeholder="Search case or company..."></div><div style="width:150px"><label>Records per page</label><select onchange="setListPageSize('internalRepair',this.value)">${[10,20,30,40,50,100].map(n=>`<option value="${n}" ${pageSize===n?'selected':''}>${n}</option>`).join('')}</select></div></div>
     <div class="muted" style="margin:10px 0">${total?`Showing ${start+1}–${Math.min(start+pageSize,total)} of ${total} Internal Repair Cases`:'Showing 0 of 0 Internal Repair Cases'}</div>
     <div class="table-wrap"><table><thead><tr><th>DJI Case ID</th><th>Repair Case</th><th>Case created</th><th>Company</th><th>Model</th><th>Serial</th><th>Case Type</th><th>Status</th><th>Action</th></tr></thead><tbody>
-    ${pageRows.map(({r,index})=>{const f=r.fields||{};return `<tr><td>${esc(f['DJI Case ID']||'')}</td><td>${esc(f['Repair Case']||'')}</td><td>${esc(formatDisplayDate(f['Case created'])||'-')}</td><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Product Model']||'')}</td><td>${esc(f['Serial No']||'')}</td><td>${esc(f['Case Type']||'')}</td><td>${esc(f['Case Status']||'')}</td><td><button class="btn-light" onclick="editInternalRepair(${index})">Open</button></td></tr>`}).join('')||'<tr><td colspan="9" class="muted">No internal repair cases found.</td></tr>'}
+    ${pageRows.map(({r,index})=>{const f=r.fields||{};return `<tr><td>${esc(f['DJI Case ID']||'')}</td><td>${esc(f['Repair Case']||'')}</td><td>${esc(formatDisplayDate(f['Case created'])||'-')}</td><td>${esc(f['Company Name']||'')}</td><td>${esc(f['Model No']||'')}</td><td>${esc(f['Serial No']||'')}</td><td>${esc(f['Case Type']||'')}</td><td>${esc(f['Case Status']||'')}</td><td><button class="btn-light" onclick="editInternalRepair(${index})">Open</button></td></tr>`}).join('')||'<tr><td colspan="9" class="muted">No internal repair cases found.</td></tr>'}
     </tbody></table></div><div class="row" style="justify-content:center;align-items:center;margin-top:12px">${listPaginationHtml('internalRepair',total,ui.page,pageSize)}</div></div>`;
   renderInternalRepairForm(S.internalRepairEdit||S.internalRepairPrefill||{});
 }
@@ -993,6 +999,8 @@ function editInternalRepair(i){
   const f=r.fields||{};
   const html = internalRepairFormHtml(f, true) + `<h3 class="details-section-title">All Lark Fields</h3>${renderAllLarkFieldsTable(f)}`;
   showDetailsModal(`Internal Repair Details - ${(f['DJI Case ID']||f['Repair Case']||'Open')}`, html);
+  const formBox=$('internalRepairForm');
+  if(formBox) formBox.innerHTML='';
   const n=internalRepairFieldsForCountry((S.internalRepairMeta||{}).country||adminModuleCountry());
   S.irParts=parseDealerRepairMaterials(f[n.material]||'').map(x=>({materialCode:x.materialCode,materialName:x.materialName,qty:x.qty}));
   setTimeout(()=>{try{renderInternalRepairSpareOptions();renderInternalRepairSparePreview();}catch(e){}},0);
@@ -1007,17 +1015,17 @@ function internalRepairFormHtml(src, isPopup){
       <div><label>DJI Internal Case ID</label><input id="irDjiInternalCaseId" value="${esc(f['DJI Internal Case ID']||'')}"></div>
       <div><label>Repair Case</label><input id="irRepairCase" value="${esc(f['Repair Case']||'')}"></div>
       ${companyInputHtml('irCompanyName','Company Name',f['Company Name']||'')}
-      <div><label>Product Model</label><input id="irProductModel" value="${esc(f['Product Model']||'')}"></div>
+      <div><label>Model No</label><input id="irProductModel" value="${esc(f['Model No']||'')}"></div>
       <div><label>Serial No</label><input id="irSerialNo" value="${esc(f['Serial No']||'')}"></div>
       <div><label>Case Type</label>${selectHtml(meta,'irCaseType','Case Type',f['Case Type']||'')}</div>
       <div><label>Warranty Status</label>${selectHtml(meta,'irWarranty',n.warranty,f[n.warranty]||'')}</div>
-      ${companyInputHtml('irBillingCompany','Billing Company',f['Billing Company']||'')}
+      ${companyInputHtml('irBillingCompany','Billing Company',f['Billing Company']||uf('Billing Company',''))}
       <div><label>Issue Type</label>${selectHtml(meta,'irIssueType','Issue Type',f['Issue Type']||'')}</div>
       <div><label>Case created</label><input id="irCreationDate" type="date" value="${esc(dateInputValue(f['Case created']))}"></div>
-      <div><label>Case Close Date</label><input id="irCloseDate" type="date" value="${esc(dateInputValue(f['Case Close Date']))}"></div>
+      <div><label>Case Closed</label><input id="irCloseDate" type="date" value="${esc(dateInputValue(f['Case Closed']))}"></div>
       <div><label>Shipper Name</label>${selectHtml(meta,'irShipper','Shipper Name',f['Shipper Name']||'')}</div>
       <div><label>Tracking No - Sending</label><input id="irSendTrack" value="${esc(f[n.sendTracking]||'')}"></div>
-      <div><label>Shipment Cost - Sent to DJI</label><input id="irSendCost" value="${esc(f['Shipment Cost - Sent to DJI']||'')}"></div>
+      <div><label>Shipment Cost - Sent</label><input id="irSendCost" value="${esc(f[n.sendCost]||'')}"></div>
       <div><label>Tracking No - Receiving</label><input id="irRecvTrack" value="${esc(f[n.recvTracking]||'')}"></div>
       <div><label>Shipment Cost - Receiving</label><input id="irRecvCost" value="${esc(f[n.recvCost]||'')}"></div>
       <div><label>Unit Consumed</label><input id="irUnitConsumed" value="${esc(f['Unit Consumed']||'')}"></div>
@@ -1027,7 +1035,7 @@ function internalRepairFormHtml(src, isPopup){
       <div><label>DJI Repair Status</label>${fieldMetaByName(meta)[n.djiStatus]?.optionCount?selectHtml(meta,'irDjiStatus',n.djiStatus,f[n.djiStatus]||''):`<input id="irDjiStatus" value="${esc(f[n.djiStatus]||'')}">`}</div>
       <div><label>Case Status</label>${selectHtml(meta,'irCaseStatus','Case Status',f['Case Status']||'')}</div>
     </div>
-    <label>Remarks</label><textarea id="irRemark">${esc(f[n.remark]||'')}</textarea>
+    <label>Internal Remarks</label><textarea id="irRemark">${esc(f[n.remark]||'')}</textarea>
     <div class="notice"><b>Add spare used:</b> select from Spare Part List. It saves to Material Consumed / Unit Consumed in the same case row.</div>
     <div class="row"><input id="irSpareSearch" placeholder="Search Material Code or Name" oninput="renderInternalRepairSpareOptions()"><input id="irSpareQty" class="qty" type="number" min="1" value="1"><button class="btn-light" onclick="addInternalRepairSpare()">Add Spare</button></div>
     <select id="irSpareSelect"></select>
@@ -1076,17 +1084,17 @@ async function saveInternalRepair(opts){
       'DJI Internal Case ID':val('irDjiInternalCaseId'),
       'Repair Case':val('irRepairCase'),
       'Company Name':val('irCompanyName'),
-      'Product Model':val('irProductModel'),
+      'Model No':val('irProductModel'),
       'Serial No':val('irSerialNo'),
       'Case Type':selectedOptionsValue('irCaseType'),
       [n.warranty]:selectedOptionsValue('irWarranty'),
       'Billing Company':val('irBillingCompany'),
       'Issue Type':selectedOptionsValue('irIssueType'),
       'Case created':val('irCreationDate'),
-      'Case Close Date':val('irCloseDate'),
+      'Case Closed':val('irCloseDate'),
       'Shipper Name':selectedOptionsValue('irShipper'),
       [n.sendTracking]:val('irSendTrack'),
-      'Shipment Cost - Sent to DJI':val('irSendCost'),
+      [n.sendCost]:val('irSendCost'),
       [n.recvTracking]:val('irRecvTrack'),
       [n.recvCost]:val('irRecvCost'),
       'Unit Consumed':val('irUnitConsumed'),
@@ -2721,6 +2729,10 @@ function ensureDetailsModalStyles(){
 function closeDetailsModal(){
   const el=document.getElementById('detailsModalOverlay');
   if(el) el.remove();
+  const box=$('internalRepairForm');
+  if(box && !box.innerHTML.trim() && (S.internalRepairEdit||S.internalRepairPrefill)){
+    try{renderInternalRepairForm(S.internalRepairEdit||S.internalRepairPrefill||{});}catch(e){}
+  }
 }
 function showDetailsModal(title, html){
   ensureDetailsModalStyles();
@@ -3192,7 +3204,7 @@ function openRepairCaseDetails(index){
   </div>
   <label>Case Close Comment</label>${canEdit?`<textarea id="repairCaseCloseComment">${esc(f['Case Close Comment']||'')}</textarea>`:`<div class="notice">${esc(f['Case Close Comment']||'-')}</div>`}
   ${canEdit?`<div class="row"><button class="act" onclick="saveRepairCaseDetails(${index})">Save Repair Details</button><span id="repairDetailMsg" class="msg"></span></div>`:''}
-  <h3 class="details-section-title">All Lark Fields</h3>${renderAllLarkFieldsTable(f,row)}`;
+  ${canEdit?`<h3 class="details-section-title">All Lark Fields</h3>${renderAllLarkFieldsTable(f,row)}`:''}`;
   showDetailsModal(`Repair Case Details - ${caseNo}`,html);
 }
 function renderRepairStatus(){
