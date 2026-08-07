@@ -1013,7 +1013,7 @@ function internalRepairFormHtml(src, isPopup){
       <div><label>Warranty Status</label>${selectHtml(meta,'irWarranty',n.warranty,f[n.warranty]||'')}</div>
       ${companyInputHtml('irBillingCompany','Billing Company',f['Billing Company']||'')}
       <div><label>Issue Type</label>${selectHtml(meta,'irIssueType','Issue Type',f['Issue Type']||'')}</div>
-      <div><label>Case Creation Date</label><input id="irCreationDate" type="date" value="${esc(dateInputValue(f['Case Creation Date']))}"></div>
+      <div><label>Case created</label><input id="irCreationDate" type="date" value="${esc(dateInputValue(f['Case created']))}"></div>
       <div><label>Case Close Date</label><input id="irCloseDate" type="date" value="${esc(dateInputValue(f['Case Close Date']))}"></div>
       <div><label>Shipper Name</label>${selectHtml(meta,'irShipper','Shipper Name',f['Shipper Name']||'')}</div>
       <div><label>Tracking No - Sending</label><input id="irSendTrack" value="${esc(f[n.sendTracking]||'')}"></div>
@@ -1082,7 +1082,7 @@ async function saveInternalRepair(opts){
       [n.warranty]:selectedOptionsValue('irWarranty'),
       'Billing Company':val('irBillingCompany'),
       'Issue Type':selectedOptionsValue('irIssueType'),
-      'Case Creation Date':val('irCreationDate'),
+      'Case created':val('irCreationDate'),
       'Case Close Date':val('irCloseDate'),
       'Shipper Name':selectedOptionsValue('irShipper'),
       [n.sendTracking]:val('irSendTrack'),
