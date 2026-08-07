@@ -378,6 +378,51 @@ function findExistingInternalRepair(rows, fields) {
   }) || null;
 }
 
+
+async function syncInternalRepairSharedFieldsToRepair(env, country, sourceFields) {
+  const caseNo = norm(sourceFields?.["Repair Case"]);
+  if (!caseNo) return { ok:true, skipped:true, reason:"Repair Case missing" };
+  const tableId = repairTable(env, country);
+  if (!tableId) return { ok:true, skipped:true, reason:"Repair table not configured" };
+  const rows = await listRecords(env, tableId);
+  const target = (rows || []).find(r => sameFieldValue(repairNo(r.fields || {}), caseNo));
+  if (!target?.record_id) return { ok:true, skipped:true, reason:"Linked Repair Case not found" };
+  const fieldTypes = await getFieldTypes(env, tableId);
+  let warranty = sourceFields?.["Warranty Status"];
+  if (lower(country).includes("ksa")) {
+    if (lower(warranty) === "warranty") warranty = "YES";
+    if (lower(warranty) === "no warranty") warranty = "NO";
+  }
+  const shared = prepareFieldsForTable(fieldTypes, {
+    "Case created":sourceFields?.["Case created"],
+    "Company Name":sourceFields?.["Company Name"],
+    "Model No":sourceFields?.["Model No"],
+    "Serial No":sourceFields?.["Serial No"],
+    "Warranty Status":warranty
+  });
+  if (!Object.keys(shared).length) return { ok:true, skipped:true, reason:"No shared fields to sync" };
+  const result = await updateRecordBestEffort(env, tableId, target.record_id, shared);
+  return { ok:true, record_id:target.record_id, ...result };
+}
+
+async function markLinkedInternalRepairClosed(env, repairTableId, repairRecordId) {
+  const country = repairTableId === env.REPAIR_KSA_TABLE_ID ? "KSA - SAUDI ARABIA" : "UAE & Other Region";
+  const repair = await getRecord(env, repairTableId, repairRecordId);
+  const caseNo = repairNo(repair?.fields || {});
+  if (!caseNo) return { ok:true, skipped:true, reason:"Repair Case missing" };
+  const rows = await listInternalRepairRows(env, country);
+  const linked = (rows || []).find(r => sameFieldValue((r.fields || {})["Repair Case"], caseNo));
+  if (!linked?.record_id) return { ok:true, skipped:true, reason:"Linked Internal Repair not found" };
+  const internalTableId = internalRepairTable(env, country);
+  const fieldTypes = await getFieldTypes(env, internalTableId);
+  const localOffsetHours = lower(country).includes("ksa") ? 3 : 4;
+  const localDate = new Date(Date.now() + localOffsetHours * 60 * 60 * 1000).toISOString().slice(0,10);
+  const fields = prepareFieldsForTable(fieldTypes, { "Case Closed":localDate });
+  if (!Object.keys(fields).length) return { ok:true, skipped:true, reason:"Case Closed field unavailable" };
+  await updateRecord(env, internalTableId, linked.record_id, fields);
+  return { ok:true, record_id:linked.record_id, updated:Object.keys(fields) };
+}
+
 function findExistingInternalSpareOrder(rows, fields) {
   const djiCase = fields?.["DJI Case ID"];
   if (!djiCase) return null;
@@ -1861,12 +1906,14 @@ async function handle(req, env) {
     }
     if (targetRecordId) {
       await updateRecord(env, tableId, targetRecordId, fields);
-      return json({ ok:true, updated:true, record_id:targetRecordId, matchedExisting:!b.record_id });
+      const repairSync = await syncInternalRepairSharedFieldsToRepair(env, country, b.fields || {});
+      return json({ ok:true, updated:true, record_id:targetRecordId, matchedExisting:!b.record_id, repairSync });
     }
 
     // Creation is allowed only when no existing case can be found.
     const rec = await createRecord(env, tableId, fields);
-    return json({ ok:true, created:true, record:rec.data || rec });
+    const repairSync = await syncInternalRepairSharedFieldsToRepair(env, country, b.fields || {});
+    return json({ ok:true, created:true, record:rec.data || rec, repairSync });
   }
 
   
@@ -2545,12 +2592,16 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     await updateRecord(env, b.tableId, b.record_id, { Status: b.status });
 
     let stockResult = null;
+    let internalRepairSync = null;
     if (lower(b.type) === "spare" && lower(b.status) === "closed") {
       const rec = await getRecord(env, b.tableId, b.record_id);
       stockResult = await deductSpareLocalStock(env, b.tableId, b.record_id, rec.fields || {});
     }
+    if (lower(b.type) === "repair" && lower(b.status) === "closed") {
+      internalRepairSync = await markLinkedInternalRepairClosed(env, b.tableId, b.record_id);
+    }
 
-    return json({ ok: true, stockResult });
+    return json({ ok: true, stockResult, internalRepairSync });
   }
 
   if (p === "/api/delete-order" && req.method === "POST") {
