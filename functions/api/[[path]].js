@@ -1,3 +1,5 @@
+import { connect } from "cloudflare:sockets";
+
 const H = {
   "content-type": "application/json; charset=utf-8",
   "access-control-allow-origin": "https://rma-spare.aeronex.ae",
@@ -1102,12 +1104,168 @@ async function saveBackupSettings(env, settings) {
     port: norm(settings.port),
     username: norm(settings.username),
     remoteFolder: norm(settings.remoteFolder),
-    schedule: "04:00 daily",
-    retention: 3,
+    scheduleTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(norm(settings.scheduleTime)) ? norm(settings.scheduleTime) : "04:00",
+    schedule: `${/^([01]\d|2[0-3]):[0-5]\d$/.test(norm(settings.scheduleTime)) ? norm(settings.scheduleTime) : "04:00"} daily`,
+    retentionDays: [3,7].includes(Number(settings.retentionDays)) ? Number(settings.retentionDays) : 3,
+    retention: [3,7].includes(Number(settings.retentionDays)) ? Number(settings.retentionDays) : 3,
     updatedAt: new Date().toISOString()
   };
   await env.LOGS_BUCKET.put("backup/settings.json", JSON.stringify(safe, null, 2), { httpMetadata: { contentType:"application/json" } });
   return safe;
+}
+
+
+function nasPort(value, fallback) {
+  const n = Number(norm(value));
+  return Number.isInteger(n) && n > 0 && n <= 65535 ? n : fallback;
+}
+
+function socketTimeout(ms, message) {
+  return new Promise((_, reject) => setTimeout(() => reject(new Error(message || "NAS connection timed out")), ms));
+}
+
+async function readSocketText(reader, timeoutMs = 8000) {
+  const decoder = new TextDecoder();
+  let text = "";
+  for (let i = 0; i < 12; i++) {
+    const result = await Promise.race([reader.read(), socketTimeout(timeoutMs, "NAS response timed out")]);
+    if (result.done) break;
+    text += decoder.decode(result.value, { stream:true });
+    if (text.includes("\n")) break;
+  }
+  return text + decoder.decode();
+}
+
+async function readFtpReply(reader, timeoutMs = 8000) {
+  const decoder = new TextDecoder();
+  let text = "";
+  let code = "";
+  let multiline = false;
+  for (let i = 0; i < 40; i++) {
+    const result = await Promise.race([reader.read(), socketTimeout(timeoutMs, "FTPS response timed out")]);
+    if (result.done) break;
+    text += decoder.decode(result.value, { stream:true });
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    if (!code && lines.length) {
+      const m = lines[0].match(/^(\d{3})([ -])/);
+      if (m) { code = m[1]; multiline = m[2] === "-"; }
+    }
+    if (code) {
+      if (!multiline && lines.some(line => line.startsWith(code + " "))) break;
+      if (multiline && lines.slice(1).some(line => line.startsWith(code + " "))) break;
+    }
+  }
+  text += decoder.decode();
+  const first = text.match(/^(\d{3})[ -]/m);
+  return { code: first ? first[1] : "", text: text.trim() };
+}
+
+async function ftpCommand(writer, reader, command, expectedCodes) {
+  await writer.write(new TextEncoder().encode(command + "\r\n"));
+  const reply = await readFtpReply(reader);
+  if (!expectedCodes.includes(reply.code)) {
+    throw new Error(`${command.split(" ")[0]} failed (${reply.code || "no code"}): ${reply.text.slice(0, 300)}`);
+  }
+  return reply;
+}
+
+async function testFtpsExplicitConnection({ host, port, username, password }) {
+  if (!username) throw new Error("NAS username is required");
+  if (!password) throw new Error("Cloudflare secret NAS_BACKUP_PASSWORD is not configured");
+  let socket = connect({ hostname:host, port }, { secureTransport:"starttls", allowHalfOpen:true });
+  await Promise.race([socket.opened, socketTimeout(8000, "FTPS TCP connection timed out")]);
+  let reader = socket.readable.getReader();
+  let writer = socket.writable.getWriter();
+  try {
+    const welcome = await readFtpReply(reader);
+    if (welcome.code !== "220") throw new Error(`FTPS server did not return 220: ${welcome.text.slice(0, 300)}`);
+    await ftpCommand(writer, reader, "AUTH TLS", ["234", "334"]);
+    reader.releaseLock();
+    writer.releaseLock();
+    socket = socket.startTls();
+    await Promise.race([socket.opened, socketTimeout(8000, "FTPS TLS handshake timed out")]);
+    reader = socket.readable.getReader();
+    writer = socket.writable.getWriter();
+    const userReply = await ftpCommand(writer, reader, `USER ${username}`, ["230", "331"]);
+    if (userReply.code === "331") await ftpCommand(writer, reader, `PASS ${password}`, ["230"]);
+    await ftpCommand(writer, reader, "PBSZ 0", ["200"]);
+    await ftpCommand(writer, reader, "PROT P", ["200"]);
+    const pwd = await ftpCommand(writer, reader, "PWD", ["257"]);
+    let folders = [];
+    let folderListingError = "";
+    try { folders = await listFtpsFolders({ host, writer, reader }); }
+    catch (e) { folderListingError = e.message || String(e); }
+    try { await ftpCommand(writer, reader, "QUIT", ["221"]); } catch {}
+    return { ok:true, status:"Connected", protocol:"ftps", tls:"Explicit TLS", authenticated:true, dataProtection:"Private", serverReply:pwd.text.slice(0, 300), folders, folderListingError };
+  } finally {
+    try { reader.releaseLock(); } catch {}
+    try { writer.releaseLock(); } catch {}
+    try { await socket.close(); } catch {}
+  }
+}
+
+async function testSftpReachability({ host, port }) {
+  const socket = connect({ hostname:host, port }, { secureTransport:"off", allowHalfOpen:true });
+  await Promise.race([socket.opened, socketTimeout(8000, "SFTP TCP connection timed out")]);
+  const reader = socket.readable.getReader();
+  try {
+    const banner = (await readSocketText(reader, 8000)).trim();
+    if (!/^SSH-/.test(banner)) throw new Error(`Server is reachable but did not return an SSH banner: ${banner.slice(0, 200) || "empty response"}`);
+    return { ok:true, status:"Reachable", protocol:"sftp", authenticated:false, note:"SFTP/SSH service is reachable. Credential authentication will be verified when the SFTP transfer client is enabled.", serverBanner:banner.slice(0, 200) };
+  } finally {
+    try { reader.releaseLock(); } catch {}
+    try { await socket.close(); } catch {}
+  }
+}
+
+function parseEpsvPort(replyText) {
+  const m = String(replyText || "").match(/\(\|\|\|(\d+)\|\)/);
+  const port = m ? Number(m[1]) : 0;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("FTPS EPSV reply did not contain a valid passive port");
+  return port;
+}
+
+function parseMlsdFolders(text) {
+  const out = [];
+  for (const raw of String(text || "").split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const split = line.lastIndexOf(";");
+    if (split < 0) continue;
+    const facts = line.slice(0, split + 1).toLowerCase();
+    const name = line.slice(split + 1).trim();
+    if (!name || name === "." || name === "..") continue;
+    if (!facts.includes("type=dir;") || facts.includes("type=cdir;") || facts.includes("type=pdir;")) continue;
+    if (!out.includes(name)) out.push(name);
+  }
+  return out.sort((a,b)=>a.localeCompare(b));
+}
+
+async function listFtpsFolders({ host, writer, reader }) {
+  const epsv = await ftpCommand(writer, reader, "EPSV", ["229"]);
+  const dataPort = parseEpsvPort(epsv.text);
+  const dataSocket = connect({ hostname:host, port:dataPort }, { secureTransport:"on", allowHalfOpen:true });
+  await Promise.race([dataSocket.opened, socketTimeout(8000, "FTPS passive data connection timed out")]);
+  const dataReader = dataSocket.readable.getReader();
+  try {
+    await writer.write(new TextEncoder().encode("MLSD\r\n"));
+    const opening = await readFtpReply(reader);
+    if (!["125","150"].includes(opening.code)) throw new Error(`MLSD failed (${opening.code || "no code"}): ${opening.text.slice(0,300)}`);
+    const decoder = new TextDecoder();
+    let listing = "";
+    for (let i=0; i<200; i++) {
+      const r = await Promise.race([dataReader.read(), socketTimeout(8000, "FTPS folder listing timed out")]);
+      if (r.done) break;
+      listing += decoder.decode(r.value, { stream:true });
+    }
+    listing += decoder.decode();
+    const done = await readFtpReply(reader);
+    if (!["226","250"].includes(done.code)) throw new Error(`FTPS folder listing did not complete (${done.code || "no code"}): ${done.text.slice(0,300)}`);
+    return parseMlsdFolders(listing);
+  } finally {
+    try { dataReader.releaseLock(); } catch {}
+    try { await dataSocket.close(); } catch {}
+  }
 }
 
 async function appendBackupHistory(env, entry) {
@@ -1126,6 +1284,24 @@ async function listBackupHistory(env) {
       const r = await env.LOGS_BUCKET.get(obj.key);
       out.push(JSON.parse(await r.text()));
     } catch {}
+  }
+  return out;
+}
+
+
+async function appendBackupLog(env, entry) {
+  if (!env.LOGS_BUCKET) return;
+  const key = `backup/logs/${new Date().toISOString().replace(/[:.]/g,"-")}-${Math.random().toString(36).slice(2,8)}.json`;
+  await env.LOGS_BUCKET.put(key, JSON.stringify(entry, null, 2), { httpMetadata:{ contentType:"application/json" } });
+}
+
+async function listBackupLogs(env) {
+  if (!env.LOGS_BUCKET) return [];
+  const listed = await env.LOGS_BUCKET.list({ prefix:"backup/logs/", limit:50 });
+  const keys = (listed.objects || []).map(x=>x.key).sort().reverse().slice(0,30);
+  const out = [];
+  for (const key of keys) {
+    try { const obj=await env.LOGS_BUCKET.get(key); if(obj) out.push(JSON.parse(await obj.text())); } catch {}
   }
   return out;
 }
@@ -2515,6 +2691,7 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     if (!reportBackupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
     const settings = await getBackupSettings(env);
     const history = await listBackupHistory(env);
+    const logs = await listBackupLogs(env);
     return json({
       ok:true,
       status: history[0]?.status || "Not configured",
@@ -2524,9 +2701,11 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
       totalAttachments: history[0]?.attachments || "-",
       backupSize: history[0]?.size || "-",
       nasConnectionStatus: settings.host ? "Configured" : "Not configured",
-      retention: "Latest 3 successful backups",
+      credentialConfigured: !!norm(env.NAS_BACKUP_PASSWORD),
+      retention: `Last ${Number(settings.retentionDays || 3)} days`,
       settings,
-      history
+      history,
+      logs
     });
   }
 
@@ -2542,19 +2721,24 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     const role = norm(url.searchParams.get("role") || req.headers.get("x-user-role"));
     if (!reportBackupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
     const b = await readBody(req);
-    const protocol = lower(b.protocol || "sftp");
+    const protocol = lower(b.protocol || "ftps");
     const host = norm(b.host);
+    const username = norm(b.username);
     if (!host) return json({ ok:false, status:"Failed", error:"NAS host is required" }, 400);
-    if (protocol === "webdav") {
-      const target = host.startsWith("http") ? host : `https://${host}`;
-      try {
-        const r = await fetch(target, { method:"OPTIONS" });
-        return json({ ok:r.ok, status:r.ok ? "Connected" : "Failed", protocol, httpStatus:r.status });
-      } catch (e) {
-        return json({ ok:false, status:"Failed", protocol, error:e.message || String(e) }, 200);
-      }
+    if (!["ftps","sftp"].includes(protocol)) return json({ ok:false, status:"Failed", error:"Supported protocols are SFTP and FTPS (Explicit TLS)" }, 400);
+    const started = Date.now();
+    try {
+      const result = protocol === "ftps"
+        ? await testFtpsExplicitConnection({ host, port:nasPort(b.port, 21), username, password:norm(env.NAS_BACKUP_PASSWORD) })
+        : await testSftpReachability({ host, port:nasPort(b.port, 22) });
+      const response={ ...result, durationMs:Date.now()-started, host, port:nasPort(b.port, protocol === "ftps" ? 21 : 22), username, remoteFolder:norm(b.remoteFolder), credentialConfigured:!!norm(env.NAS_BACKUP_PASSWORD) };
+      await appendBackupLog(env,{ time:new Date().toISOString(), operation:"NAS Connection Test", status:"success", protocol, host, port:response.port, username, remoteFolder:norm(b.remoteFolder), durationMs:response.durationMs, message:result.authenticated===true?"NAS authentication successful":"NAS service reachable", folderCount:Array.isArray(result.folders)?result.folders.length:0 });
+      return json(response);
+    } catch (e) {
+      const response={ ok:false, status:"Failed", protocol, durationMs:Date.now()-started, host, port:nasPort(b.port, protocol === "ftps" ? 21 : 22), username, remoteFolder:norm(b.remoteFolder), credentialConfigured:!!norm(env.NAS_BACKUP_PASSWORD), error:e.message || String(e) };
+      await appendBackupLog(env,{ time:new Date().toISOString(), operation:"NAS Connection Test", status:"error", protocol, host, port:response.port, username, remoteFolder:norm(b.remoteFolder), durationMs:response.durationMs, message:response.error, error:response.error });
+      return json(response, 200);
     }
-    return json({ ok:true, status:"Configured", protocol, note:"Protocol saved. Live SFTP/SMB/NFS transfer requires deployment-specific connector support; this endpoint validates settings without touching working portal modules." });
   }
 
   if (p === "/api/report-backup/backup-now" && req.method === "POST") {
@@ -2562,8 +2746,9 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     if (!reportBackupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
     const settings = await getBackupSettings(env);
     if (!settings.host) return json({ ok:false, status:"Failed", error:"Backup settings are not configured" }, 400);
-    const entry = { date:new Date().toISOString(), status:"Queued", records:"-", attachments:"-", size:"-", destination:`${settings.protocol || "sftp"}://${settings.host}${settings.remoteFolder || ""}`, error:"Export-to-NAS worker not enabled yet" };
+    const entry = { date:new Date().toISOString(), status:"Queued", trigger:"Manual", records:"-", attachments:"-", size:"-", destination:`${settings.protocol || "sftp"}://${settings.host}${settings.remoteFolder || ""}`, error:"Export-to-NAS worker not enabled yet" };
     await appendBackupHistory(env, entry);
+    await appendBackupLog(env,{ time:entry.date, operation:"Backup Now", status:"error", protocol:settings.protocol||"sftp", host:settings.host, port:settings.port||"", username:settings.username||"", remoteFolder:settings.remoteFolder||"", message:"Backup engine not enabled yet; no Lark data was exported.", error:entry.error });
     return json({ ok:true, ...entry });
   }
 
