@@ -1204,7 +1204,13 @@ async function testFtpsExplicitConnection({ host, port, username, password }) {
       await Promise.race([secureSocket.opened, socketTimeout(12000, "FTPS TLS handshake timed out")]);
     } catch (e) {
       const detail = e?.message || String(e);
-      throw new Error(`FTPS TLS handshake failed after AUTH TLS (${authTlsReply.slice(0,120)}). Cloudflare validates the NAS TLS certificate. Use a NAS/DDNS hostname that matches the QNAP certificate instead of a raw WAN IP if the certificate is issued to a hostname. Detail: ${detail}`);
+      const ipHost = /^(?:\d{1,3}\.){3}\d{1,3}$/.test(cleanHost);
+      const hint = ipHost
+        ? "The NAS is being contacted by raw IP. FileZilla can let a user manually accept an untrusted or hostname-mismatched certificate, but Cloudflare Workers cannot show that certificate prompt. Install a publicly trusted QNAP certificate and use its matching DDNS hostname as NAS Host."
+        : "Cloudflare Workers require the NAS TLS certificate to be publicly trusted and valid for the NAS Host name. Check the QNAP FTPS certificate chain, expiry, and hostname.";
+      const err = new Error(`FTPS TLS handshake failed after AUTH TLS (${authTlsReply.slice(0,120)}). ${hint} Detail: ${detail}`);
+      err.code = "ftps_tls_handshake_failed";
+      throw err;
     }
     reader = socket.readable.getReader();
     writer = socket.writable.getWriter();
