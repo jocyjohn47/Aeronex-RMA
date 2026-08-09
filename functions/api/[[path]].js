@@ -1093,6 +1093,7 @@ const BACKUP_SETTINGS_KEY = "rma-backup-settings-v1";
 const BACKUP_HISTORY_KEY = "rma-backup-history-v1";
 const BACKUP_LOGS_KEY = "rma-backup-logs-v1";
 const BACKUP_LOCK_KEY = "rma-backup-running-v1";
+const BACKUP_JOB_PREFIX = "rma-backup-job-v2:";
 
 async function backupKvRead(env, key, fallback) {
   if (!env.KINGDEE_LOGS) return fallback;
@@ -1772,6 +1773,286 @@ async function runRestoreGradeBackup(env, settings, trigger="Manual") {
   } finally {
     await closeFtpSession(session);
   }
+}
+
+
+function backupJobKey(id){ return BACKUP_JOB_PREFIX + norm(id); }
+
+async function saveBackupJob(env, job){
+  if (!job?.id) throw new Error("Backup job ID missing");
+  await backupKvWrite(env, backupJobKey(job.id), job);
+}
+
+async function getBackupJob(env, id){
+  return await backupKvRead(env, backupJobKey(id), null);
+}
+
+async function deleteBackupJob(env, id){
+  if (!env.KINGDEE_LOGS || !id) return;
+  try { await env.KINGDEE_LOGS.delete(backupJobKey(id)); } catch {}
+}
+
+function backupProgress(job){
+  const tableCount = job.tables?.length || 0;
+  const tableIndex = Math.min(Number(job.tableIndex || 0), tableCount);
+  const totalRecords = Number(job.manifest?.totals?.records || 0);
+  const totalAttachments = Number(job.manifest?.totals?.attachments || 0);
+  const totalBytes = Number(job.manifest?.totals?.bytes || 0);
+  return {
+    jobId:job.id,
+    state:job.state || "running",
+    phase:job.phase || "starting",
+    tableIndex,
+    tableCount,
+    currentTable:job.tables?.[job.tableIndex]?.label || "Finalizing",
+    records:totalRecords,
+    attachments:totalAttachments,
+    files:Number(job.manifest?.totals?.files || 0),
+    sizeBytes:totalBytes,
+    size:backupFormatBytes(totalBytes),
+    failures:Array.isArray(job.manifest?.failures) ? job.manifest.failures.length : 0,
+    restoreReady:job.state === "complete" ? !!job.manifest?.restoreReady : false,
+    message:job.message || "Backup in progress"
+  };
+}
+
+async function backupListRecordPage(env, tableId, pageToken="", pageSize=20){
+  const qs = new URLSearchParams({ page_size:String(pageSize) });
+  if (pageToken) qs.set("page_token", pageToken);
+  const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/records?${qs}`);
+  return { rows:data.data?.items || [], nextPageToken:data.data?.page_token || "", hasMore:!!data.data?.has_more };
+}
+
+async function backupFetchAttachmentBytesWithToken(env, tableId, fileToken, token){
+  const extra = encodeURIComponent(JSON.stringify({ bitablePerm:{ tableId } }));
+  const url = `https://open.larksuite.com/open-apis/drive/v1/medias/${encodeURIComponent(fileToken)}/download?extra=${extra}`;
+  const res = await fetch(url, { headers:{ Authorization:`Bearer ${token}` } });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Lark attachment download failed (${res.status}): ${text.slice(0,300)}`);
+  }
+  return { bytes:new Uint8Array(await res.arrayBuffer()), contentType:res.headers.get("content-type") || "application/octet-stream" };
+}
+
+function backupBuildRecordTasks(row, schema){
+  const tasks=[];
+  const fields=row?.fields || {};
+  for (const f of schema || []) {
+    const fieldName=f.field_name;
+    if (Number(f.type) === 17) {
+      let n=0;
+      for (const item of backupAttachmentItems(fields[fieldName])) {
+        n++;
+        const fieldFolder=backupSafeName(fieldName,"Attachments");
+        const baseFileName=backupSafeName(item.name || `${fieldFolder}-${n}.bin`, `${fieldFolder}-${n}.bin`);
+        tasks.push({ type:"attachment", fieldName, fieldFolder, token:item.token, fileName:backupSafeName(`${String(n).padStart(2,"0")}-${baseFileName}`,`${fieldFolder}-${n}.bin`) });
+      }
+    } else if (Number(f.type) === 15) {
+      let n=0;
+      for (const link of backupUrlItems(fields[fieldName])) {
+        n++;
+        tasks.push({ type:"linked-file", fieldName, fieldFolder:backupSafeName(`${fieldName}-Linked-Files`,"Linked-Files"), url:link.url, sourceName:link.name || "", index:n });
+      }
+    }
+  }
+  return tasks;
+}
+
+async function startBatchedRestoreBackup(env, settings, trigger="Manual"){
+  if (lower(settings.protocol) !== "ftp") throw new Error("Full backup currently requires the confirmed working FTP protocol.");
+  if (!settings.host || !settings.username || !settings.remoteFolder) throw new Error("NAS Host, Username, and Remote Folder must be configured");
+  const tables=restoreBackupTableConfigs(env);
+  if (!tables.length) throw new Error("No configured Lark tables were found for backup");
+  await acquireBackupLock(env);
+  const now=new Date();
+  const stamp=now.toISOString().replace(/[-:]/g,"").replace(/\.\d{3}Z$/,"Z");
+  const id=`BK-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+  const backupFolder=`AERONEX_RMA_${stamp}`;
+  const manifest={
+    format:"AERONEX-RMA-LARK-RESTORE-V2-BATCHED",
+    jobId:id, createdAt:now.toISOString(), completedAt:null, trigger,
+    larkBaseToken:env.LARK_BASE_TOKEN || "", expectedTableCount:tables.length, actualTableCount:0,
+    destination:`ftp://${settings.host}${settings.remoteFolder}/${backupFolder}`,
+    restoreReady:false, tables:[], failures:[], totals:{ tables:0, records:0, attachments:0, files:0, bytes:0 }
+  };
+  const job={ id, state:"running", phase:"schema", trigger, startedAt:now.toISOString(), startedMs:Date.now(), backupFolder,
+    settings:{ protocol:settings.protocol, host:settings.host, port:settings.port, username:settings.username, remoteFolder:settings.remoteFolder, retentionDays:settings.retentionDays },
+    tables, tableIndex:0, schema:null, currentTable:null, pageToken:"", nextPageToken:"", partIndex:0, currentRows:[], rowIndex:0, currentRecord:null, manifest,
+    message:"Backup initialized"
+  };
+  let session=null;
+  try {
+    session=await openPlainFtpSession({ host:settings.host, port:nasPort(settings.port,21), username:settings.username, password:norm(env.NAS_BACKUP_PASSWORD) });
+    await ftpCwdAbsolute(session, settings.remoteFolder);
+    await ftpEnsureDir(session, backupFolder);
+    const initMf={ verified:false };
+    const initBytes=backupJsonBytes({ jobId:id, startedAt:job.startedAt, status:"RUNNING", format:manifest.format, expectedTableCount:tables.length });
+    manifest.totals.files++; manifest.totals.bytes += await ftpUploadVerified(session,"BACKUP_IN_PROGRESS.json",initBytes,initMf);
+  } finally { await closeFtpSession(session); }
+  await saveBackupJob(env,job);
+  await appendBackupLog(env,{ time:job.startedAt, operation:"Backup Now", status:"success", protocol:settings.protocol, host:settings.host, port:settings.port||"", username:settings.username||"", remoteFolder:settings.remoteFolder||"", jobId:id, message:"Backup started in batched mode." });
+  return job;
+}
+
+function backupCurrentTableEntry(job){
+  return job.manifest.tables.find(t => t.tableId === job.currentTable?.tableId) || null;
+}
+
+async function backupStepSchema(env, job){
+  const table=job.tables[job.tableIndex];
+  if (!table) { job.phase="finalize"; return; }
+  const schema=await backupTableSchema(env,table.tableId);
+  const tableFolder=backupSafeName(`${table.key}-${table.label}`,table.key);
+  const entry={ key:table.key,label:table.label,envKey:table.envKey,tableId:table.tableId,tableFolder,records:0,attachments:0,files:0,bytes:0,parts:[],schemaFile:`Schema/${tableFolder}/schema.json`,failures:[] };
+  let session=null;
+  try {
+    session=await openPlainFtpSession({ host:job.settings.host, port:nasPort(job.settings.port,21), username:job.settings.username, password:norm(env.NAS_BACKUP_PASSWORD) });
+    await ftpCwdAbsolute(session, `${job.settings.remoteFolder}/${job.backupFolder}`);
+    await ftpEnsureDir(session,"Schema"); await ftpEnsureDir(session,tableFolder);
+    const mf={ verified:false };
+    const bytes=backupJsonBytes({ key:table.key,label:table.label,envKey:table.envKey,tableId:table.tableId,fields:schema });
+    const n=await ftpUploadVerified(session,"schema.json",bytes,mf);
+    entry.files++; entry.bytes+=n; job.manifest.totals.files++; job.manifest.totals.bytes+=n;
+  } finally { await closeFtpSession(session); }
+  job.manifest.tables.push(entry);
+  job.schema=schema; job.currentTable=table; job.pageToken=""; job.nextPageToken=""; job.partIndex=0; job.currentRows=[]; job.rowIndex=0; job.currentRecord=null; job.phase="page";
+  job.message=`Schema verified: ${table.label}`;
+}
+
+async function backupStepPage(env,job){
+  const table=job.currentTable;
+  const entry=backupCurrentTableEntry(job);
+  const page=await backupListRecordPage(env,table.tableId,job.pageToken,20);
+  job.partIndex=Number(job.partIndex||0)+1;
+  const part=String(job.partIndex).padStart(4,"0");
+  let session=null;
+  try {
+    session=await openPlainFtpSession({ host:job.settings.host, port:nasPort(job.settings.port,21), username:job.settings.username, password:norm(env.NAS_BACKUP_PASSWORD) });
+    await ftpCwdAbsolute(session, `${job.settings.remoteFolder}/${job.backupFolder}`);
+    await ftpEnsureDir(session,"Raw-Data"); await ftpEnsureDir(session,entry.tableFolder);
+    const files=[
+      [`records-part-${part}.json`,backupJsonBytes({ key:table.key,label:table.label,envKey:table.envKey,tableId:table.tableId,part:job.partIndex,records:page.rows }),"raw"],
+      [`records-part-${part}.csv`,backupCsvBytes(page.rows,job.schema),"csv"],
+      [`records-part-${part}.xls`,backupXlsBytes(`${table.label} - Part ${job.partIndex}`,page.rows,job.schema),"excel"]
+    ];
+    const partInfo={ part:job.partIndex, records:page.rows.length, raw:`Raw-Data/${entry.tableFolder}/${files[0][0]}`, csv:`Raw-Data/${entry.tableFolder}/${files[1][0]}`, excel:`Raw-Data/${entry.tableFolder}/${files[2][0]}`, verified:true };
+    for (const [name,bytes] of files) { const mf={verified:false}; const n=await ftpUploadVerified(session,name,bytes,mf); entry.files++;entry.bytes+=n;job.manifest.totals.files++;job.manifest.totals.bytes+=n; }
+    entry.parts.push(partInfo);
+  } finally { await closeFtpSession(session); }
+  job.currentRows=page.rows; job.rowIndex=0; job.nextPageToken=page.nextPageToken || ""; job.phase=page.rows.length?"records":"table-done";
+  job.message=`${table.label}: loaded ${page.rows.length} records (part ${job.partIndex})`;
+}
+
+async function backupInitCurrentRecord(env,job,row){
+  const table=job.currentTable, entry=backupCurrentTableEntry(job), schema=job.schema || [];
+  const primary=schema.find(f=>f.is_primary)||schema[0];
+  const caseName=backupSafeName(fieldText((row.fields||{})[primary?.field_name])||row.record_id,row.record_id||"record");
+  const recMeta={ record_id:row.record_id, created_time:row.created_time??row.createdTime??null, last_modified_time:row.last_modified_time??row.lastModifiedTime??null, fields:row.fields||{}, source:{ tableId:table.tableId,envKey:table.envKey,tableKey:table.key,primaryField:primary?.field_name||"" } };
+  let session=null;
+  try {
+    session=await openPlainFtpSession({ host:job.settings.host, port:nasPort(job.settings.port,21), username:job.settings.username, password:norm(env.NAS_BACKUP_PASSWORD) });
+    await ftpCwdAbsolute(session, `${job.settings.remoteFolder}/${job.backupFolder}`);
+    await ftpEnsureDir(session,"Cases"); await ftpEnsureDir(session,entry.tableFolder); await ftpEnsureDir(session,caseName);
+    const mf={verified:false}; const n=await ftpUploadVerified(session,"record.json",backupJsonBytes(recMeta),mf);
+    entry.files++;entry.bytes+=n;job.manifest.totals.files++;job.manifest.totals.bytes+=n;
+  } finally { await closeFtpSession(session); }
+  job.currentRecord={ recordId:row.record_id,caseName,tasks:backupBuildRecordTasks(row,schema),taskIndex:0,backedUpFiles:[],recordMeta:recMeta };
+}
+
+async function backupProcessRecordFiles(env,job,maxFiles=6){
+  const table=job.currentTable, entry=backupCurrentTableEntry(job), cr=job.currentRecord;
+  const end=Math.min(cr.tasks.length,cr.taskIndex+maxFiles);
+  let larkAccessToken="";
+  if (cr.tasks.slice(cr.taskIndex,end).some(t=>t.type==="attachment")) larkAccessToken=await larkToken(env);
+  for (; cr.taskIndex<end; cr.taskIndex++) {
+    const task=cr.tasks[cr.taskIndex];
+    let session=null;
+    try {
+      let dl, fileName;
+      if (task.type==="attachment") { dl=await backupFetchAttachmentBytesWithToken(env,table.tableId,task.token,larkAccessToken); fileName=task.fileName; }
+      else { dl=await backupFetchUrlBytes({url:task.url,name:task.sourceName},task.index); fileName=backupSafeName(`${String(task.index).padStart(2,"0")}-${dl.name}`,`linked-file-${task.index}`); }
+      session=await openPlainFtpSession({ host:job.settings.host, port:nasPort(job.settings.port,21), username:job.settings.username, password:norm(env.NAS_BACKUP_PASSWORD) });
+      await ftpCwdAbsolute(session, `${job.settings.remoteFolder}/${job.backupFolder}/Cases/${entry.tableFolder}/${cr.caseName}`);
+      await ftpEnsureDir(session,task.fieldFolder);
+      const mf={verified:false}; const n=await ftpUploadVerified(session,fileName,dl.bytes,mf);
+      entry.files++;entry.bytes+=n;entry.attachments++;job.manifest.totals.files++;job.manifest.totals.bytes+=n;job.manifest.totals.attachments++;
+      cr.backedUpFiles.push({ type:task.type,fieldName:task.fieldName,fileName,relativePath:`Cases/${entry.tableFolder}/${cr.caseName}/${task.fieldFolder}/${fileName}`,fileToken:task.token||null,sourceUrl:task.url||null,size:n,sha256:mf.sha256,verified:true });
+    } catch(e) {
+      const failure={ table:table.label,tableId:table.tableId,recordId:cr.recordId,case:cr.caseName,field:task.fieldName,fileToken:task.token||undefined,sourceUrl:task.url||undefined,error:e.message||String(e) };
+      entry.failures.push(failure);job.manifest.failures.push(failure);
+    } finally { await closeFtpSession(session); }
+  }
+  if (cr.taskIndex>=cr.tasks.length) {
+    let session=null;
+    try {
+      session=await openPlainFtpSession({ host:job.settings.host, port:nasPort(job.settings.port,21), username:job.settings.username, password:norm(env.NAS_BACKUP_PASSWORD) });
+      await ftpCwdAbsolute(session, `${job.settings.remoteFolder}/${job.backupFolder}/Cases/${entry.tableFolder}/${cr.caseName}`);
+      const map={ recordId:cr.recordId,case:cr.caseName,tableId:table.tableId,tableKey:table.key,files:cr.backedUpFiles,restoreRules:["Use record.json fields as authoritative values.","Re-upload files and replace original Lark file tokens with newly returned file tokens in the same field."] };
+      const mf={verified:false}; const n=await ftpUploadVerified(session,"restore-map.json",backupJsonBytes(map),mf);
+      entry.files++;entry.bytes+=n;job.manifest.totals.files++;job.manifest.totals.bytes+=n;
+    } finally { await closeFtpSession(session); }
+    entry.records++;job.manifest.totals.records++;job.rowIndex++;job.currentRecord=null;
+  }
+}
+
+async function backupStepRecords(env,job){
+  if (job.rowIndex>=job.currentRows.length) { job.currentRows=[]; job.rowIndex=0; if(job.nextPageToken){job.pageToken=job.nextPageToken;job.nextPageToken="";job.phase="page";} else job.phase="table-done"; return; }
+  const row=job.currentRows[job.rowIndex];
+  if (!job.currentRecord) await backupInitCurrentRecord(env,job,row);
+  await backupProcessRecordFiles(env,job,6);
+  const entry=backupCurrentTableEntry(job);
+  job.message=`${job.currentTable.label}: ${entry.records} records / ${entry.attachments} attachments verified`;
+}
+
+async function backupStepTableDone(env,job){
+  const entry=backupCurrentTableEntry(job);
+  job.manifest.totals.tables++; job.manifest.actualTableCount=job.manifest.totals.tables;
+  job.tableIndex++; job.schema=null;job.currentTable=null;job.pageToken="";job.nextPageToken="";job.partIndex=0;job.currentRows=[];job.rowIndex=0;job.currentRecord=null;
+  job.phase=job.tableIndex>=job.tables.length?"finalize":"schema";
+  job.message=`Completed ${entry.label}: ${entry.records} records, ${entry.attachments} attachments`;
+}
+
+async function finalizeBatchedBackup(env,job){
+  const m=job.manifest;
+  m.restoreReady=m.failures.length===0 && m.totals.tables===job.tables.length && m.tables.every(t=>t.schemaFile && t.parts.length>=1);
+  m.completedAt=new Date().toISOString();m.durationMs=Date.now()-job.startedMs;m.actualTableCount=m.totals.tables;m.backupSize=backupFormatBytes(m.totals.bytes);
+  const restoreManifest={ format:m.format,jobId:job.id,backupFolder:job.backupFolder,createdAt:m.createdAt,completedAt:m.completedAt,restoreReady:m.restoreReady,sourceBaseToken:m.larkBaseToken,expectedTableCount:m.expectedTableCount,actualTableCount:m.actualTableCount,totals:m.totals,failures:m.failures,tables:m.tables.map(t=>({key:t.key,label:t.label,envKey:t.envKey,sourceTableId:t.tableId,schemaFile:t.schemaFile,recordParts:t.parts,recordCount:t.records,attachmentCount:t.attachments})),restoreRules:["Recreate or validate tables/fields from Schema before importing data.","Import Raw-Data JSON parts in part order; CSV/XLS are inspection copies only.","Use each case restore-map.json to re-upload attachments into the original field.","Keep source record_id only as an audit reference because Lark can assign new record IDs.","Verify restored table, record and attachment totals against this manifest."] };
+  let session=null;
+  try {
+    session=await openPlainFtpSession({ host:job.settings.host, port:nasPort(job.settings.port,21), username:job.settings.username, password:norm(env.NAS_BACKUP_PASSWORD) });
+    await ftpCwdAbsolute(session, `${job.settings.remoteFolder}/${job.backupFolder}`);
+    for (const [name,obj] of [["manifest.json",m],["restore-manifest.json",restoreManifest]]) { const mf={verified:false}; const n=await ftpUploadVerified(session,name,backupJsonBytes(obj),mf);m.totals.files++;m.totals.bytes+=n; }
+    if (m.restoreReady) { const complete={ backupFolder:job.backupFolder,jobId:job.id,completedAt:m.completedAt,restoreReady:true,records:m.totals.records,attachments:m.totals.attachments,files:m.totals.files,bytes:m.totals.bytes,shaVerification:"Per-file upload + read-back SHA-256" }; const mf={verified:false};const n=await ftpUploadVerified(session,"BACKUP_COMPLETE.json",backupJsonBytes(complete),mf);m.totals.files++;m.totals.bytes+=n; }
+  } finally { await closeFtpSession(session); }
+  job.state="complete";job.phase="complete";job.message=m.restoreReady?"Full Lark backup uploaded and read-back verified. Restore package is ready.":`Backup completed with ${m.failures.length} failure(s). Restore Ready: No.`;
+  const status=m.restoreReady?"Success":(m.totals.records>0?"Partial":"Failed");
+  const entry={ date:m.createdAt,status,trigger:job.trigger||"Manual",records:m.totals.records,attachments:m.totals.attachments,size:backupFormatBytes(m.totals.bytes),sizeBytes:m.totals.bytes,destination:m.destination,duration:`${Math.round(m.durationMs/1000)} sec`,durationMs:m.durationMs,restoreReady:!!m.restoreReady,tables:m.totals.tables,expectedTables:m.expectedTableCount,files:m.totals.files,failures:m.failures,backupFolder:job.backupFolder,jobId:job.id,message:job.message };
+  await appendBackupHistory(env,entry);
+  await appendBackupLog(env,{ time:new Date().toISOString(),operation:"Backup Now",status:m.restoreReady?"success":"error",protocol:job.settings.protocol,host:job.settings.host,port:job.settings.port||"",username:job.settings.username||"",remoteFolder:job.settings.remoteFolder||"",durationMs:entry.durationMs,records:entry.records,attachments:entry.attachments,size:entry.size,restoreReady:entry.restoreReady,backupFolder:entry.backupFolder,jobId:job.id,failures:entry.failures,message:entry.message });
+  await releaseBackupLock(env);
+  await saveBackupJob(env,job);
+  return entry;
+}
+
+async function runBatchedBackupStep(env,job){
+  if (!job || job.state!=="running") return job;
+  if (job.phase==="schema") await backupStepSchema(env,job);
+  else if (job.phase==="page") await backupStepPage(env,job);
+  else if (job.phase==="records") await backupStepRecords(env,job);
+  else if (job.phase==="table-done") await backupStepTableDone(env,job);
+  else if (job.phase==="finalize") { await finalizeBatchedBackup(env,job); return job; }
+  await saveBackupJob(env,job);
+  return job;
+}
+
+async function failBatchedBackup(env,job,error){
+  const msg=error?.message||String(error);
+  if (job) {
+    job.state="failed";job.phase="failed";job.message=msg;job.manifest.restoreReady=false;job.manifest.completedAt=new Date().toISOString();job.manifest.durationMs=Date.now()-Number(job.startedMs||Date.now());
+    const entry={ date:job.startedAt||new Date().toISOString(),status:"Failed",trigger:job.trigger||"Manual",records:job.manifest.totals.records,attachments:job.manifest.totals.attachments,size:backupFormatBytes(job.manifest.totals.bytes),sizeBytes:job.manifest.totals.bytes,destination:job.manifest.destination,durationMs:job.manifest.durationMs,restoreReady:false,tables:job.manifest.totals.tables,expectedTables:job.manifest.expectedTableCount,files:job.manifest.totals.files,failures:[...(job.manifest.failures||[]),{stage:job.phase,error:msg}],backupFolder:job.backupFolder,jobId:job.id,message:msg };
+    try{await appendBackupHistory(env,entry);}catch{};try{await appendBackupLog(env,{time:new Date().toISOString(),operation:"Backup Now",status:"error",jobId:job.id,protocol:job.settings?.protocol,host:job.settings?.host,port:job.settings?.port,username:job.settings?.username,remoteFolder:job.settings?.remoteFolder,durationMs:entry.durationMs,records:entry.records,attachments:entry.attachments,size:entry.size,restoreReady:false,message:msg,error:msg});}catch{};try{await saveBackupJob(env,job);}catch{};
+  }
+  await releaseBackupLock(env);
 }
 
 async function appendBackupHistory(env, entry) {
@@ -3237,33 +3518,39 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     const role = norm(url.searchParams.get("role") || req.headers.get("x-user-role"));
     if (!reportBackupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
     const settings = await getBackupSettings(env);
-    if (!settings.host) return json({ ok:false, status:"Failed", error:"Backup settings are not configured" }, 400);
-    const started = Date.now();
-    let lockAcquired = false;
+    if (!settings.host) return json({ ok:false,status:"Failed",error:"Backup settings are not configured" },400);
     try {
-      await acquireBackupLock(env); lockAcquired = true;
-      const result = await runRestoreGradeBackup(env, settings, "Manual");
-      const m = result.manifest;
-      const status = m.restoreReady ? "Success" : (m.totals.records > 0 ? "Partial" : "Failed");
-      const entry = {
-        date:m.createdAt, status, trigger:"Manual", records:m.totals.records, attachments:m.totals.attachments,
-        size:backupFormatBytes(m.totals.bytes), sizeBytes:m.totals.bytes, destination:m.destination,
-        duration:`${Math.round((Date.now()-started)/1000)} sec`, durationMs:Date.now()-started,
-        restoreReady:!!m.restoreReady, tables:m.totals.tables, expectedTables:m.expectedTableCount,
-        files:m.totals.files, failures:m.failures, backupFolder:result.backupFolder,
-        message:m.restoreReady ? "Full Lark backup uploaded and read-back verified. Restore package is ready." : `Backup completed with ${m.failures.length} failure(s). Restore Ready: No.`
-      };
-      await appendBackupHistory(env, entry);
-      await appendBackupLog(env,{ time:new Date().toISOString(), operation:"Backup Now", status:m.restoreReady?"success":"error", protocol:settings.protocol, host:settings.host, port:settings.port||"", username:settings.username||"", remoteFolder:settings.remoteFolder||"", durationMs:entry.durationMs, records:entry.records, attachments:entry.attachments, size:entry.size, restoreReady:entry.restoreReady, backupFolder:entry.backupFolder, failures:entry.failures, message:entry.message });
-      return json({ ok:m.restoreReady, ...entry }, 200);
-    } catch (e) {
-      const entry = { date:new Date().toISOString(), status:"Failed", trigger:"Manual", records:0, attachments:0, size:"0 B", destination:`${settings.protocol || "ftp"}://${settings.host}${settings.remoteFolder || ""}`, durationMs:Date.now()-started, restoreReady:false, error:e.message || String(e), message:e.message || String(e) };
-      await appendBackupHistory(env, entry);
-      await appendBackupLog(env,{ time:entry.date, operation:"Backup Now", status:"error", protocol:settings.protocol||"ftp", host:settings.host, port:settings.port||"", username:settings.username||"", remoteFolder:settings.remoteFolder||"", durationMs:entry.durationMs, restoreReady:false, message:entry.message, error:entry.error });
-      return json({ ok:false, ...entry }, 200);
-    } finally {
-      if (lockAcquired) await releaseBackupLock(env);
+      const job=await startBatchedRestoreBackup(env,settings,"Manual");
+      return json({ ok:true,status:"Running",...backupProgress(job) },200);
+    } catch(e) {
+      await releaseBackupLock(env);
+      return json({ ok:false,status:"Failed",restoreReady:false,error:e.message||String(e) },200);
     }
+  }
+
+  if (p === "/api/report-backup/backup-step" && req.method === "POST") {
+    const role = norm(url.searchParams.get("role") || req.headers.get("x-user-role"));
+    if (!reportBackupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    const b=await readBody(req); const id=norm(b.jobId);
+    if(!id) return json({ok:false,error:"Missing backup job ID"},400);
+    const job=await getBackupJob(env,id);
+    if(!job) return json({ok:false,error:"Backup job not found"},404);
+    if(job.state!=="running") return json({ok:job.state==="complete",status:job.state==="complete"?"Success":"Failed",...backupProgress(job)},200);
+    try {
+      await runBatchedBackupStep(env,job);
+      return json({ ok:job.state!=="failed",status:job.state==="complete"?(job.manifest.restoreReady?"Success":"Partial"):"Running",...backupProgress(job) },200);
+    } catch(e) {
+      await failBatchedBackup(env,job,e);
+      return json({ok:false,status:"Failed",...backupProgress(job),error:e.message||String(e)},200);
+    }
+  }
+
+  if (p === "/api/report-backup/backup-job") {
+    const role = norm(url.searchParams.get("role") || req.headers.get("x-user-role"));
+    if (!reportBackupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    const id=norm(url.searchParams.get("jobId")); const job=await getBackupJob(env,id);
+    if(!job) return json({ok:false,error:"Backup job not found"},404);
+    return json({ok:job.state!=="failed",status:job.state==="complete"?(job.manifest.restoreReady?"Success":"Partial"):job.state==="failed"?"Failed":"Running",...backupProgress(job)},200);
   }
 
 
