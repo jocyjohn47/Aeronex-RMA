@@ -1625,7 +1625,15 @@ async function testReportBackupNas(){
   }catch(e){msg('backupMsg',e.message)}
 }
 async function runReportBackupNow(){
-  try{const d=await api('/api/report-backup/backup-now?role='+encodeURIComponent(S.user?.role||''),{method:'POST',body:JSON.stringify({})});msg('backupMsg',(d.status||'Backup requested')+(d.error?' - '+d.error:''),!!d.ok);await loadReportBackupStatus()}catch(e){msg('backupMsg',e.message)}
+  const btn=$('backupNowBtn');
+  if(btn&&btn.disabled)return;
+  try{
+    if(btn){btn.disabled=true;btn.textContent='Backup in progress…';}
+    msg('backupMsg','Full backup in progress. Do not start another backup.',true);
+    const d=await api('/api/report-backup/backup-now?role='+encodeURIComponent(S.user?.role||''),{method:'POST',body:JSON.stringify({})});
+    msg('backupMsg',(d.status||'Backup completed')+' - '+(d.message||d.error||'')+(d.size?' - '+d.size:'')+(d.restoreReady===true?' - Restore Ready: Yes':d.restoreReady===false?' - Restore Ready: No':''),!!d.ok);
+    await loadReportBackupStatus();
+  }catch(e){msg('backupMsg',e.message)}finally{if(btn){btn.disabled=false;btn.textContent='Backup Now';}}
 }
 
 
@@ -1636,7 +1644,7 @@ function backupDetailsHtml(item){
     ['Date & Time',backupDate(item.date||item.time)],['Operation',item.operation||item.trigger||'Backup'],['Result',item.status||'—'],
     ['Protocol',String(item.protocol||'').toUpperCase()||'—'],['Host',item.host||'—'],['Port',item.port||'—'],['Username',item.username||'—'],
     ['Remote Folder',item.remoteFolder||item.destination||'—'],['Duration',item.durationMs!=null?item.durationMs+' ms':(item.duration||'—')],
-    ['Records',item.records??'—'],['Attachments',item.attachments??'—'],['Size',item.size||'—'],['Message',item.message||item.note||item.error||'—']
+    ['Records',item.records??'—'],['Attachments',item.attachments??'—'],['Size',item.size||'—'],['Restore Ready',item.restoreReady===true?'Yes':item.restoreReady===false?'No':'—'],['Backup Folder',item.backupFolder||'—'],['Files',item.files??'—'],['Failures',Array.isArray(item.failures)?item.failures.length:(item.failures??'—')],['Message',item.message||item.note||item.error||'—']
   ];
   return `<div class="backup-log-details">${rows.map(r=>`<div class="backup-log-detail-row"><div class="backup-log-detail-label">${esc(r[0])}</div><div class="backup-log-detail-value">${esc(String(r[1]))}</div></div>`).join('')}</div>`;
 }
@@ -1652,7 +1660,7 @@ async function loadReportBackupStatus(){
     if($('backupNasProtocol')) $('backupNasProtocol').value=d.settings?.protocol||'ftps'; if($('backupNasHost')) $('backupNasHost').value=d.settings?.host||''; if($('backupNasPort')) $('backupNasPort').value=d.settings?.port||((d.settings?.protocol||'ftps')==='sftp'?'22':'21'); if($('backupNasUser')) $('backupNasUser').value=d.settings?.username||'';
     if($('backupScheduleTime')) $('backupScheduleTime').value=d.settings?.scheduleTime||'04:00'; if($('backupRetentionDays')) $('backupRetentionDays').value=String(d.settings?.retentionDays||3);
     const folder=$('backupNasFolder'); if(folder&&d.settings?.remoteFolder){folder.innerHTML=`<option value="${esc(d.settings.remoteFolder)}">${esc(d.settings.remoteFolder)}</option>`;folder.value=d.settings.remoteFolder;}
-    const h=$('backupHistoryBody'); const hist=Array.isArray(d.history)?d.history:[]; if(h)h.innerHTML=hist.length?hist.map((x,i)=>`<tr><td>${esc(backupDate(x.date))}</td><td><b class="${String(x.status).toLowerCase()==='success'?'ok':String(x.status).toLowerCase()==='failed'?'bad':''}">${esc(x.status||'—')}</b></td><td>${esc(x.trigger||'Manual')}</td><td>${esc(String(x.records??'—'))}</td><td>${esc(String(x.attachments??'—'))}</td><td>${esc(x.size||'—')}</td><td>${esc(x.destination||'—')}</td><td><a href="#" style="color:var(--blue);font-weight:700" onclick="openBackupLogDetails(${i},'history');return false;">View Details</a></td></tr>`).join(''):'<tr><td colspan="8" class="muted">No backup history yet.</td></tr>';
+    const h=$('backupHistoryBody'); const hist=Array.isArray(d.history)?d.history:[]; if(h)h.innerHTML=hist.length?hist.map((x,i)=>`<tr><td>${esc(backupDate(x.date))}</td><td><b class="${String(x.status).toLowerCase()==='success'?'ok':String(x.status).toLowerCase()==='failed'?'bad':''}">${esc(x.status||'—')}</b></td><td>${esc(x.trigger||'Manual')}</td><td>${esc(String(x.records??'—'))}</td><td>${esc(String(x.attachments??'—'))}</td><td>${esc(x.size||'—')}</td><td>${x.restoreReady===true?'<b class="ok">Yes</b>':x.restoreReady===false?'<b class="bad">No</b>':'—'}</td><td>${esc(x.destination||'—')}</td><td><a href="#" style="color:var(--blue);font-weight:700" onclick="openBackupLogDetails(${i},'history');return false;">View Details</a></td></tr>`).join(''):'<tr><td colspan="9" class="muted">No backup history yet.</td></tr>';
     const l=$('backupLogsBody'); const logs=Array.isArray(d.logs)?d.logs:[]; if(l)l.innerHTML=logs.length?logs.map((x,i)=>`<tr><td>${esc(backupDate(x.time||x.date))}</td><td>${esc(x.operation||'Backup')}</td><td><b class="${x.status==='success'?'ok':'bad'}">${esc(x.status==='success'?'Success':'Error')}</b></td><td>${x.durationMs!=null?esc(String(x.durationMs)+' ms'):'—'}</td><td>${esc(x.message||x.error||x.note||'—')}</td><td><a href="#" style="color:var(--blue);font-weight:700" onclick="openBackupLogDetails(${i},'logs');return false;">View Details</a></td></tr>`).join(''):'<tr><td colspan="6" class="muted">No logs yet.</td></tr>';
   }catch(e){msg('backupMsg',e.message)}
 }
@@ -1714,21 +1722,19 @@ function renderReportBackup(){
         <div><label>NAS Host</label><input id="backupNasHost" placeholder="NAS IP or hostname"></div>
         <div><label>Port</label><input id="backupNasPort" value="21"></div>
         <div><label>Username</label><input id="backupNasUser" placeholder="backup_user"></div>
-        <div><label>Credential</label><input value="Configured securely in Cloudflare (NAS_BACKUP_PASSWORD)" disabled></div>
+        <div><label>Credential</label><input value="Configured" disabled></div>
         <div><label>Remote Folder</label><select id="backupNasFolder" disabled><option value="">Test connection to load folders</option></select></div>
         <div><label>Daily Backup Time</label><input id="backupScheduleTime" type="time" value="04:00"></div>
         <div><label>Keep Backups</label><select id="backupRetentionDays"><option value="3">Last 3 days</option><option value="7">Last 7 days</option></select></div>
-        <div><label>Contents</label><input value="Tables, attachments, XLSX, CSV, JSON, manifest" disabled></div>
-        <div><label>Verification</label><input value="Manifest + latest successful backup only" disabled></div>
       </div>
       <p>
-        <button onclick="runReportBackupNow()">Backup Now</button>
+        <button id="backupNowBtn" onclick="runReportBackupNow()">Backup Now</button>
         <button class="btn-light" onclick="testReportBackupNas()">Test NAS Connection</button>
         <button class="btn-light" onclick="saveReportBackupSettings()">Save Settings</button>
         <span id="backupMsg" class="msg"></span>
       </p>
       <h3>Backup History</h3>
-      <div class="table-wrap"><table><thead><tr><th>Date & Time</th><th>Status</th><th>Trigger</th><th>Records</th><th>Attachments</th><th>Size</th><th>Destination</th><th>Details</th></tr></thead><tbody id="backupHistoryBody"><tr><td colspan="8" class="muted">No backup history yet.</td></tr></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>Date & Time</th><th>Status</th><th>Trigger</th><th>Records</th><th>Attachments</th><th>Size</th><th>Restore Ready</th><th>Destination</th><th>Details</th></tr></thead><tbody id="backupHistoryBody"><tr><td colspan="9" class="muted">No backup history yet.</td></tr></tbody></table></div>
       <h3>Backup & NAS Logs</h3>
       <div class="table-wrap"><table><thead><tr><th>Date & Time</th><th>Operation</th><th>Result</th><th>Response</th><th>Message</th><th>Details</th></tr></thead><tbody id="backupLogsBody"><tr><td colspan="6" class="muted">No logs yet.</td></tr></tbody></table></div>
     </div>
