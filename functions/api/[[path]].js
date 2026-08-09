@@ -1092,6 +1092,7 @@ function reportWorkbookBytes(label, rows, filters) {
 const BACKUP_SETTINGS_KEY = "rma-backup-settings-v1";
 const BACKUP_HISTORY_KEY = "rma-backup-history-v1";
 const BACKUP_LOGS_KEY = "rma-backup-logs-v1";
+const BACKUP_LOCK_KEY = "rma-backup-running-v1";
 
 async function backupKvRead(env, key, fallback) {
   if (!env.KINGDEE_LOGS) return fallback;
@@ -1320,6 +1321,456 @@ async function listFtpFolders({ host, writer, reader, encrypted=true }) {
   } finally {
     try { dataReader.releaseLock(); } catch {}
     try { await dataSocket.close(); } catch {}
+  }
+}
+
+
+function backupSafeName(value, fallback="item") {
+  const s = norm(value || fallback).replace(/[\\/:*?"<>|\x00-\x1f]/g, "_").replace(/\s+/g, " ").trim();
+  return (s || fallback).slice(0, 120);
+}
+
+function backupFormatBytes(bytes) {
+  const n = Number(bytes || 0);
+  if (!Number.isFinite(n) || n <= 0) return "0 B";
+  const units = ["B","KB","MB","GB","TB"];
+  let v = n, i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v >= 10 || i === 0 ? v.toFixed(0) : v.toFixed(2)} ${units[i]}`;
+}
+
+function backupCsvCell(v) {
+  let text;
+  if (v === undefined || v === null) text = "";
+  else if (typeof v === "object") text = JSON.stringify(v);
+  else text = String(v);
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function backupCsvBytes(rows, schema) {
+  const headers = (schema || []).map(f => f.field_name);
+  const lines = [headers.map(backupCsvCell).join(",")];
+  for (const row of rows || []) lines.push(headers.map(h => backupCsvCell((row.fields || {})[h])).join(","));
+  return new TextEncoder().encode('\ufeff' + lines.join("\r\n"));
+}
+
+function backupXlsBytes(label, rows, schema) {
+  const headers = (schema || []).map(f => f.field_name);
+  const escHtml = v => String(v ?? "").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  const cell = v => escHtml(v === undefined || v === null ? "" : (typeof v === "object" ? JSON.stringify(v) : String(v)));
+  const head = headers.map(h => `<th>${escHtml(h)}</th>`).join("");
+  const body = (rows || []).map(r => `<tr>${headers.map(h => `<td>${cell((r.fields || {})[h])}</td>`).join("")}</tr>`).join("");
+  const html = `<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif}table{border-collapse:collapse}th,td{border:1px solid #999;padding:5px;mso-number-format:'\\@'}th{background:#e8eef8}</style></head><body><h2>${escHtml(label)}</h2><p>Generated ${escHtml(new Date().toISOString())}</p><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></body></html>`;
+  return new TextEncoder().encode(html);
+}
+
+function backupJsonBytes(value) {
+  return new TextEncoder().encode(JSON.stringify(value, null, 2));
+}
+
+async function backupSha256Hex(bytes) {
+  const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const digest = await crypto.subtle.digest("SHA-256", view);
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2,"0")).join("");
+}
+
+function backupAttachmentItems(value) {
+  const out = [];
+  const seen = new Set();
+  const walk = v => {
+    if (!v) return;
+    if (Array.isArray(v)) return v.forEach(walk);
+    if (typeof v !== "object") return;
+    const token = norm(v.file_token || v.token);
+    if (token && !seen.has(token)) {
+      seen.add(token);
+      out.push({ token, name: backupSafeName(v.name || v.file_name || v.title || `${token}.bin`, `${token}.bin`) });
+    }
+    for (const child of Object.values(v)) if (child && typeof child === "object") walk(child);
+  };
+  walk(value);
+  return out;
+}
+
+
+function backupUrlItems(value) {
+  const out = [];
+  const seen = new Set();
+  const walk = v => {
+    if (!v) return;
+    if (Array.isArray(v)) return v.forEach(walk);
+    if (typeof v === "string") {
+      const u = norm(v);
+      if (/^https?:\/\//i.test(u) && !seen.has(u)) { seen.add(u); out.push({ url:u, name:"" }); }
+      return;
+    }
+    if (typeof v !== "object") return;
+    const u = norm(v.link || v.url || v.href);
+    if (/^https?:\/\//i.test(u) && !seen.has(u)) { seen.add(u); out.push({ url:u, name:backupSafeName(v.text || v.name || "linked-file", "linked-file") }); }
+    for (const child of Object.values(v)) if (child && typeof child === "object") walk(child);
+  };
+  walk(value);
+  return out;
+}
+
+async function backupFetchUrlBytes(item, index) {
+  const res = await fetch(item.url, { redirect:"follow" });
+  if (!res.ok) throw new Error(`Linked file download failed (${res.status}) from ${item.url.slice(0,180)}`);
+  const ct = res.headers.get("content-type") || "application/octet-stream";
+  const cd = res.headers.get("content-disposition") || "";
+  const m = cd.match(/filename\*?=(?:UTF-8''|\")?([^";]+)/i);
+  let name = item.name || (m ? decodeURIComponent(m[1].replace(/^"|"$/g,"")) : "");
+  if (!name || name === "linked-file") {
+    try { const u = new URL(item.url); name = decodeURIComponent(u.pathname.split("/").filter(Boolean).pop() || `linked-file-${index}`); } catch { name = `linked-file-${index}`; }
+  }
+  return { bytes:new Uint8Array(await res.arrayBuffer()), contentType:ct, name:backupSafeName(name,`linked-file-${index}`) };
+}
+
+async function backupFetchAttachmentBytes(env, tableId, fileToken) {
+  const token = await larkToken(env);
+  const extra = encodeURIComponent(JSON.stringify({ bitablePerm: { tableId } }));
+  const url = `https://open.larksuite.com/open-apis/drive/v1/medias/${encodeURIComponent(fileToken)}/download?extra=${extra}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Lark attachment download failed (${res.status}): ${text.slice(0,300)}`);
+  }
+  return { bytes:new Uint8Array(await res.arrayBuffer()), contentType:res.headers.get("content-type") || "application/octet-stream" };
+}
+
+async function backupTableSchema(env, tableId) {
+  const data = await larkFetch(env, `/bitable/v1/apps/${env.LARK_BASE_TOKEN}/tables/${tableId}/fields`);
+  return data.data?.items || [];
+}
+
+function restoreBackupTableConfigs(env) {
+  const candidates = [
+    ["users","User & Company Details","USER_TABLE_ID",env.USER_TABLE_ID],
+    ["spareParts","Spare Part List","SPARE_LIST_TABLE_ID",env.SPARE_LIST_TABLE_ID],
+    ["spareUae","Spare Orders - UAE & Other Region",env.ORDER_UAE_TABLE_ID?"ORDER_UAE_TABLE_ID":"SPARE_ORDER_UAE_TABLE_ID",env.ORDER_UAE_TABLE_ID || env.SPARE_ORDER_UAE_TABLE_ID],
+    ["spareKsa","Spare Orders - KSA",env.ORDER_KSA_TABLE_ID?"ORDER_KSA_TABLE_ID":"SPARE_ORDER_KSA_TABLE_ID",env.ORDER_KSA_TABLE_ID || env.SPARE_ORDER_KSA_TABLE_ID],
+    ["repairUae","Repair Cases - UAE & Other Region",env.REPAIR_UAE_TABLE_ID?"REPAIR_UAE_TABLE_ID":"REPAIR_CASE_UAE_TABLE_ID",env.REPAIR_UAE_TABLE_ID || env.REPAIR_CASE_UAE_TABLE_ID],
+    ["repairKsa","Repair Cases - KSA",env.REPAIR_KSA_TABLE_ID?"REPAIR_KSA_TABLE_ID":"REPAIR_CASE_KSA_TABLE_ID",env.REPAIR_KSA_TABLE_ID || env.REPAIR_CASE_KSA_TABLE_ID],
+    ["internalRepairUae","Internal Repair Register - UAE & Other Region","INTERNAL_REPAIR_UAE_TABLE_ID",env.INTERNAL_REPAIR_UAE_TABLE_ID],
+    ["internalRepairKsa","Internal Repair Register - KSA","INTERNAL_REPAIR_KSA_TABLE_ID",env.INTERNAL_REPAIR_KSA_TABLE_ID],
+    ["internalSpare","Internal Spare Order details","SPARE_ORDER_DETAILS_TABLE_ID",env.SPARE_ORDER_DETAILS_TABLE_ID],
+    ["dealerRepair","Dealer Repair Case","DEALER_REPAIR_CASE_TABLE_ID",env.DEALER_REPAIR_CASE_TABLE_ID],
+    ["warranty","Warranty Status","WARRANTY_STATUS_TABLE_ID",env.WARRANTY_STATUS_TABLE_ID],
+    ["software","Software Status","SOFTWARE_STATUS_TABLE_ID",env.SOFTWARE_STATUS_TABLE_ID],
+    ["flycart","Flycart Credit Use","FLYCART_CREDIT_USE_TABLE_ID",env.FLYCART_CREDIT_USE_TABLE_ID],
+    ["portalNotes","Portal Notes","PORTAL_NOTES_TABLE_ID",env.PORTAL_NOTES_TABLE_ID],
+    ["contracts","Contract & Document - Internal",env.CONTRACT_DOCUMENT_INTERNAL_TABLE_ID?"CONTRACT_DOCUMENT_INTERNAL_TABLE_ID":env.INTERNAL_CONTRACT_DOCUMENT_TABLE_ID?"INTERNAL_CONTRACT_DOCUMENT_TABLE_ID":"CONTRACT_DOCUMENT_TABLE_ID",env.CONTRACT_DOCUMENT_INTERNAL_TABLE_ID || env.INTERNAL_CONTRACT_DOCUMENT_TABLE_ID || env.CONTRACT_DOCUMENT_TABLE_ID],
+    ["afterSales","After Sales Support Register","AFTER_SALES_SUPPORT_TABLE_ID",env.AFTER_SALES_SUPPORT_TABLE_ID]
+  ];
+  const byId = new Map();
+  for (const [key,label,envKey,tableId] of candidates) {
+    if (!tableId) continue;
+    if (!byId.has(tableId)) byId.set(tableId,{ key,label,envKey,tableId });
+  }
+  return [...byId.values()];
+}
+
+async function openPlainFtpSession({ host, port, username, password }) {
+  if (!username) throw new Error("NAS username is required");
+  if (!password) throw new Error("Cloudflare secret NAS_BACKUP_PASSWORD is not configured");
+  const cleanHost = norm(host).replace(/^ftp:\/\//i, "").replace(/\/$/, "");
+  const socket = connect({ hostname:cleanHost, port }, { secureTransport:"off", allowHalfOpen:true });
+  await Promise.race([socket.opened, socketTimeout(10000, "FTP TCP connection timed out")]);
+  const reader = socket.readable.getReader();
+  const writer = socket.writable.getWriter();
+  const welcome = await readFtpReply(reader, 10000);
+  if (welcome.code !== "220") throw new Error(`FTP server did not return 220: ${welcome.text.slice(0,300)}`);
+  const userReply = await ftpCommand(writer, reader, `USER ${username}`, ["230","331"]);
+  if (userReply.code === "331") await ftpCommand(writer, reader, `PASS ${password}`, ["230"]);
+  await ftpCommand(writer, reader, "TYPE I", ["200"]);
+  return { host:cleanHost, socket, reader, writer };
+}
+
+async function closeFtpSession(session) {
+  if (!session) return;
+  try { await ftpCommand(session.writer, session.reader, "QUIT", ["221"]); } catch {}
+  try { session.reader.releaseLock(); } catch {}
+  try { session.writer.releaseLock(); } catch {}
+  try { await session.socket.close(); } catch {}
+}
+
+async function ftpEnsureDir(session, name) {
+  const safe = backupSafeName(name, "folder");
+  try { await ftpCommand(session.writer, session.reader, `CWD ${safe}`, ["250"]); return; } catch {}
+  try { await ftpCommand(session.writer, session.reader, `MKD ${safe}`, ["257","250"]); } catch (e) {
+    // Some FTP servers return 550 when the folder already exists. CWD below is the authoritative check.
+  }
+  await ftpCommand(session.writer, session.reader, `CWD ${safe}`, ["250"]);
+}
+
+async function ftpCwdAbsolute(session, path) {
+  const parts = norm(path).split("/").filter(Boolean);
+  await ftpCommand(session.writer, session.reader, "CWD /", ["250"]);
+  for (const part of parts) await ftpEnsureDir(session, part);
+}
+
+async function ftpPassiveSocket(session, timeoutLabel="FTP data") {
+  const epsv = await ftpCommand(session.writer, session.reader, "EPSV", ["229"]);
+  const dataPort = parseEpsvPort(epsv.text);
+  const dataSocket = connect({ hostname:session.host, port:dataPort }, { secureTransport:"off", allowHalfOpen:true });
+  await Promise.race([dataSocket.opened, socketTimeout(12000, `${timeoutLabel} connection timed out`)]);
+  return dataSocket;
+}
+
+async function ftpUploadBytes(session, fileName, bytes) {
+  const safeName = backupSafeName(fileName, "file.bin");
+  const dataSocket = await ftpPassiveSocket(session, `FTP upload ${safeName}`);
+  const dataWriter = dataSocket.writable.getWriter();
+  try {
+    await session.writer.write(new TextEncoder().encode(`STOR ${safeName}\r\n`));
+    const opening = await readFtpReply(session.reader, 10000);
+    if (!["125","150"].includes(opening.code)) throw new Error(`STOR failed (${opening.code || "no code"}): ${opening.text.slice(0,300)}`);
+    await dataWriter.write(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
+    await dataWriter.close();
+    const done = await readFtpReply(session.reader, 15000);
+    if (!["226","250"].includes(done.code)) throw new Error(`STOR did not complete (${done.code || "no code"}): ${done.text.slice(0,300)}`);
+  } finally {
+    try { dataWriter.releaseLock(); } catch {}
+    try { await dataSocket.close(); } catch {}
+  }
+  const sizeReply = await ftpCommand(session.writer, session.reader, `SIZE ${safeName}`, ["213"]);
+  const remoteSize = Number((sizeReply.text.match(/213\s+(\d+)/) || [])[1] || -1);
+  const expectedSize = bytes.byteLength ?? bytes.length ?? 0;
+  if (remoteSize !== expectedSize) throw new Error(`NAS size verification failed for ${safeName}: expected ${expectedSize}, got ${remoteSize}`);
+  return { name:safeName, size:expectedSize };
+}
+
+async function ftpDownloadBytes(session, fileName) {
+  const safeName = backupSafeName(fileName, "file.bin");
+  const dataSocket = await ftpPassiveSocket(session, `FTP verify ${safeName}`);
+  const dataReader = dataSocket.readable.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    await session.writer.write(new TextEncoder().encode(`RETR ${safeName}\r\n`));
+    const opening = await readFtpReply(session.reader, 10000);
+    if (!["125","150"].includes(opening.code)) throw new Error(`RETR failed (${opening.code || "no code"}): ${opening.text.slice(0,300)}`);
+    for (;;) {
+      const r = await Promise.race([dataReader.read(), socketTimeout(20000, `FTP verify read timed out for ${safeName}`)]);
+      if (r.done) break;
+      chunks.push(r.value); total += r.value.byteLength;
+    }
+    const done = await readFtpReply(session.reader, 15000);
+    if (!["226","250"].includes(done.code)) throw new Error(`RETR did not complete (${done.code || "no code"}): ${done.text.slice(0,300)}`);
+  } finally {
+    try { dataReader.releaseLock(); } catch {}
+    try { await dataSocket.close(); } catch {}
+  }
+  const out = new Uint8Array(total); let off = 0;
+  for (const c of chunks) { out.set(c, off); off += c.byteLength; }
+  return out;
+}
+
+async function ftpUploadVerified(session, fileName, bytes, manifestFile) {
+  const src = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const sourceHash = await backupSha256Hex(src);
+  await ftpUploadBytes(session, fileName, src);
+  const readBack = await ftpDownloadBytes(session, fileName);
+  const remoteHash = await backupSha256Hex(readBack);
+  if (sourceHash !== remoteHash || readBack.byteLength !== src.byteLength) {
+    throw new Error(`NAS read-back verification failed for ${fileName}`);
+  }
+  manifestFile.size = src.byteLength;
+  manifestFile.sha256 = sourceHash;
+  manifestFile.verified = true;
+  return src.byteLength;
+}
+
+
+async function acquireBackupLock(env) {
+  const now = Date.now();
+  const lock = await backupKvRead(env, BACKUP_LOCK_KEY, null);
+  if (lock && Number(lock.expiresAt || 0) > now) throw new Error(`Another backup is already running (started ${lock.startedAt || "recently"})`);
+  const value = { startedAt:new Date(now).toISOString(), expiresAt:now + 2 * 60 * 60 * 1000 };
+  await backupKvWrite(env, BACKUP_LOCK_KEY, value);
+  return value;
+}
+
+async function releaseBackupLock(env) {
+  if (!env.KINGDEE_LOGS) return;
+  try { await env.KINGDEE_LOGS.delete(BACKUP_LOCK_KEY); } catch {}
+}
+
+async function runRestoreGradeBackup(env, settings, trigger="Manual") {
+  const started = Date.now();
+  const startedAt = new Date().toISOString();
+  if (lower(settings.protocol) !== "ftp") throw new Error("Full backup currently requires the confirmed working FTP protocol. FTPS/SFTP remain available for connectivity testing.");
+  if (!settings.host || !settings.username || !settings.remoteFolder) throw new Error("NAS Host, Username, and Remote Folder must be configured");
+  const tables = restoreBackupTableConfigs(env);
+  if (!tables.length) throw new Error("No configured Lark tables were found for backup");
+  const stamp = startedAt.replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  const backupFolder = `AERONEX_RMA_${stamp}`;
+  const session = await openPlainFtpSession({ host:settings.host, port:nasPort(settings.port,21), username:settings.username, password:norm(env.NAS_BACKUP_PASSWORD) });
+  const manifest = {
+    format:"AERONEX-RMA-RESTORE-BACKUP-v1",
+    createdAt:startedAt,
+    trigger,
+    larkBaseToken:env.LARK_BASE_TOKEN || "",
+    restoreReady:false,
+    verification:"SHA-256 read-back verification for every uploaded file",
+    totals:{ tables:0, records:0, attachments:0, files:0, bytes:0 },
+    tables:[], failures:[]
+  };
+  try {
+    await ftpCwdAbsolute(session, settings.remoteFolder);
+    await ftpEnsureDir(session, backupFolder);
+    const backupRootPwd = await ftpCommand(session.writer, session.reader, "PWD", ["257"]);
+
+    for (const table of tables) {
+      const tableEntry = { key:table.key, label:table.label, envKey:table.envKey, tableId:table.tableId, schemaFile:"", rawFile:"", csvFile:"", excelFile:"", records:0, attachments:0, files:[], failures:[] };
+      manifest.tables.push(tableEntry);
+      try {
+        const schema = await backupTableSchema(env, table.tableId);
+        const rows = await listRecords(env, table.tableId);
+        tableEntry.records = rows.length;
+        manifest.totals.tables++;
+        manifest.totals.records += rows.length;
+        const tableFolder = backupSafeName(`${table.key}-${table.label}`, table.key);
+        await ftpEnsureDir(session, "Tables");
+        await ftpEnsureDir(session, tableFolder);
+
+        const schemaName = "schema.json";
+        const rawName = "records.json";
+        const csvName = "records.csv";
+        const xlsName = "records.xls";
+        for (const [name, bytes, kind] of [
+          [schemaName, backupJsonBytes({ key:table.key,label:table.label,envKey:table.envKey,tableId:table.tableId,fields:schema }), "schema"],
+          [rawName, backupJsonBytes({ key:table.key,label:table.label,envKey:table.envKey,tableId:table.tableId,records:rows }), "raw"],
+          [csvName, backupCsvBytes(rows,schema), "csv"],
+          [xlsName, backupXlsBytes(table.label,rows,schema), "excel"]
+        ]) {
+          const mf = { path:`Tables/${tableFolder}/${name}`, kind, verified:false };
+          tableEntry.files.push(mf); manifest.totals.files++;
+          manifest.totals.bytes += await ftpUploadVerified(session,name,bytes,mf);
+          if (kind === "schema") tableEntry.schemaFile = mf.path;
+          if (kind === "raw") tableEntry.rawFile = mf.path;
+          if (kind === "csv") tableEntry.csvFile = mf.path;
+          if (kind === "excel") tableEntry.excelFile = mf.path;
+        }
+
+        await ftpCommand(session.writer, session.reader, "CDUP", ["250"]); // Tables
+        await ftpCommand(session.writer, session.reader, "CDUP", ["250"]); // backup root
+        await ftpEnsureDir(session, "Cases");
+        await ftpEnsureDir(session, tableFolder);
+        const primary = schema.find(f => f.is_primary) || schema[0];
+        const attachmentFields = new Set(schema.filter(f => Number(f.type) === 17).map(f => f.field_name));
+        const urlFields = new Set(schema.filter(f => Number(f.type) === 15).map(f => f.field_name));
+        for (const row of rows) {
+          const caseName = backupSafeName(fieldText((row.fields || {})[primary?.field_name]) || row.record_id, row.record_id || "record");
+          await ftpEnsureDir(session, caseName);
+          const recMeta = {
+            record_id:row.record_id,
+            created_time:row.created_time ?? row.createdTime ?? null,
+            last_modified_time:row.last_modified_time ?? row.lastModifiedTime ?? null,
+            fields:row.fields || {},
+            source:{ tableId:table.tableId, envKey:table.envKey, tableKey:table.key, primaryField:primary?.field_name || "" }
+          };
+          const recMf = { path:`Cases/${tableFolder}/${caseName}/record.json`, kind:"record", verified:false };
+          tableEntry.files.push(recMf); manifest.totals.files++;
+          manifest.totals.bytes += await ftpUploadVerified(session,"record.json",backupJsonBytes(recMeta),recMf);
+          for (const fieldName of attachmentFields) {
+            const items = backupAttachmentItems((row.fields || {})[fieldName]);
+            if (!items.length) continue;
+            const fieldFolder = backupSafeName(fieldName,"Attachments");
+            await ftpEnsureDir(session, fieldFolder);
+            let n = 0;
+            for (const item of items) {
+              n++;
+              const baseFileName = backupSafeName(item.name || `${fieldFolder}-${n}.bin`, `${fieldFolder}-${n}.bin`);
+              const fileName = backupSafeName(`${String(n).padStart(2,"0")}-${baseFileName}`, `${fieldFolder}-${n}.bin`);
+              try {
+                const dl = await backupFetchAttachmentBytes(env, table.tableId, item.token);
+                const mf = { path:`Cases/${tableFolder}/${caseName}/${fieldFolder}/${fileName}`, kind:"attachment", fieldName, fileToken:item.token, contentType:dl.contentType, verified:false };
+                tableEntry.files.push(mf); manifest.totals.files++;
+                manifest.totals.bytes += await ftpUploadVerified(session,fileName,dl.bytes,mf);
+                tableEntry.attachments++; manifest.totals.attachments++;
+              } catch (e) {
+                const failure = { table:table.label, tableId:table.tableId, recordId:row.record_id, case:caseName, field:fieldName, fileToken:item.token, fileName, error:e.message || String(e) };
+                tableEntry.failures.push(failure); manifest.failures.push(failure);
+              }
+            }
+            await ftpCommand(session.writer, session.reader, "CDUP", ["250"]);
+          }
+          for (const fieldName of urlFields) {
+            const links = backupUrlItems((row.fields || {})[fieldName]);
+            if (!links.length) continue;
+            const fieldFolder = backupSafeName(`${fieldName}-Linked-Files`,"Linked-Files");
+            await ftpEnsureDir(session, fieldFolder);
+            let n = 0;
+            for (const link of links) {
+              n++;
+              try {
+                const dl = await backupFetchUrlBytes(link,n);
+                const fileName = backupSafeName(`${String(n).padStart(2,"0")}-${dl.name}`,`linked-file-${n}`);
+                const mf = { path:`Cases/${tableFolder}/${caseName}/${fieldFolder}/${fileName}`, kind:"linked-file", fieldName, sourceUrl:link.url, contentType:dl.contentType, verified:false };
+                tableEntry.files.push(mf); manifest.totals.files++;
+                manifest.totals.bytes += await ftpUploadVerified(session,fileName,dl.bytes,mf);
+                tableEntry.attachments++; manifest.totals.attachments++;
+              } catch (e) {
+                const failure = { table:table.label, tableId:table.tableId, recordId:row.record_id, case:caseName, field:fieldName, sourceUrl:link.url, error:e.message || String(e) };
+                tableEntry.failures.push(failure); manifest.failures.push(failure);
+              }
+            }
+            await ftpCommand(session.writer, session.reader, "CDUP", ["250"]);
+          }
+          await ftpCommand(session.writer, session.reader, "CDUP", ["250"]);
+        }
+        await ftpCommand(session.writer, session.reader, "CDUP", ["250"]); // Cases
+        await ftpCommand(session.writer, session.reader, "CDUP", ["250"]); // backup root
+      } catch (e) {
+        const failure = { table:table.label, tableId:table.tableId, stage:"table_export", error:e.message || String(e) };
+        tableEntry.failures.push(failure); manifest.failures.push(failure);
+        try { await ftpCwdAbsolute(session, `${settings.remoteFolder}/${backupFolder}`); } catch {}
+      }
+    }
+
+    manifest.restoreReady = manifest.failures.length === 0 && manifest.totals.tables === tables.length && manifest.tables.every(t => t.schemaFile && t.rawFile && t.files.every(f => f.verified));
+    manifest.completedAt = new Date().toISOString();
+    manifest.durationMs = Date.now() - started;
+    manifest.destination = `ftp://${settings.host}${settings.remoteFolder}/${backupFolder}`;
+    manifest.expectedTableCount = tables.length;
+    manifest.actualTableCount = manifest.totals.tables;
+    manifest.backupSize = backupFormatBytes(manifest.totals.bytes);
+
+    await ftpCwdAbsolute(session, `${settings.remoteFolder}/${backupFolder}`);
+    const manifestMf = { path:"manifest.json", kind:"manifest", verified:false };
+    manifest.totals.files++;
+    const manifestBytes = backupJsonBytes(manifest);
+    manifest.totals.bytes += await ftpUploadVerified(session,"manifest.json",manifestBytes,manifestMf);
+    const restoreManifest = {
+      format:manifest.format,
+      backupFolder,
+      createdAt:manifest.createdAt,
+      restoreReady:manifest.restoreReady,
+      sourceBaseToken:manifest.larkBaseToken,
+      tables:manifest.tables.map(t => ({ key:t.key,label:t.label,envKey:t.envKey,sourceTableId:t.tableId,schemaFile:t.schemaFile,rawFile:t.rawFile,recordCount:t.records,attachmentCount:t.attachments })),
+      restoreRules:[
+        "Validate or recreate table schema from Schema/records metadata before importing records.",
+        "Use records.json as the authoritative record source; Excel/CSV are inspection copies only.",
+        "Re-upload attachment files and write new Lark file tokens into their original attachment fields.",
+        "Preserve source record_id values as audit references; Lark may assign new record IDs during restore.",
+        "Verify restored record and attachment counts against this manifest before declaring restore complete."
+      ]
+    };
+    const restoreMf = { path:"restore-manifest.json", kind:"restore-manifest", verified:false };
+    manifest.totals.files++;
+    manifest.totals.bytes += await ftpUploadVerified(session,"restore-manifest.json",backupJsonBytes(restoreManifest),restoreMf);
+
+    if (manifest.restoreReady) {
+      const complete = { backupFolder, completedAt:new Date().toISOString(), restoreReady:true, records:manifest.totals.records, attachments:manifest.totals.attachments, files:manifest.totals.files, bytes:manifest.totals.bytes };
+      const completeMf = { path:"BACKUP_COMPLETE.json", kind:"completion-marker", verified:false };
+      manifest.totals.files++;
+      manifest.totals.bytes += await ftpUploadVerified(session,"BACKUP_COMPLETE.json",backupJsonBytes(complete),completeMf);
+    }
+
+    return { manifest, backupFolder, rootReply:backupRootPwd.text };
+  } finally {
+    await closeFtpSession(session);
   }
 }
 
@@ -2787,10 +3238,32 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     if (!reportBackupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
     const settings = await getBackupSettings(env);
     if (!settings.host) return json({ ok:false, status:"Failed", error:"Backup settings are not configured" }, 400);
-    const entry = { date:new Date().toISOString(), status:"Queued", trigger:"Manual", records:"-", attachments:"-", size:"-", destination:`${settings.protocol || "sftp"}://${settings.host}${settings.remoteFolder || ""}`, error:"Export-to-NAS worker not enabled yet" };
-    await appendBackupHistory(env, entry);
-    await appendBackupLog(env,{ time:entry.date, operation:"Backup Now", status:"error", protocol:settings.protocol||"sftp", host:settings.host, port:settings.port||"", username:settings.username||"", remoteFolder:settings.remoteFolder||"", message:"Backup engine not enabled yet; no Lark data was exported.", error:entry.error });
-    return json({ ok:true, ...entry });
+    const started = Date.now();
+    let lockAcquired = false;
+    try {
+      await acquireBackupLock(env); lockAcquired = true;
+      const result = await runRestoreGradeBackup(env, settings, "Manual");
+      const m = result.manifest;
+      const status = m.restoreReady ? "Success" : (m.totals.records > 0 ? "Partial" : "Failed");
+      const entry = {
+        date:m.createdAt, status, trigger:"Manual", records:m.totals.records, attachments:m.totals.attachments,
+        size:backupFormatBytes(m.totals.bytes), sizeBytes:m.totals.bytes, destination:m.destination,
+        duration:`${Math.round((Date.now()-started)/1000)} sec`, durationMs:Date.now()-started,
+        restoreReady:!!m.restoreReady, tables:m.totals.tables, expectedTables:m.expectedTableCount,
+        files:m.totals.files, failures:m.failures, backupFolder:result.backupFolder,
+        message:m.restoreReady ? "Full Lark backup uploaded and read-back verified. Restore package is ready." : `Backup completed with ${m.failures.length} failure(s). Restore Ready: No.`
+      };
+      await appendBackupHistory(env, entry);
+      await appendBackupLog(env,{ time:new Date().toISOString(), operation:"Backup Now", status:m.restoreReady?"success":"error", protocol:settings.protocol, host:settings.host, port:settings.port||"", username:settings.username||"", remoteFolder:settings.remoteFolder||"", durationMs:entry.durationMs, records:entry.records, attachments:entry.attachments, size:entry.size, restoreReady:entry.restoreReady, backupFolder:entry.backupFolder, failures:entry.failures, message:entry.message });
+      return json({ ok:m.restoreReady, ...entry }, 200);
+    } catch (e) {
+      const entry = { date:new Date().toISOString(), status:"Failed", trigger:"Manual", records:0, attachments:0, size:"0 B", destination:`${settings.protocol || "ftp"}://${settings.host}${settings.remoteFolder || ""}`, durationMs:Date.now()-started, restoreReady:false, error:e.message || String(e), message:e.message || String(e) };
+      await appendBackupHistory(env, entry);
+      await appendBackupLog(env,{ time:entry.date, operation:"Backup Now", status:"error", protocol:settings.protocol||"ftp", host:settings.host, port:settings.port||"", username:settings.username||"", remoteFolder:settings.remoteFolder||"", durationMs:entry.durationMs, restoreReady:false, message:entry.message, error:entry.error });
+      return json({ ok:false, ...entry }, 200);
+    } finally {
+      if (lockAcquired) await releaseBackupLock(env);
+    }
   }
 
 
