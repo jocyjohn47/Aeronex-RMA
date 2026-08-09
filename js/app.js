@@ -1629,11 +1629,22 @@ async function runReportBackupNow(){
   if(btn&&btn.disabled)return;
   try{
     if(btn){btn.disabled=true;btn.textContent='Backup in progress…';}
-    msg('backupMsg','Full backup in progress. Do not start another backup.',true);
-    const d=await api('/api/report-backup/backup-now?role='+encodeURIComponent(S.user?.role||''),{method:'POST',body:JSON.stringify({})});
-    msg('backupMsg',(d.status||'Backup completed')+' - '+(d.message||d.error||'')+(d.size?' - '+d.size:'')+(d.restoreReady===true?' - Restore Ready: Yes':d.restoreReady===false?' - Restore Ready: No':''),!!d.ok);
+    msg('backupMsg','Starting full restore-ready backup…',true);
+    let d=await api('/api/report-backup/backup-now?role='+encodeURIComponent(S.user?.role||''),{method:'POST',body:JSON.stringify({})});
+    if(!d.ok||!d.jobId) throw new Error(d.error||d.message||'Unable to start backup');
+    const jobId=d.jobId;
+    let guard=0;
+    while(String(d.state||'running')==='running'){
+      guard++; if(guard>10000) throw new Error('Backup exceeded the safety step limit. Job: '+jobId);
+      const table=d.currentTable||'Finalizing';
+      msg('backupMsg',`Backup in progress — Tables ${d.tableIndex||0}/${d.tableCount||0} — ${table} — Records ${d.records||0} — Attachments ${d.attachments||0} — ${d.size||'0 B'}`,true);
+      d=await api('/api/report-backup/backup-step?role='+encodeURIComponent(S.user?.role||''),{method:'POST',body:JSON.stringify({jobId})});
+      if(d.status==='Failed'||d.state==='failed') throw new Error(d.error||d.message||'Backup failed');
+      await new Promise(r=>setTimeout(r,80));
+    }
+    msg('backupMsg',(d.status||'Backup completed')+' - '+(d.message||d.error||'')+(d.size?' - '+d.size:'')+(d.restoreReady===true?' - Restore Ready: Yes':' - Restore Ready: No'),d.restoreReady===true);
     await loadReportBackupStatus();
-  }catch(e){msg('backupMsg',e.message)}finally{if(btn){btn.disabled=false;btn.textContent='Backup Now';}}
+  }catch(e){msg('backupMsg',e.message);await loadReportBackupStatus().catch(()=>{});}finally{if(btn){btn.disabled=false;btn.textContent='Backup Now';}}
 }
 
 
