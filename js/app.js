@@ -1612,7 +1612,7 @@ async function testReportBackupNas(){
     const detail=d.ok ? ((d.authenticated===true?'Authenticated':'Reachable')+(d.tls?' / '+d.tls:'')+(d.durationMs!=null?' / '+d.durationMs+' ms':'')) : (d.error||'Connection failed');
     msg('backupMsg',(d.status||'Test completed')+' - '+detail,!!d.ok);
     const folder=$('backupNasFolder');
-    if(folder && d.ok && d.protocol==='ftps'){
+    if(folder && d.ok && (d.protocol==='ftps' || d.protocol==='ftp')){
       const current=folder.value || '';
       const folders=Array.isArray(d.folders)?d.folders:[];
       folder.innerHTML='<option value="">Select NAS folder</option>'+folders.map(name=>`<option value="/${esc(name)}">${esc(name)}</option>`).join('');
@@ -1649,7 +1649,7 @@ async function loadReportBackupStatus(){
     set('backupStatusValue',d.status||'Not configured');set('backupLastTime',d.lastBackupTime||'-');set('backupDurationValue',d.backupDuration||'-');
     set('backupNasConnectionValue',d.nasConnectionStatus||'Not configured');set('backupRecordsValue',d.totalRecords||'-');set('backupAttachmentsValue',d.totalAttachments||'-');set('backupSizeValue',d.backupSize||'-');
     set('backupRetentionStatus',`Last ${Number(d.settings?.retentionDays||3)} days`);
-    if($('backupNasProtocol')) $('backupNasProtocol').value=d.settings?.protocol||'ftps'; if($('backupNasHost')) $('backupNasHost').value=d.settings?.host||''; if($('backupNasPort')) $('backupNasPort').value=d.settings?.port||((d.settings?.protocol||'ftps')==='ftps'?'21':'22'); if($('backupNasUser')) $('backupNasUser').value=d.settings?.username||'';
+    if($('backupNasProtocol')) $('backupNasProtocol').value=d.settings?.protocol||'ftps'; if($('backupNasHost')) $('backupNasHost').value=d.settings?.host||''; if($('backupNasPort')) $('backupNasPort').value=d.settings?.port||((d.settings?.protocol||'ftps')==='sftp'?'22':'21'); if($('backupNasUser')) $('backupNasUser').value=d.settings?.username||'';
     if($('backupScheduleTime')) $('backupScheduleTime').value=d.settings?.scheduleTime||'04:00'; if($('backupRetentionDays')) $('backupRetentionDays').value=String(d.settings?.retentionDays||3);
     const folder=$('backupNasFolder'); if(folder&&d.settings?.remoteFolder){folder.innerHTML=`<option value="${esc(d.settings.remoteFolder)}">${esc(d.settings.remoteFolder)}</option>`;folder.value=d.settings.remoteFolder;}
     const h=$('backupHistoryBody'); const hist=Array.isArray(d.history)?d.history:[]; if(h)h.innerHTML=hist.length?hist.map((x,i)=>`<tr><td>${esc(backupDate(x.date))}</td><td><b class="${String(x.status).toLowerCase()==='success'?'ok':String(x.status).toLowerCase()==='failed'?'bad':''}">${esc(x.status||'—')}</b></td><td>${esc(x.trigger||'Manual')}</td><td>${esc(String(x.records??'—'))}</td><td>${esc(String(x.attachments??'—'))}</td><td>${esc(x.size||'—')}</td><td>${esc(x.destination||'—')}</td><td><a href="#" style="color:var(--blue);font-weight:700" onclick="openBackupLogDetails(${i},'history');return false;">View Details</a></td></tr>`).join(''):'<tr><td colspan="8" class="muted">No backup history yet.</td></tr>';
@@ -1710,7 +1710,7 @@ function renderReportBackup(){
       </div>
       <h3>Backup Settings</h3>
       <div class="grid3">
-        <div><label>NAS Protocol</label><select id="backupNasProtocol" onchange="if($('backupNasPort')) $('backupNasPort').value=this.value==='ftps'?'21':'22'"><option value="ftps">FTPS (Explicit TLS)</option><option value="sftp">SFTP</option></select></div>
+        <div><label>NAS Protocol</label><select id="backupNasProtocol" onchange="if($('backupNasPort')) $('backupNasPort').value=this.value==='sftp'?'22':'21'"><option value="ftp">FTP (No Encryption)</option><option value="ftps">FTPS (Explicit TLS)</option><option value="sftp">SFTP</option></select></div>
         <div><label>NAS Host</label><input id="backupNasHost" placeholder="NAS IP or hostname"></div>
         <div><label>Port</label><input id="backupNasPort" value="21"></div>
         <div><label>Username</label><input id="backupNasUser" placeholder="backup_user"></div>
