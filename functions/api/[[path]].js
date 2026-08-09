@@ -1151,13 +1151,13 @@ async function readSocketText(reader, timeoutMs = 8000) {
   return text + decoder.decode();
 }
 
-async function readFtpReply(reader, timeoutMs = 8000) {
+async function readFtpReply(reader, timeoutMs = 20000, timeoutLabel = "FTP response timed out") {
   const decoder = new TextDecoder();
   let text = "";
   let code = "";
   let multiline = false;
   for (let i = 0; i < 40; i++) {
-    const result = await Promise.race([reader.read(), socketTimeout(timeoutMs, "FTPS response timed out")]);
+    const result = await Promise.race([reader.read(), socketTimeout(timeoutMs, timeoutLabel)]);
     if (result.done) break;
     text += decoder.decode(result.value, { stream:true });
     const lines = text.split(/\r?\n/).filter(Boolean);
@@ -1175,13 +1175,24 @@ async function readFtpReply(reader, timeoutMs = 8000) {
   return { code: first ? first[1] : "", text: text.trim() };
 }
 
-async function ftpCommand(writer, reader, command, expectedCodes) {
+async function ftpCommand(writer, reader, command, expectedCodes, timeoutMs = 20000) {
+  const verb = String(command || "FTP").split(" ")[0].toUpperCase();
   await writer.write(new TextEncoder().encode(command + "\r\n"));
-  const reply = await readFtpReply(reader);
+  let reply;
+  try {
+    reply = await readFtpReply(reader, timeoutMs, `FTP ${verb} response timed out after ${timeoutMs} ms`);
+  } catch (e) {
+    throw new Error(`FTP ${verb} failed: ${e?.message || String(e)}`);
+  }
   if (!expectedCodes.includes(reply.code)) {
-    throw new Error(`${command.split(" ")[0]} failed (${reply.code || "no code"}): ${reply.text.slice(0, 300)}`);
+    throw new Error(`FTP ${verb} failed (${reply.code || "no code"}): ${reply.text.slice(0, 300)}`);
   }
   return reply;
+}
+
+function isTransientFtpBackupError(error) {
+  const msg = String(error?.message || error || "").toLowerCase();
+  return msg.includes("timed out") || msg.includes("timeout") || msg.includes("connection reset") || msg.includes("connection closed") || msg.includes("socket") || msg.includes("network connection lost") || msg.includes("econnreset") || msg.includes("broken pipe");
 }
 
 async function testFtpsExplicitConnection({ host, port, username, password }) {
@@ -1524,11 +1535,11 @@ async function ftpUploadBytes(session, fileName, bytes) {
   const dataWriter = dataSocket.writable.getWriter();
   try {
     await session.writer.write(new TextEncoder().encode(`STOR ${safeName}\r\n`));
-    const opening = await readFtpReply(session.reader, 10000);
+    const opening = await readFtpReply(session.reader, 20000, `FTP STOR opening response timed out for ${safeName}`);
     if (!["125","150"].includes(opening.code)) throw new Error(`STOR failed (${opening.code || "no code"}): ${opening.text.slice(0,300)}`);
     await dataWriter.write(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
     await dataWriter.close();
-    const done = await readFtpReply(session.reader, 15000);
+    const done = await readFtpReply(session.reader, 30000, `FTP STOR completion response timed out for ${safeName}`);
     if (!["226","250"].includes(done.code)) throw new Error(`STOR did not complete (${done.code || "no code"}): ${done.text.slice(0,300)}`);
   } finally {
     try { dataWriter.releaseLock(); } catch {}
@@ -1549,14 +1560,14 @@ async function ftpDownloadBytes(session, fileName) {
   let total = 0;
   try {
     await session.writer.write(new TextEncoder().encode(`RETR ${safeName}\r\n`));
-    const opening = await readFtpReply(session.reader, 10000);
+    const opening = await readFtpReply(session.reader, 20000, `FTP RETR opening response timed out for ${safeName}`);
     if (!["125","150"].includes(opening.code)) throw new Error(`RETR failed (${opening.code || "no code"}): ${opening.text.slice(0,300)}`);
     for (;;) {
       const r = await Promise.race([dataReader.read(), socketTimeout(20000, `FTP verify read timed out for ${safeName}`)]);
       if (r.done) break;
       chunks.push(r.value); total += r.value.byteLength;
     }
-    const done = await readFtpReply(session.reader, 15000);
+    const done = await readFtpReply(session.reader, 30000, `FTP RETR completion response timed out for ${safeName}`);
     if (!["226","250"].includes(done.code)) throw new Error(`RETR did not complete (${done.code || "no code"}): ${done.text.slice(0,300)}`);
   } finally {
     try { dataReader.releaseLock(); } catch {}
@@ -3538,8 +3549,24 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     if(job.state!=="running") return json({ok:job.state==="complete",status:job.state==="complete"?"Success":"Failed",...backupProgress(job)},200);
     try {
       await runBatchedBackupStep(env,job);
+      job.transientRetryCount = 0;
+      job.lastTransientError = "";
+      await saveBackupJob(env,job);
       return json({ ok:job.state!=="failed",status:job.state==="complete"?(job.manifest.restoreReady?"Success":"Partial"):"Running",...backupProgress(job) },200);
     } catch(e) {
+      if (isTransientFtpBackupError(e)) {
+        const retryCount = Number(job.transientRetryCount || 0) + 1;
+        job.transientRetryCount = retryCount;
+        job.lastTransientError = e.message || String(e);
+        job.message = `Temporary FTP communication issue. Automatic retry ${retryCount}/3: ${job.lastTransientError}`;
+        if (retryCount <= 3) {
+          await saveBackupJob(env,job);
+          try {
+            await appendBackupLog(env,{time:new Date().toISOString(),operation:"Backup Retry",status:"warning",jobId:job.id,protocol:job.settings?.protocol,host:job.settings?.host,port:job.settings?.port,username:job.settings?.username,remoteFolder:job.settings?.remoteFolder,message:job.message,error:job.lastTransientError});
+          } catch {}
+          return json({ok:true,status:"Running",retrying:true,retryCount,maxRetries:3,...backupProgress(job),warning:job.lastTransientError},200);
+        }
+      }
       await failBatchedBackup(env,job,e);
       return json({ok:false,status:"Failed",...backupProgress(job),error:e.message||String(e)},200);
     }
