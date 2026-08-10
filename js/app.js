@@ -2450,48 +2450,9 @@ function drawCart(){
 }
 
 function submitSuccessPopup(kind, caseNo){
-  const no = String(caseNo || '').trim();
-  if(kind === 'Spare Order'){
-    alert(
-      `Spare Order Submitted Successfully
-
-` +
-      `Your spare order has been submitted successfully.` +
-      (no ? `
-
-Spare Order No: ${no}` : '') +
-      `
-
-Please send us an email with the Spare Order Number for follow-up.`
-    );
-    return;
-  }
-  if(kind === 'Repair Case'){
-    alert(
-      `Repair Case Submitted Successfully
-
-` +
-      `Your repair case has been submitted successfully.` +
-      (no ? `
-
-Case No: ${no}` : '') +
-      `
-
-Please send us an email with the Case Number for follow-up.`
-    );
-    return;
-  }
   alert(
-    `Submitted Successfully
-
-` +
-    `Your case has been submitted successfully.` +
-    (no ? `
-
-Case No: ${no}` : '') +
-    `
-
-Please send us an email with the Case Number for follow-up.`
+    `Case Submitted Successfully\n\n` +
+    `Sent email with order no to follow up.`
   );
 }
 
