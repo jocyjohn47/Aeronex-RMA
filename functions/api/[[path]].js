@@ -975,6 +975,31 @@ function reportBackupAccessAllowed(role) {
   return r.includes("admin") || r.includes("technician") || r.includes("tech");
 }
 
+function backupAccessAllowed(role) {
+  return lower(role).includes("admin");
+}
+
+function diagnosticsAccessAllowed(role) {
+  return lower(role).includes("admin");
+}
+
+function scopedLarkCountryValue(country) {
+  return lower(country).includes("ksa") || lower(country).includes("saudi") ? "KSA" : "UAE & Other Region";
+}
+
+function scopedCountryRecordMatches(value, country) {
+  const wanted = scopedLarkCountryValue(country);
+  const actual = lower(fieldText(value));
+  if (wanted === "KSA") return actual.includes("ksa") || actual.includes("saudi");
+  return actual.includes("uae") || actual.includes("other region");
+}
+
+function portalNoteCountryMatches(value, country) {
+  const actual = lower(fieldText(value));
+  if (!actual || actual === "all" || actual === "all region" || actual === "all regions") return true;
+  return scopedCountryRecordMatches(value, country);
+}
+
 function reportCellText(v) {
   if (v === undefined || v === null) return "";
   if (Array.isArray(v)) return v.map(reportCellText).filter(Boolean).join(", ");
@@ -2085,7 +2110,22 @@ async function appendBackupLog(env, entry) {
 
 async function listBackupLogs(env) {
   const items = await backupKvRead(env, BACKUP_LOGS_KEY, []);
-  return (Array.isArray(items) ? items : []).slice(0, 30);
+  const all = Array.isArray(items) ? items : [];
+  const settings = await getBackupSettings(env);
+  const days = Math.max(1, Number(settings.retentionDays || 3));
+  const cutoff = Date.now() - days * 86400000;
+  const kept = all.filter(item => {
+    const raw = item?.time || item?.date || "";
+    const ts = raw ? new Date(raw).getTime() : NaN;
+    return !Number.isFinite(ts) || ts >= cutoff;
+  });
+  if (kept.length !== all.length) await backupKvWrite(env, BACKUP_LOGS_KEY, kept);
+  return kept.slice(0, 30);
+}
+
+async function clearBackupLogs(env) {
+  await backupKvWrite(env, BACKUP_LOGS_KEY, []);
+  return { ok:true, cleared:true };
 }
 
 async function writeErrorLog(env, entry) {
@@ -2475,7 +2515,7 @@ async function handle(req, env) {
 
   if (p === "/api/logs-diagnostics/tables") {
     const role = norm(url.searchParams.get("role"));
-    if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    if (!diagnosticsAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
 
     const selected = norm(url.searchParams.get("table"));
     const configs = logTableConfigs(env);
@@ -2494,13 +2534,13 @@ async function handle(req, env) {
 
   if (p === "/api/logs-diagnostics/table-options") {
     const role = norm(url.searchParams.get("role"));
-    if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    if (!diagnosticsAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
     return json({ tables: logTableConfigs(env).map(x => ({ key:x.key, name:x.name, configured:!!x.tableId })) });
   }
 
   if (p === "/api/logs-diagnostics/environment") {
     const role = norm(url.searchParams.get("role"));
-    if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    if (!diagnosticsAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
 
     const configs = logTableConfigs(env);
     return json({
@@ -2514,13 +2554,13 @@ async function handle(req, env) {
 
   if (p === "/api/logs-diagnostics/error-logs") {
     const role = norm(url.searchParams.get("role"));
-    if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    if (!diagnosticsAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
     return json(await listRecentErrorLogs(env, Number(url.searchParams.get("limit") || 50)));
   }
 
   if (p === "/api/logs-diagnostics/test-error-log") {
     const role = norm(url.searchParams.get("role"));
-    if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    if (!diagnosticsAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
     const result = await writeErrorLog(env, {
       source:"manual-test",
       message:"Manual test error log from Logs page",
@@ -2688,7 +2728,12 @@ async function handle(req, env) {
   }
 
   if (p === "/api/portal-notes") {
-    return json(await listRecords(env, env.PORTAL_NOTES_TABLE_ID));
+    const role = norm(url.searchParams.get("role"));
+    const requestedCountry = norm(url.searchParams.get("country") || "UAE & Other Region");
+    const userCountry = norm(url.searchParams.get("userCountry") || "");
+    const country = scopedModuleCountry(role, requestedCountry, userCountry);
+    const rows = await listRecords(env, env.PORTAL_NOTES_TABLE_ID);
+    return json((rows || []).filter(r => portalNoteCountryMatches((r.fields || {}).Country, country)));
   }
 
 
@@ -2766,11 +2811,15 @@ async function handle(req, env) {
   if (p === "/api/after-sales-support" && req.method === "GET") {
     const role = norm(url.searchParams.get("role"));
     if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    const requestedCountry = norm(url.searchParams.get("country") || "UAE & Other Region");
+    const userCountry = norm(url.searchParams.get("userCountry") || "");
+    const country = scopedModuleCountry(role, requestedCountry, userCountry);
     const tableId = env.AFTER_SALES_SUPPORT_TABLE_ID;
     if (!tableId) return json({ error:"AFTER_SALES_SUPPORT_TABLE_ID not configured" }, 400);
-    const rows = await listRecords(env, tableId);
+    const allRows = await listRecords(env, tableId);
+    const rows = (allRows || []).filter(r => scopedCountryRecordMatches((r.fields || {}).Country, country));
     const fields = await getTableFieldsForDiagnostics(env, tableId);
-    return json({ ok:true, tableId, rows, fields });
+    return json({ ok:true, tableId, country:scopedLarkCountryValue(country), rows, fields });
   }
 
   if (p === "/api/after-sales-support/save" && req.method === "POST") {
@@ -2779,9 +2828,15 @@ async function handle(req, env) {
     if (!logAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
     const tableId = env.AFTER_SALES_SUPPORT_TABLE_ID;
     if (!tableId) return json({ error:"AFTER_SALES_SUPPORT_TABLE_ID not configured" }, 400);
+    const country = scopedModuleCountry(role, body.country || "UAE & Other Region", body.userCountry || "");
     const fieldTypes = await getFieldTypes(env, tableId);
-    const fields = prepareFieldsForTable(fieldTypes, body.fields || {});
+    const incomingFields = { ...(body.fields || {}), Country:scopedLarkCountryValue(country) };
+    const fields = prepareFieldsForTable(fieldTypes, incomingFields);
     let recordId = norm(body.record_id);
+    if (recordId) {
+      const existingRecord = await getRecord(env, tableId, recordId);
+      if (!scopedCountryRecordMatches((existingRecord.fields || {}).Country, country)) return json({ error:"Permission denied for this country" }, 403);
+    }
     if (!Object.keys(fields).length) {
       if (recordId) return json({ ok:true, updated:true, created:false, record_id:recordId, updatedFields:[], noChanges:true });
       return json({ error:"No valid fields to save" }, 400);
@@ -3466,7 +3521,7 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
 
   if (p === "/api/report-backup/status") {
     const role = norm(url.searchParams.get("role") || req.headers.get("x-user-role"));
-    if (!reportBackupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    if (!backupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
     const settings = await getBackupSettings(env);
     const history = await listBackupHistory(env);
     const logs = await listBackupLogs(env);
@@ -3487,9 +3542,15 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
     });
   }
 
+  if (p === "/api/report-backup/clear-logs" && req.method === "POST") {
+    const role = norm(url.searchParams.get("role") || req.headers.get("x-user-role"));
+    if (!backupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    return json(await clearBackupLogs(env));
+  }
+
   if (p === "/api/report-backup/settings" && req.method === "POST") {
     const role = norm(url.searchParams.get("role") || req.headers.get("x-user-role"));
-    if (!reportBackupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    if (!backupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
     const b = await readBody(req);
     const saved = await saveBackupSettings(env, b || {});
     return json({ ok:true, settings:saved });
@@ -3497,7 +3558,7 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
 
   if (p === "/api/report-backup/test-nas" && req.method === "POST") {
     const role = norm(url.searchParams.get("role") || req.headers.get("x-user-role"));
-    if (!reportBackupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    if (!backupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
     const b = await readBody(req);
     const protocol = lower(b.protocol || "ftps");
     const host = norm(b.host);
@@ -3523,7 +3584,7 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
 
   if (p === "/api/report-backup/backup-now" && req.method === "POST") {
     const role = norm(url.searchParams.get("role") || req.headers.get("x-user-role"));
-    if (!reportBackupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    if (!backupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
     const settings = await getBackupSettings(env);
     if (!settings.host) return json({ ok:false,status:"Failed",error:"Backup settings are not configured" },400);
     try {
@@ -3537,7 +3598,7 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
 
   if (p === "/api/report-backup/backup-step" && req.method === "POST") {
     const role = norm(url.searchParams.get("role") || req.headers.get("x-user-role"));
-    if (!reportBackupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    if (!backupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
     const b=await readBody(req); const id=norm(b.jobId);
     if(!id) return json({ok:false,error:"Missing backup job ID"},400);
     const job=await getBackupJob(env,id);
@@ -3570,7 +3631,7 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
 
   if (p === "/api/report-backup/backup-job") {
     const role = norm(url.searchParams.get("role") || req.headers.get("x-user-role"));
-    if (!reportBackupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
+    if (!backupAccessAllowed(role)) return json({ error:"Forbidden" }, 403);
     const id=norm(url.searchParams.get("jobId")); const job=await getBackupJob(env,id);
     if(!job) return json({ok:false,error:"Backup job not found"},404);
     return json({ok:job.state!=="failed",status:job.state==="complete"?(job.manifest.restoreReady?"Success":"Partial"):job.state==="failed"?"Failed":"Running",...backupProgress(job)},200);
