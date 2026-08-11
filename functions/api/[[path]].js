@@ -2845,7 +2845,7 @@ async function handle(req, env) {
     const repairs = (module === "internalrepair" || module === "internal-repair")
       ? await listRecords(env, repairTable(env, country))
       : [];
-    const spares = [];
+    const spares = env.SPARE_LIST_TABLE_ID ? await listRecords(env, env.SPARE_LIST_TABLE_ID) : [];
     return json({ ok:true, module, country, tableId, tableName, fields, rows, dealers, repairs, spares });
   }
 
@@ -3257,8 +3257,6 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
       "Required Details Link": uploadRequiredLink,
 
       "Log File": logLink,
-      "Log File Link": logLink,
-      "Log for Drone and RC Link": logLink,
 
       "Issue Video and Pictures Link": issueMediaLink,
 
@@ -3278,8 +3276,6 @@ if (p === "/api/save-spare-order-details" && req.method === "POST") {
       "Upload all required details link",
       "Required Details Link",
       "Log File",
-      "Log File Link",
-      "Log for Drone and RC Link",
       "Issue Video and Pictures Link"
     ]);
     const sendFields = {};
