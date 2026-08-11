@@ -1788,7 +1788,7 @@ function adminCenterCards(){
   if(reportsEnabled()){
     cards.push(isAdmin()?['💾','Report & Backup','Reports plus admin-only NAS backup settings and history.','reportBackup','Open']:['📊','Reports','Generate and download module reports in Excel format.','reportBackup','Open']);
   }
-  if(currentUserIsAdminTech()){
+  if(isAdmin()){
     cards.push(['🔗','Integration','Kingdee connection status, testing, and diagnostic logs.','integration','Open']);
   }
   return cards;
@@ -2084,7 +2084,7 @@ function kingdeeRecentLogsTable(logs){
 }
 async function renderKingdeeIntegration(){
   const sec=$('integration');if(!sec)return;
-  if(!currentUserIsAdminTech()){sec.innerHTML='<div class="panel"><h2>Integration</h2><div class="notice">Admin or Technician access only.</div></div>';return}
+  if(!isAdmin()){sec.innerHTML='<div class="panel"><h2>Integration</h2><div class="notice">Admin access only.</div></div>';return}
   sec.innerHTML='<div class="panel"><h2>Integration</h2><div class="notice">Loading integration status...</div></div>';
   try{
     const [d,logData]=await Promise.all([kingdeeApi('/api/kingdee/status'),kingdeeApi('/api/kingdee/logs?limit=5')]);
@@ -2128,7 +2128,7 @@ function kingdeeLogDetails(item){
 }
 async function renderKingdeeLogs(){
   const sec=$('integrationLogs');if(!sec)return;
-  if(!currentUserIsAdminTech()){sec.innerHTML='<div class="panel"><h2>Integration Logs</h2><div class="notice">Admin or Technician access only.</div></div>';return}
+  if(!isAdmin()){sec.innerHTML='<div class="panel"><h2>Integration Logs</h2><div class="notice">Admin access only.</div></div>';return}
   sec.innerHTML='<div class="panel"><h2>Integration Logs</h2><div class="notice">Loading logs...</div></div>';
   try{
     const d=await kingdeeApi('/api/kingdee/logs?'+kingdeeLogFilterQuery());const logs=d.logs||[];S.kingdeeAllLogs=logs;
