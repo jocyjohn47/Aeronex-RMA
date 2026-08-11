@@ -651,7 +651,7 @@ function renderWarrantySoftwareStatus(){
 }
 
 
-function logsPageEnabled(){ return currentUserIsAdminTech(); }
+function logsPageEnabled(){ return currentUserIsAdmin(); }
 
 function renderLogsDiagnosticsTableOptions(){
   const list = [
@@ -681,7 +681,7 @@ function renderLogsDiagnostics(){
     return;
   }
   $('logsDiagnostics').innerHTML=`<div class="panel"><h2>Logs & Diagnostics</h2>
-    <div class="notice">Admin/Technician only. Error logs are stored in Cloudflare R2 under /logs/. Keep max 3 days using R2 lifecycle policy.</div>
+    <div class="notice">Admin only. Error logs are stored in Cloudflare R2 under /logs/. Keep max 3 days using R2 lifecycle policy.</div>
     <div class="grid3">
       <div><label>Lark Table</label><select id="diagTableSelect">${renderLogsDiagnosticsTableOptions()}</select></div>
       <div class="act"><button onclick="generateLarkDiagnostics()">Generate Lark Table Diagnostics</button></div>
@@ -1660,6 +1660,16 @@ function backupDetailsHtml(item){
   return `<div class="backup-log-details">${rows.map(r=>`<div class="backup-log-detail-row"><div class="backup-log-detail-label">${esc(r[0])}</div><div class="backup-log-detail-value">${esc(String(r[1]))}</div></div>`).join('')}</div>`;
 }
 function openBackupLogDetails(i,kind){const arr=kind==='history'?(reportBackupStatusCache.history||[]):(reportBackupStatusCache.logs||[]);const item=arr[i];if(item)showDetailsModal(kind==='history'?'Backup Run Details':'Backup / NAS Log Details',backupDetailsHtml(item));}
+async function clearReportBackupLogs(){
+  if(!isAdmin()) return msg('backupMsg','Admin access only.');
+  if(!confirm('Clear all Backup & NAS Logs shown in the portal? Backup History will not be deleted.')) return;
+  try{
+    await api('/api/report-backup/clear-logs?role='+encodeURIComponent(S.user?.role||''),{method:'POST',body:'{}'});
+    msg('backupMsg','Backup & NAS Logs cleared.',true);
+    await loadReportBackupStatus();
+  }catch(e){msg('backupMsg',e.message)}
+}
+
 async function loadReportBackupStatus(){
   try{
     const d=await api('/api/report-backup/status?role='+encodeURIComponent(S.user?.role||''));
@@ -1683,8 +1693,8 @@ function renderReportBackup(){
     sec.innerHTML=`<div class="panel"><h2>Report & Backup</h2><div class="notice">You do not have permission to access Report & Backup.</div></div>`;
     return;
   }
-  sec.innerHTML=`<div class="panel"><h2>Report & Backup</h2>
-    <div class="notice">Reports export directly from Lark tables. NAS backup runs once daily at the selected time. Keep the last 3 or 7 days of successful backups.</div>
+  sec.innerHTML=`<div class="panel"><h2>${isAdmin()?'Report & Backup':'Reports'}</h2>
+    <div class="notice">${isAdmin()?'Reports export directly from Lark tables. NAS backup is Admin only.':'Generate and download module reports in Excel format.'}</div>
 
     <div class="panel" style="box-shadow:none;margin:16px 0 18px 0;padding:20px;border:1px solid #dbe3ef">
       <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:18px">
@@ -1709,7 +1719,7 @@ function renderReportBackup(){
       </p>
     </div>
 
-    <div class="panel" style="box-shadow:none;margin:0;padding:20px;border:1px solid #dbe3ef">
+    ${isAdmin()?`<div class="panel" style="box-shadow:none;margin:0;padding:20px;border:1px solid #dbe3ef">
       <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:18px">
         <div style="font-size:32px;background:#eaf1ff;border-radius:14px;padding:12px;line-height:1">💾</div>
         <div style="flex:1">
@@ -1746,11 +1756,11 @@ function renderReportBackup(){
       </p>
       <h3>Backup History</h3>
       <div class="table-wrap"><table><thead><tr><th>Date & Time</th><th>Status</th><th>Trigger</th><th>Records</th><th>Attachments</th><th>Size</th><th>Restore Ready</th><th>Destination</th><th>Details</th></tr></thead><tbody id="backupHistoryBody"><tr><td colspan="9" class="muted">No backup history yet.</td></tr></tbody></table></div>
-      <h3>Backup & NAS Logs</h3>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><h3 style="margin-bottom:8px">Backup & NAS Logs</h3><button class="btn-light" onclick="clearReportBackupLogs()">Clear Backup & NAS Logs</button></div>
       <div class="table-wrap"><table><thead><tr><th>Date & Time</th><th>Operation</th><th>Result</th><th>Response</th><th>Message</th><th>Details</th></tr></thead><tbody id="backupLogsBody"><tr><td colspan="6" class="muted">No logs yet.</td></tr></tbody></table></div>
-    </div>
+    </div>`:''}
   </div>`;
-  loadReportBackupStatus();
+  if(isAdmin()) loadReportBackupStatus();
 }
 
 function adminCenterCards(){
@@ -1776,7 +1786,7 @@ function adminCenterCards(){
     cards.push(['🧾','Logs & Diagnostics','Check error logs and Lark table diagnostics.','logsDiagnostics','Open']);
   }
   if(reportsEnabled()){
-    cards.push(['💾','Report & Backup','Daily backup status, NAS settings, retention, and backup history.','reportBackup','Open']);
+    cards.push(isAdmin()?['💾','Report & Backup','Reports plus admin-only NAS backup settings and history.','reportBackup','Open']:['📊','Reports','Generate and download module reports in Excel format.','reportBackup','Open']);
   }
   if(currentUserIsAdminTech()){
     cards.push(['🔗','Integration','Kingdee connection status, testing, and diagnostic logs.','integration','Open']);
@@ -1981,8 +1991,12 @@ function afterSalesAttachmentLinks(row){
 }
 function afterSalesDealerOptions(current){
   const items=[],seen=new Set();
+  const wantKsa=String(selectedCountry()||'').toLowerCase().includes('ksa');
   for(const r of (Array.isArray(S.dealers)?S.dealers:[])){
     const f=r?.fields||{},name=String(f['Company Name']||f['Dealer Name']||'').trim(),email=String(f['Username ( Email )']||f['Contact Email']||f.Email||'').trim();
+    const dealerCountry=String(normalizeCountryValue(f.Country)||'').toLowerCase();
+    const dealerIsKsa=dealerCountry.includes('ksa')||dealerCountry.includes('saudi');
+    if(wantKsa!==dealerIsKsa) continue;
     if(!name) continue; const key=(name+'|'+email).toLowerCase(); if(seen.has(key)) continue; seen.add(key); items.push({name,email});
   }
   items.sort((a,b)=>a.name.localeCompare(b.name));
@@ -1996,7 +2010,7 @@ function simplePaginationHtml(fn,page,totalPages){if(totalPages<=1)return '';ret
 
 async function loadAfterSalesSupport(){
   if(!currentUserIsAdminTech()) throw new Error('Admin or Technician access only.');
-  const d=await api('/api/after-sales-support?role='+encodeURIComponent(S.user.role||''));
+  const d=await api('/api/after-sales-support?role='+encodeURIComponent(S.user.role||'')+'&country='+encodeURIComponent(selectedCountry())+'&userCountry='+encodeURIComponent(userCountryText()||country()));
   S.afterSalesRows=d.rows||[]; S.afterSalesFields=d.fields||[]; S.afterSalesTableId=d.tableId||'';
   return d;
 }
@@ -2013,17 +2027,17 @@ function renderAfterSalesSupport(){
   sec.innerHTML=`<div class="panel"><h2>After Sales Support Register <button class="btn-light" onclick="loadAfterSalesSupport().then(renderAfterSalesSupport)">Refresh</button></h2><div class="notice">Available to Admin and Technician. Records are saved directly to the Lark After Sales Support Register Case table.</div>
   <div class="row" style="align-items:end;gap:12px;flex-wrap:wrap"><div style="min-width:260px;flex:1"><label>Search</label><input value="${esc(window.AFTER_SALES_SEARCH||'')}" oninput="window.AFTER_SALES_SEARCH=this.value;S.afterSalesPage=1;renderAfterSalesSupport()" placeholder="Case number, dealer, email, or case type"></div><div style="width:190px"><label>Case Status</label><select onchange="window.AFTER_SALES_STATUS=this.value;S.afterSalesPage=1;renderAfterSalesSupport()"><option value="">All Status</option><option ${status==='Open'?'selected':''}>Open</option><option ${status==='Closed'?'selected':''}>Closed</option></select></div><div><button onclick="newAfterSalesSupport()">+ New Support Case</button></div></div>
   <div class="muted" style="margin:10px 0">${filtered.length?`Showing ${start+1}–${Math.min(start+pageSize,filtered.length)} of ${filtered.length}`:'Showing 0 of 0'}</div>
-  <div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>Date</th><th>DJI Case Number</th><th>Status</th><th>Dealer Name</th><th>Type of Case</th><th>Action</th></tr></thead><tbody>${shown.map(r=>{const x=r.fields||{};return `<tr><td>${esc(afterSalesDateInput(x['Date of Case Register']))}</td><td>${esc(x['DJI Case Number']||'')}</td><td>${esc(x['Case Status']||'')}</td><td>${esc(x['Dealer Name']||'')}</td><td>${esc(x['Type of Case']||'')}</td><td><button class="btn-light" onclick="editAfterSalesSupport('${esc(r.record_id)}')">View / Edit</button></td></tr>`}).join('')||'<tr><td colspan="6" class="muted">No support cases found.</td></tr>'}</tbody></table></div>
+  <div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>Date</th><th>DJI Case Number</th><th>Status</th><th>Dealer Name</th><th>Country</th><th>Type of Case</th><th>Action</th></tr></thead><tbody>${shown.map(r=>{const x=r.fields||{};return `<tr><td>${esc(afterSalesDateInput(x['Date of Case Register']))}</td><td>${esc(x['DJI Case Number']||'')}</td><td>${esc(x['Case Status']||'')}</td><td>${esc(x['Dealer Name']||'')}</td><td>${esc(x['Country']||'')}</td><td>${esc(x['Type of Case']||'')}</td><td><button class="btn-light" onclick="editAfterSalesSupport('${esc(r.record_id)}')">View / Edit</button></td></tr>`}).join('')||'<tr><td colspan="7" class="muted">No support cases found.</td></tr>'}</tbody></table></div>
   <div class="row" style="justify-content:center;align-items:center;margin-top:12px">${simplePaginationHtml('afterSalesSetPage',S.afterSalesPage,totalPages)}</div>
-  <div id="afterSalesForm" class="panel" style="box-shadow:none;margin-top:18px;border:1px solid #dbe3ef"><h3>${editing?'Update Support Case':'New Support Case'}</h3><input type="hidden" id="afterSalesRecordId" value="${esc(editing?.record_id||'')}"><div class="grid3"><div><label>Date of Case Register</label><input id="afterSalesDate" type="date" value="${esc(afterSalesDateInput(f['Date of Case Register']))}"></div><div><label>DJI Case Number</label><input id="afterSalesCaseNo" value="${esc(f['DJI Case Number']||'')}"></div><div><label>Case Status</label><select id="afterSalesCaseStatus"><option ${String(f['Case Status']||'Open')==='Open'?'selected':''}>Open</option><option ${String(f['Case Status']||'')==='Closed'?'selected':''}>Closed</option></select></div><div><label>Recorded by</label><input id="afterSalesRecordedBy" value="${esc(f['Recorded by']||S.user.displayName||S.user.contactName||S.user.username||'')}"></div><div><label>Dealer Name</label><select id="afterSalesDealerName" onchange="afterSalesDealerChanged()"><option value="">Select dealer</option>${afterSalesDealerOptions(f['Dealer Name']||'')}</select></div><div><label>Dealer Email</label><input id="afterSalesDealerEmail" type="email" value="${esc(f['Dealer Email']||'')}"></div><div><label>Type of Case</label><input id="afterSalesType" value="${esc(f['Type of Case']||'')}"></div><div style="grid-column:span 2"><label>Attachment</label><input id="afterSalesAttachment" type="file" multiple>${editing?afterSalesAttachmentLinks(editing):''}</div></div><div class="grid2"><div><label>Case Description</label><textarea id="afterSalesDescription" rows="4">${esc(f['Case Description']||'')}</textarea></div><div><label>DJI Reply</label><textarea id="afterSalesReply" rows="4">${esc(f['DJI Reply']||'')}</textarea></div></div><div><label>Remarks</label><textarea id="afterSalesRemarks" rows="3">${esc(f['Remarks']||'')}</textarea></div><p><button onclick="saveAfterSalesSupport()">${editing?'Update Case':'Create Case'}</button> <button class="btn-light" onclick="newAfterSalesSupport()">Clear</button> <span id="afterSalesMsg" class="msg"></span></p></div></div>`;
+  <div id="afterSalesForm" class="panel" style="box-shadow:none;margin-top:18px;border:1px solid #dbe3ef"><h3>${editing?'Update Support Case':'New Support Case'}</h3><input type="hidden" id="afterSalesRecordId" value="${esc(editing?.record_id||'')}"><div class="grid3"><div><label>Date of Case Register</label><input id="afterSalesDate" type="date" value="${esc(afterSalesDateInput(f['Date of Case Register']))}"></div><div><label>DJI Case Number</label><input id="afterSalesCaseNo" value="${esc(f['DJI Case Number']||'')}"></div><div><label>Case Status</label><select id="afterSalesCaseStatus"><option ${String(f['Case Status']||'Open')==='Open'?'selected':''}>Open</option><option ${String(f['Case Status']||'')==='Closed'?'selected':''}>Closed</option></select></div><div><label>Recorded by</label><input id="afterSalesRecordedBy" value="${esc(f['Recorded by']||S.user.displayName||S.user.contactName||S.user.username||'')}"></div><div><label>Country</label><input value="${esc(f['Country']||(selectedCountry().includes('KSA')?'KSA':'UAE & Other Region'))}" disabled></div><div><label>Dealer Name</label><select id="afterSalesDealerName" onchange="afterSalesDealerChanged()"><option value="">Select dealer</option>${afterSalesDealerOptions(f['Dealer Name']||'')}</select></div><div><label>Dealer Email</label><input id="afterSalesDealerEmail" type="email" value="${esc(f['Dealer Email']||'')}"></div><div><label>Type of Case</label><input id="afterSalesType" value="${esc(f['Type of Case']||'')}"></div><div style="grid-column:span 2"><label>Attachment</label><input id="afterSalesAttachment" type="file" multiple>${editing?afterSalesAttachmentLinks(editing):''}</div></div><div class="grid2"><div><label>Case Description</label><textarea id="afterSalesDescription" rows="4">${esc(f['Case Description']||'')}</textarea></div><div><label>DJI Reply</label><textarea id="afterSalesReply" rows="4">${esc(f['DJI Reply']||'')}</textarea></div></div><div><label>Remarks</label><textarea id="afterSalesRemarks" rows="3">${esc(f['Remarks']||'')}</textarea></div><p><button onclick="saveAfterSalesSupport()">${editing?'Update Case':'Create Case'}</button> <button class="btn-light" onclick="newAfterSalesSupport()">Clear</button> <span id="afterSalesMsg" class="msg"></span></p></div></div>`;
 }
 async function saveAfterSalesSupport(){
   try{
     if(!currentUserIsAdminTech()) throw new Error('Admin or Technician access only.');
-    const fields={'Date of Case Register':$('afterSalesDate')?.value||'','DJI Case Number':$('afterSalesCaseNo')?.value.trim()||'','Case Status':$('afterSalesCaseStatus')?.value||'Open','Recorded by':$('afterSalesRecordedBy')?.value.trim()||'','Dealer Name':$('afterSalesDealerName')?.value.trim()||'','Dealer Email':$('afterSalesDealerEmail')?.value.trim()||'','Type of Case':$('afterSalesType')?.value.trim()||'','Case Description':$('afterSalesDescription')?.value.trim()||'','DJI Reply':$('afterSalesReply')?.value.trim()||'','Remarks':$('afterSalesRemarks')?.value.trim()||''};
+    const fields={'Date of Case Register':$('afterSalesDate')?.value||'','DJI Case Number':$('afterSalesCaseNo')?.value.trim()||'','Case Status':$('afterSalesCaseStatus')?.value||'Open','Recorded by':$('afterSalesRecordedBy')?.value.trim()||'','Dealer Name':$('afterSalesDealerName')?.value.trim()||'','Dealer Email':$('afterSalesDealerEmail')?.value.trim()||'','Country':selectedCountry().includes('KSA')?'KSA':'UAE & Other Region','Type of Case':$('afterSalesType')?.value.trim()||'','Case Description':$('afterSalesDescription')?.value.trim()||'','DJI Reply':$('afterSalesReply')?.value.trim()||'','Remarks':$('afterSalesRemarks')?.value.trim()||''};
     if(!fields['DJI Case Number']) throw new Error('DJI Case Number is required.');
     const files=[]; for(const file of Array.from($('afterSalesAttachment')?.files||[])) files.push({name:file.name,type:file.type||'application/octet-stream',data:await fileToDataUrl(file)});
-    const d=await api('/api/after-sales-support/save',{method:'POST',body:JSON.stringify({role:S.user.role||'',record_id:$('afterSalesRecordId')?.value||'',fields,files})});
+    const d=await api('/api/after-sales-support/save',{method:'POST',body:JSON.stringify({role:S.user.role||'',country:selectedCountry(),userCountry:userCountryText()||country(),record_id:$('afterSalesRecordId')?.value||'',fields,files})});
     msg('afterSalesMsg',d.updated?'Support case updated.':'Support case created.',true); S.afterSalesEditingId=d.record_id||''; await loadAfterSalesSupport(); renderAfterSalesSupport();
   }catch(e){msg('afterSalesMsg',e.message||String(e))}
 }
@@ -3293,7 +3307,7 @@ async function initApp(){
   try{await loadOrders()}catch{}
   try{await loadRepairs()}catch{}
   try{S.dealers=await api('/api/dealers')}catch{}
-  try{S.notes=await api('/api/portal-notes')}catch{}
+  try{S.notes=await api('/api/portal-notes?role='+encodeURIComponent(S.user.role||'')+'&country='+encodeURIComponent(selectedCountry())+'&userCountry='+encodeURIComponent(userCountryText()||country()))}catch{}
   renderDashboard();
 
   renderSpare();
